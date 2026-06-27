@@ -25,7 +25,7 @@ export default {
       return json({ error: "请求体不是合法 JSON" }, 400);
     }
 
-    const { messages, model, password } = payload;
+    const { messages, model, password, reasoning, webSearch } = payload;
     if (!Array.isArray(messages) || messages.length === 0) {
       return json({ error: "messages 必须是非空数组" }, 400);
     }
@@ -38,6 +38,19 @@ export default {
 
     let upstream;
     try {
+      const body = {
+        model: model || DEFAULT_MODEL,
+        messages,
+        stream: true,
+      };
+      if (reasoning) {
+        body.include_reasoning = true;
+        body.reasoning = { effort: "medium" };
+      }
+      if (webSearch) {
+        body.plugins = [{ id: "web", max_results: 5 }];
+      }
+
       upstream = await fetch(OPENROUTER_URL, {
         method: "POST",
         headers: {
@@ -46,11 +59,7 @@ export default {
           "HTTP-Referer": ALLOWED_ORIGIN,
           "X-Title": "ember",
         },
-        body: JSON.stringify({
-          model: model || DEFAULT_MODEL,
-          messages,
-          stream: true,
-        }),
+        body: JSON.stringify(body),
       });
     } catch (err) {
       return json({ error: "连接 OpenRouter 失败：" + err.message }, 502);

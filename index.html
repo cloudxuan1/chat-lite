@@ -51,6 +51,24 @@
     border-bottom: 0.5px solid rgba(31,30,29,0.12);
     background: var(--bg-primary);
   }
+  .topbar-spacer { flex: 1; }
+  .tools {
+    display: flex;
+    gap: 6px;
+  }
+  .tool-toggle {
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: 5px 8px;
+    color: var(--text-secondary);
+    background: rgba(31,30,29,0.06);
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .tool-toggle[aria-pressed="true"] {
+    color: #fff;
+    background: var(--btn-primary-bg);
+  }
   .spark {
     width: 9px; height: 9px;
     border-radius: 50%;
@@ -98,6 +116,31 @@
     color: var(--text-primary);
     box-shadow: var(--shadow);
     border-bottom-left-radius: 6px;
+  }
+  .reasoning {
+    align-self: flex-start;
+    max-width: 85%;
+    padding: 9px 12px;
+    border-left: 3px solid rgba(217,119,87,0.45);
+    color: var(--text-secondary);
+    background: rgba(31,30,29,0.04);
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .reasoning:empty {
+    display: none;
+  }
+  .citations {
+    align-self: flex-start;
+    max-width: 85%;
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .citations a {
+    color: var(--text-secondary);
   }
   .msg.error {
     align-self: flex-start;
@@ -223,6 +266,11 @@
   <header class="topbar">
     <span class="spark"></span>
     <span class="brand">ember</span>
+    <span class="topbar-spacer"></span>
+    <div class="tools" aria-label="模型能力开关">
+      <button class="tool-toggle" id="reasoning-toggle" type="button" aria-pressed="true">思考</button>
+      <button class="tool-toggle" id="web-toggle" type="button" aria-pressed="true">联网</button>
+    </div>
   </header>
 
   <main class="messages" id="messages">
@@ -241,16 +289,22 @@
   const MODEL = "anthropic/claude-opus-4.6";
 
   const PW_KEY = "ember_pw";  // 访问密码在本设备浏览器的存储键
+  const REASONING_KEY = "ember_reasoning";
+  const WEB_KEY = "ember_web";
 
   // ===== 状态 =====
   const messages = [];        // 对话历史，只存在内存，刷新即清空
   let pending = false;        // 是否正在等回复，防止重复发送
   let accessPw = localStorage.getItem(PW_KEY) || "";  // 访问密码，存在本设备浏览器
+  let reasoningEnabled = localStorage.getItem(REASONING_KEY) !== "0";
+  let webSearchEnabled = localStorage.getItem(WEB_KEY) !== "0";
 
   const messagesEl = document.getElementById("messages");
   const hintEl = document.getElementById("hint");
   const input = document.getElementById("input");
   const sendBtn = document.getElementById("send");
+  const reasoningToggle = document.getElementById("reasoning-toggle");
+  const webToggle = document.getElementById("web-toggle");
   const composer = document.getElementById("composer");
   const gate = document.getElementById("gate");
   const gateInput = document.getElementById("gate-input");
@@ -272,12 +326,56 @@
     return el;
   }
 
-  // 解析 SSE 流，每收到一段文字就回调 onDelta，返回完整文本
-  async function readStream(body, onDelta) {
+  function addReasoningBlock() {
+    if (hintEl) hintEl.remove();
+    const el = document.createElement("div");
+    el.className = "reasoning";
+    messagesEl.appendChild(el);
+    return el;
+  }
+
+  function addCitations(annotations) {
+    const links = (annotations || [])
+      .map((item) => item?.url_citation || item)
+      .filter((item) => item?.url)
+      .slice(0, 6);
+    if (!links.length) return;
+
+    const el = document.createElement("div");
+    el.className = "citations";
+    el.textContent = "来源：";
+    links.forEach((item, i) => {
+      if (i) el.appendChild(document.createTextNode(" · "));
+      const a = document.createElement("a");
+      a.href = item.url;
+      a.target = "_blank";
+      a.rel = "noreferrer";
+      a.textContent = item.title || new URL(item.url).hostname;
+      el.appendChild(a);
+    });
+    messagesEl.appendChild(el);
+    scrollToBottom();
+  }
+
+  function textFromReasoningDetails(details) {
+    if (!Array.isArray(details)) return "";
+    return details
+      .map((item) => item?.text || item?.summary || item?.content || "")
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  function updateToggle(el, enabled) {
+    el.setAttribute("aria-pressed", String(enabled));
+  }
+
+  // 解析 SSE 流，每收到一段文字就回调 callbacks，返回完整正文和来源
+  async function readStream(body, callbacks) {
     const reader = body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
     let full = "";
+    const annotations = [];
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -289,14 +387,20 @@
         if (!t || t.startsWith(":")) continue;    // 跳过空行和注释（如 OpenRouter 的心跳）
         if (!t.startsWith("data:")) continue;
         const data = t.slice(5).trim();
-        if (data === "[DONE]") return full;
+        if (data === "[DONE]") return { full, annotations };
         try {
-          const delta = JSON.parse(data).choices?.[0]?.delta?.content;
-          if (delta) { full += delta; onDelta(delta); }
+          const delta = JSON.parse(data).choices?.[0]?.delta || {};
+          const reasoning = delta.reasoning || delta.reasoning_content || textFromReasoningDetails(delta.reasoning_details);
+          if (reasoning) callbacks.onReasoning(reasoning);
+          if (Array.isArray(delta.annotations)) annotations.push(...delta.annotations);
+          if (delta.content) {
+            full += delta.content;
+            callbacks.onContent(delta.content);
+          }
         } catch { /* 半截 JSON，忽略 */ }
       }
     }
-    return full;
+    return { full, annotations };
   }
 
   // ===== 发送 =====
@@ -311,6 +415,7 @@
 
     pending = true;
     sendBtn.disabled = true;
+    const reasoningBox = reasoningEnabled ? addReasoningBlock() : null;
     const bubble = addBubble("assistant", "");
     bubble.classList.add("typing");
 
@@ -318,7 +423,13 @@
       const res = await fetch(WORKER_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages, model: MODEL, password: accessPw }),
+        body: JSON.stringify({
+          messages,
+          model: MODEL,
+          password: accessPw,
+          reasoning: reasoningEnabled,
+          webSearch: webSearchEnabled,
+        }),
       });
 
       // 密码错误：清掉本地密码，待会弹回密码界面
@@ -338,15 +449,23 @@
         throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
       }
 
-      const full = await readStream(res.body, (delta) => {
-        bubble.classList.remove("typing");
-        bubble.textContent += delta;
-        scrollToBottom();
+      const { full, annotations } = await readStream(res.body, {
+        onReasoning(delta) {
+          if (!reasoningBox) return;
+          reasoningBox.textContent += delta;
+          scrollToBottom();
+        },
+        onContent(delta) {
+          bubble.classList.remove("typing");
+          bubble.textContent += delta;
+          scrollToBottom();
+        },
       });
 
       bubble.classList.remove("typing");
       if (full) {
         messages.push({ role: "assistant", content: full });
+        addCitations(annotations);
       } else {
         bubble.classList.add("error");
         bubble.textContent = "⚠️ 没有收到回复内容";
@@ -411,6 +530,19 @@
   gateInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") { e.preventDefault(); submitGate(); }
   });
+
+  reasoningToggle.addEventListener("click", () => {
+    reasoningEnabled = !reasoningEnabled;
+    localStorage.setItem(REASONING_KEY, reasoningEnabled ? "1" : "0");
+    updateToggle(reasoningToggle, reasoningEnabled);
+  });
+  webToggle.addEventListener("click", () => {
+    webSearchEnabled = !webSearchEnabled;
+    localStorage.setItem(WEB_KEY, webSearchEnabled ? "1" : "0");
+    updateToggle(webToggle, webSearchEnabled);
+  });
+  updateToggle(reasoningToggle, reasoningEnabled);
+  updateToggle(webToggle, webSearchEnabled);
 
   // 没存过密码就先弹密码界面（密码不写在代码里，由你打开时手输一次）
   if (!accessPw) showGate();
