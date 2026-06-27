@@ -120,18 +120,99 @@
   .reasoning {
     align-self: flex-start;
     max-width: 85%;
-    padding: 9px 12px;
-    border-left: 3px solid rgba(217,119,87,0.45);
     color: var(--text-secondary);
-    background: rgba(31,30,29,0.04);
-    border-radius: var(--radius-sm);
     font-size: 13px;
+  }
+  .reasoning-toggle {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    width: 100%;
+    padding: 0;
+    color: var(--text-muted);
+    background: transparent;
+    border: none;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .reasoning-mark {
+    position: relative;
+    flex: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background:
+      conic-gradient(from 0deg, rgba(217,119,87,0), rgba(217,119,87,0.95), rgba(217,119,87,0));
+    animation: spin 1.4s linear infinite;
+  }
+  .reasoning-mark::after {
+    content: '';
+    position: absolute;
+    inset: 5px;
+    border-radius: 50%;
+    background: var(--bg-primary);
+  }
+  .reasoning.is-done .reasoning-mark {
+    border: 1.5px solid rgba(31,30,29,0.32);
+    background: transparent;
+    animation: none;
+  }
+  .reasoning.is-done .reasoning-mark::after {
+    inset: 4px;
+    width: 7px;
+    height: 4px;
+    border-left: 1.5px solid rgba(31,30,29,0.55);
+    border-bottom: 1.5px solid rgba(31,30,29,0.55);
+    border-radius: 0;
+    background: transparent;
+    transform: rotate(-45deg);
+  }
+  .reasoning-title {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .reasoning-done {
+    display: none;
+    color: var(--text-muted);
+  }
+  .reasoning.is-done .reasoning-done {
+    display: inline;
+  }
+  .reasoning-chevron {
+    color: var(--text-muted);
+    transition: transform .18s ease;
+  }
+  .reasoning.is-open .reasoning-chevron {
+    transform: rotate(180deg);
+  }
+  .reasoning-body {
+    display: none;
+    margin: 10px 0 0 9px;
+    padding: 0 0 0 18px;
+    border-left: 1px solid rgba(31,30,29,0.14);
     white-space: pre-wrap;
     word-break: break-word;
   }
-  .reasoning:empty {
+  .reasoning.is-open .reasoning-body {
+    display: block;
+  }
+  .reasoning-tools {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 10px 0 0 9px;
+    padding: 0 0 0 18px;
+    border-left: 1px solid rgba(31,30,29,0.14);
+    color: var(--text-muted);
+  }
+  .reasoning:not(.is-open) .reasoning-tools {
     display: none;
   }
+  @keyframes spin { to { transform: rotate(360deg); } }
   .citations {
     align-self: flex-start;
     max-width: 85%;
@@ -326,12 +407,74 @@
     return el;
   }
 
-  function addReasoningBlock() {
+  function addReasoningBlock({ webSearch }) {
     if (hintEl) hintEl.remove();
-    const el = document.createElement("div");
-    el.className = "reasoning";
-    messagesEl.appendChild(el);
-    return el;
+    const root = document.createElement("div");
+    root.className = "reasoning is-open";
+
+    const toggle = document.createElement("button");
+    toggle.className = "reasoning-toggle";
+    toggle.type = "button";
+    toggle.setAttribute("aria-expanded", "true");
+
+    const mark = document.createElement("span");
+    mark.className = "reasoning-mark";
+    mark.setAttribute("aria-hidden", "true");
+
+    const title = document.createElement("span");
+    title.className = "reasoning-title";
+    title.textContent = webSearch ? "策划并搜索相关资料。" : "正在思考。";
+
+    const done = document.createElement("span");
+    done.className = "reasoning-done";
+    done.textContent = "Done";
+
+    const chevron = document.createElement("span");
+    chevron.className = "reasoning-chevron";
+    chevron.setAttribute("aria-hidden", "true");
+    chevron.textContent = "⌄";
+
+    const body = document.createElement("div");
+    body.className = "reasoning-body";
+
+    toggle.append(mark, title, done, chevron);
+    root.append(toggle, body);
+
+    if (webSearch) {
+      const tools = document.createElement("div");
+      tools.className = "reasoning-tools";
+      const item = document.createElement("div");
+      item.textContent = "联网搜索已开启";
+      tools.appendChild(item);
+      root.appendChild(tools);
+    }
+
+    toggle.addEventListener("click", () => {
+      const open = !root.classList.contains("is-open");
+      root.classList.toggle("is-open", open);
+      toggle.setAttribute("aria-expanded", String(open));
+    });
+
+    messagesEl.appendChild(root);
+    scrollToBottom();
+
+    let hasReasoning = false;
+    return {
+      root,
+      append(delta) {
+        hasReasoning = true;
+        if (title.textContent === "正在思考。" || title.textContent === "策划并搜索相关资料。") {
+          title.textContent = webSearch ? "策划并搜索相关资料。" : "整理思路。";
+        }
+        body.textContent += delta;
+      },
+      finish() {
+        root.classList.add("is-done");
+        root.classList.remove("is-open");
+        toggle.setAttribute("aria-expanded", "false");
+        title.textContent = hasReasoning ? "思考完成" : "思考完成";
+      },
+    };
   }
 
   function addCitations(annotations) {
@@ -415,7 +558,7 @@
 
     pending = true;
     sendBtn.disabled = true;
-    const reasoningBox = reasoningEnabled ? addReasoningBlock() : null;
+    const reasoningBox = reasoningEnabled ? addReasoningBlock({ webSearch: webSearchEnabled }) : null;
     const bubble = addBubble("assistant", "");
     bubble.classList.add("typing");
 
@@ -452,7 +595,7 @@
       const { full, annotations } = await readStream(res.body, {
         onReasoning(delta) {
           if (!reasoningBox) return;
-          reasoningBox.textContent += delta;
+          reasoningBox.append(delta);
           scrollToBottom();
         },
         onContent(delta) {
@@ -463,6 +606,7 @@
       });
 
       bubble.classList.remove("typing");
+      reasoningBox?.finish();
       if (full) {
         messages.push({ role: "assistant", content: full });
         addCitations(annotations);
@@ -471,6 +615,7 @@
         bubble.textContent = "⚠️ 没有收到回复内容";
       }
     } catch (err) {
+      reasoningBox?.finish();
       bubble.classList.remove("typing");
       bubble.classList.add("error");
       bubble.textContent = "⚠️ " + err.message;
