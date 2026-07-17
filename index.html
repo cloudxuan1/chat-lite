@@ -229,12 +229,46 @@
   .citations {
     align-self: flex-start;
     max-width: 85%;
+    min-width: 0;
     color: var(--text-muted);
     font-size: 12px;
     line-height: 1.5;
   }
-  .citations a {
+  .citations-toggle {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    max-width: 100%;
+    padding: 0;
+    color: var(--text-muted);
+    background: transparent;
+    border: none;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .citations-chevron {
+    flex: none;
+    color: var(--text-muted);
+    transition: transform .18s ease;
+  }
+  .citations.is-open .citations-chevron {
+    transform: rotate(180deg);
+  }
+  .citations-list {
+    display: none;
+    flex-direction: column;
+    gap: 6px;
+    max-width: 100%;
+    margin-top: 8px;
+  }
+  .citations.is-open .citations-list {
+    display: flex;
+  }
+  .citations-list a {
+    max-width: 100%;
     color: var(--text-secondary);
+    overflow-wrap: anywhere;
   }
   .msg.error {
     align-self: flex-start;
@@ -536,22 +570,46 @@
     const links = (annotations || [])
       .map((item) => item?.url_citation || item)
       .filter((item) => item?.url)
-      .slice(0, 6);
+      .slice(0, 10);
     if (!links.length) return;
 
-    const el = document.createElement("div");
-    el.className = "citations";
-    el.textContent = "来源：";
-    links.forEach((item, i) => {
-      if (i) el.appendChild(document.createTextNode(" · "));
+    const root = document.createElement("div");
+    root.className = "citations";
+
+    const toggle = document.createElement("button");
+    toggle.className = "citations-toggle";
+    toggle.type = "button";
+    toggle.setAttribute("aria-expanded", "false");
+
+    const summary = document.createElement("span");
+    summary.textContent = `联网搜索 · 来源 ${links.length} 条`;
+
+    const chevron = document.createElement("span");
+    chevron.className = "citations-chevron";
+    chevron.setAttribute("aria-hidden", "true");
+    chevron.textContent = "⌄";
+
+    const list = document.createElement("div");
+    list.className = "citations-list";
+    links.forEach((item) => {
       const a = document.createElement("a");
       a.href = item.url;
       a.target = "_blank";
       a.rel = "noreferrer";
       a.textContent = item.title || new URL(item.url).hostname;
-      el.appendChild(a);
+      list.appendChild(a);
     });
-    messagesEl.appendChild(el);
+
+    toggle.append(summary, chevron);
+    root.append(toggle, list);
+    toggle.addEventListener("click", () => {
+      const open = !root.classList.contains("is-open");
+      root.classList.toggle("is-open", open);
+      toggle.setAttribute("aria-expanded", String(open));
+      if (open) scrollToBottom();
+    });
+
+    messagesEl.appendChild(root);
     scrollToBottom();
   }
 
