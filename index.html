@@ -242,6 +242,21 @@
     color: #9a3412;
     box-shadow: none;
   }
+  .cache-badge {
+    align-self: flex-start;
+    max-width: 85%;
+    margin-top: -6px;
+    padding-left: 15px;
+    color: var(--text-muted);
+    font-size: 11px;
+    line-height: 1.4;
+  }
+  .cache-badge .num {
+    font-family: 'SF Mono', 'Fira Code', Menlo, Consolas, monospace;
+  }
+  .cache-badge.hit .num {
+    color: var(--accent);
+  }
   /* 等待首字时的呼吸光标 */
   .msg.typing::after {
     content: '';
@@ -540,6 +555,22 @@
     scrollToBottom();
   }
 
+  // 缓存命中小徽章：挂在回复气泡下方，显示本轮输入里有多少 token 走了缓存（一折计费）。
+  // Opus 长对话过约 4096 token 门槛后才开始命中，前几轮显示 0 是正常的。
+  function addCacheBadge(usage) {
+    const promptTokens = usage?.prompt_tokens;
+    if (!promptTokens) return;
+    const cached = usage?.prompt_tokens_details?.cached_tokens || 0;
+    const el = document.createElement("div");
+    el.className = "cache-badge" + (cached > 0 ? " hit" : "");
+    el.title = "对话攒过约 4096 token 后开始命中缓存，命中部分按一折计费";
+    const num = document.createElement("span");
+    num.className = "num";
+    num.textContent = `${cached.toLocaleString()} / ${promptTokens.toLocaleString()}`;
+    el.append(cached > 0 ? "⚡ 缓存命中 " : "缓存命中 ", num);
+    messagesEl.appendChild(el);
+  }
+
   function textFromReasoningDetails(details) {
     if (!Array.isArray(details)) return "";
     return details
@@ -559,6 +590,7 @@
     let buffer = "";
     let full = "";
     const annotations = [];
+    let usage = null;                             // OpenRouter 在最后一个数据块里附带 token 账单
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -570,9 +602,11 @@
         if (!t || t.startsWith(":")) continue;    // 跳过空行和注释（如 OpenRouter 的心跳）
         if (!t.startsWith("data:")) continue;
         const data = t.slice(5).trim();
-        if (data === "[DONE]") return { full, annotations };
+        if (data === "[DONE]") return { full, annotations, usage };
         try {
-          const delta = JSON.parse(data).choices?.[0]?.delta || {};
+          const obj = JSON.parse(data);
+          if (obj.usage) usage = obj.usage;
+          const delta = obj.choices?.[0]?.delta || {};
           const reasoning = delta.reasoning || delta.reasoning_content || textFromReasoningDetails(delta.reasoning_details);
           if (reasoning) callbacks.onReasoning(reasoning);
           if (Array.isArray(delta.annotations)) annotations.push(...delta.annotations);
@@ -583,7 +617,7 @@
         } catch { /* 半截 JSON，忽略 */ }
       }
     }
-    return { full, annotations };
+    return { full, annotations, usage };
   }
 
   // ===== 发送 =====
@@ -633,7 +667,7 @@
         throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
       }
 
-      const { full, annotations } = await readStream(res.body, {
+      const { full, annotations, usage } = await readStream(res.body, {
         onReasoning(delta) {
           if (!reasoningBox) return;
           reasoningBox.append(delta);
@@ -652,6 +686,7 @@
         messages.push({ role: "assistant", content: full });
         saveMessages();
         addCitations(annotations);
+        addCacheBadge(usage);
       } else {
         bubble.classList.add("error");
         bubble.textContent = "⚠️ 没有收到回复内容";
