@@ -5,7 +5,14 @@
 
 ---
 
-## 部署：二选一
+## 部署：日常走自动，手动只当备胎
+
+### 方式 C — GitHub Actions 自动部署（2026-07-17 起，日常用这个）
+
+**平时什么都不用做**：push 到 GitHub（main 或 codex/add-reasoning-web 分支）且改动涉及 `worker/`，Actions 自动跑测试并部署到 Cloudflare。手机上重发：GitHub App → 本仓库 → Actions → Deploy Worker → Run workflow。
+一次性前提：仓库 Actions secrets 配好 `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID`（步骤见 `.github/workflows/deploy-worker.yml` 头部注释）。
+
+## 手动部署（备胎）：二选一
 
 ### 方式 A — Cloudflare 网页后台（最简单，不用装东西）
 

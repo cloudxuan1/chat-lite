@@ -72,10 +72,10 @@ Claude = 提供创意
 
 ## 项目概述
 
-ember —— 跟 Claude Opus 4.6 聊天的单页网页小工具。前端（原生 HTML/CSS/JS）托管在 GitHub Pages，经 Cloudflare Worker 代理调 OpenRouter；打开要输访问密码。单次会话，不存历史，刷新即清空。
+chat-lite（曾用名 ember，2026 年迁仓改名）—— 跟 Claude 聊天的单页网页小工具。前端（原生 HTML/CSS/JS）托管在 GitHub Pages，经 Cloudflare Worker 代理调 OpenRouter；打开要输访问密码。聊天历史存本地浏览器（localStorage），可手动清空。
 
-- 网址：https://cloudxuan1.github.io/ember/
-- 仓库：https://github.com/cloudxuan1/ember （public）
+- 网址：https://cloudxuan1.github.io/chat-lite/
+- 仓库：https://github.com/cloudxuan1/chat-lite （public）
 - 链路：浏览器 → 密码门禁 → Worker（注入 key）→ OpenRouter → Opus 4.6
 
 ## 绝对不能动（摘要）
@@ -88,8 +88,10 @@ ember —— 跟 Claude Opus 4.6 聊天的单页网页小工具。前端（原�
 
 ## 当前任务和下一步
 
-- V1 已上线（聊天 + 密码门禁），可正常使用。
-- V2 候选（未承诺，待定）：system prompt（给模型设身份）、对话持久化、正规登录、Markdown 渲染。
+- 线上跑的是 `codex/add-reasoning-web` 分支（GitHub Pages 从它发布）：聊天 + 密码门禁 + 思考开关 + 联网搜索 + 本地历史。main 停在 V1，落后待合并。
+- Worker 已接 Anthropic 提示词缓存（滚动双断点 + usage 账单，Opus 起缓门槛 4096 token）。
+- Worker 部署已自动化：push 涉及 `worker/` 即自动发布（GitHub Actions，见 worker/README）。
+- V2 剩余候选（未承诺，待定）：system prompt、正规登录、Markdown 渲染。
 
 ## 详细项目信息
 
