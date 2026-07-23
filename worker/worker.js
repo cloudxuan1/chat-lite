@@ -65,6 +65,15 @@ export default {
     ) {
       return json({ error: "session_id 必须是 1 到 256 个字符" }, 400);
     }
+    if (
+      payload.maxCompletionTokens !== undefined
+      && (
+        !Number.isSafeInteger(payload.maxCompletionTokens)
+        || payload.maxCompletionTokens < 1
+      )
+    ) {
+      return json({ error: "maxCompletionTokens 必须是大于 0 的整数" }, 400);
+    }
 
     let upstream;
     try {
@@ -120,11 +129,15 @@ export function normalizeModel(model) {
   if (!model || typeof model.id !== "string" || !model.id) {
     return null;
   }
+  const providerMax = model.top_provider?.max_completion_tokens;
   return {
     id: model.id,
     name: typeof model.name === "string" && model.name ? model.name : model.id,
     description: typeof model.description === "string" ? model.description : "",
     contextLength: Number.isFinite(model.context_length) ? model.context_length : null,
+    maxCompletionTokens: Number.isFinite(providerMax) && providerMax > 0
+      ? Math.floor(providerMax)
+      : null,
     pricing: model.pricing && typeof model.pricing === "object" ? model.pricing : null,
     reasoning: model.reasoning && typeof model.reasoning === "object"
       ? model.reasoning
@@ -152,6 +165,9 @@ export function buildUpstreamBody(payload) {
   }
   if (payload.session_id !== undefined) {
     body.session_id = payload.session_id;
+  }
+  if (payload.maxCompletionTokens !== undefined) {
+    body.max_completion_tokens = payload.maxCompletionTokens;
   }
 
   return body;

@@ -533,6 +533,8 @@
       opacity var(--motion-panel) var(--ease-out),
       visibility 0s linear var(--motion-panel);
   }
+  .settings-child-screen { z-index: 21; }
+  .settings-screen.skip-motion { transition: none !important; }
   .settings-screen.is-open {
     visibility: visible;
     pointer-events: auto;
@@ -558,6 +560,14 @@
     line-height: 1.2;
     text-align: center;
   }
+  .settings-back,
+  .settings-nav-row,
+  .model-star,
+  .models-retry,
+  .token-step,
+  .models-scroll-top {
+    -webkit-tap-highlight-color: transparent;
+  }
   .settings-back {
     display: grid;
     place-items: center;
@@ -568,12 +578,23 @@
     background: transparent;
     border: none;
     border-radius: 12px;
+    transition: transform var(--motion-fast) var(--ease-out);
     cursor: pointer;
+  }
+  .settings-back svg,
+  .settings-nav-chevron,
+  .models-scroll-top svg,
+  .token-step svg {
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
   }
   .settings-scroll {
     flex: 1;
     min-height: 0;
     overflow-y: auto;
+    overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
   }
   .settings-content {
@@ -581,56 +602,105 @@
     margin: 0 auto;
     padding: 20px 18px 36px;
   }
-  .settings-section + .settings-section { margin-top: 20px; }
+  .settings-main-content { max-width: 600px; }
+  .settings-section + .settings-section { margin-top: 22px; }
   .settings-section-title {
-    margin: 0 0 8px 2px;
+    margin: 0 0 8px 3px;
     color: var(--text-muted);
     font-size: 12px;
     font-weight: 650;
   }
-  .current-model-card,
+  .settings-nav-group,
   .settings-card,
   .model-list {
     background: var(--bg-card);
     border-radius: 18px;
     box-shadow: var(--shadow);
   }
-  .current-model-card {
+  .settings-nav-group,
+  .model-list { overflow: hidden; }
+  .settings-nav-row {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 12px;
+    width: 100%;
     min-height: 72px;
-    padding: 13px 15px;
+    padding: 13px 13px 13px 15px;
+    color: var(--text-primary);
+    background: transparent;
+    border: none;
+    font: inherit;
+    text-align: left;
+    transition: transform var(--motion-fast) var(--ease-out);
+    cursor: pointer;
+  }
+  .settings-nav-row + .settings-nav-row::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 14px;
+    left: 58px;
+    height: .5px;
+    background: rgba(31,30,29,.1);
+  }
+  .settings-nav-icon {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    color: var(--accent);
+    background: rgba(217,119,87,.1);
+    border-radius: 10px;
+  }
+  .settings-nav-icon svg {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
   }
   .current-model-mark {
+    width: 22px;
+    height: 22px;
+    border: 6px solid var(--accent);
+    border-radius: 50%;
+  }
+  .settings-nav-copy {
+    min-width: 0;
+    flex: 1;
+  }
+  .settings-nav-title,
+  .settings-nav-summary {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .settings-nav-title {
+    font-size: 15px;
+    font-weight: 650;
+  }
+  .settings-nav-summary {
+    margin-top: 3px;
+    color: var(--text-muted);
+    font-size: 12px;
+  }
+  .settings-model-id {
+    font-family: 'SF Mono', 'Fira Code', Menlo, Consolas, monospace;
+    font-size: 11px;
+  }
+  .settings-nav-chevron {
     flex: none;
     width: 18px;
     height: 18px;
-    border: 5px solid var(--accent);
-    border-radius: 50%;
+    color: #b5b5b0;
+    stroke-width: 1.8;
   }
-  .current-model-text {
-    min-width: 0;
-  }
-  .current-model-name {
-    display: block;
-    overflow: hidden;
-    font-size: 15px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .current-model-id {
-    display: block;
-    overflow: hidden;
-    color: var(--text-muted);
-    font-family: 'SF Mono', 'Fira Code', Menlo, Consolas, monospace;
-    font-size: 11px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .settings-card {
-    padding: 15px;
-  }
+  .settings-card { padding: 15px; }
   .settings-card-label {
     display: block;
     margin-bottom: 9px;
@@ -643,11 +713,73 @@
     font-size: 12px;
     line-height: 1.5;
   }
+  .generation-card { padding: 0; overflow: hidden; }
+  .generation-block { padding: 15px; }
+  .generation-block + .generation-block {
+    border-top: .5px solid rgba(31,30,29,.1);
+  }
+  .max-token-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+  }
+  .max-token-row > .settings-card-label { margin: 0; }
+  .max-token-controls {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  #max-completion-tokens {
+    width: 104px;
+    min-height: 44px;
+    padding: 9px 10px;
+    color: var(--text-primary);
+    background: rgba(31,30,29,.045);
+    border: .5px solid rgba(31,30,29,.13);
+    border-radius: 12px;
+    outline: none;
+    font: 14px 'SF Mono', 'Fira Code', Menlo, Consolas, monospace;
+    text-align: center;
+    appearance: textfield;
+  }
+  #max-completion-tokens::-webkit-inner-spin-button,
+  #max-completion-tokens::-webkit-outer-spin-button { appearance: none; margin: 0; }
+  #max-completion-tokens::placeholder { color: var(--text-muted); }
+  .token-step {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    color: var(--text-secondary);
+    background: rgba(31,30,29,.045);
+    border: .5px solid rgba(31,30,29,.13);
+    border-radius: 12px;
+    transition: transform var(--motion-fast) var(--ease-out);
+    cursor: pointer;
+  }
+  .token-step svg { width: 17px; height: 17px; stroke-width: 1.8; }
+  .max-token-error {
+    display: block;
+    min-height: 17px;
+    margin: 7px 1px 0;
+    color: #9a3412;
+    font-size: 11px;
+    line-height: 1.4;
+  }
+  .model-toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    padding: 14px 18px 4px;
+    background: linear-gradient(var(--bg-primary) 80%, rgba(250,249,245,0));
+  }
   .model-search-wrap {
     position: relative;
     display: flex;
     align-items: center;
-    margin-bottom: 10px;
     color: var(--text-muted);
   }
   .model-search-wrap .search-icon {
@@ -683,6 +815,7 @@
     background: transparent;
     border: none;
     border-radius: 10px;
+    transition: transform var(--motion-fast) var(--ease-out);
     cursor: pointer;
   }
   .models-retry svg {
@@ -697,13 +830,11 @@
   .models-status {
     display: block;
     min-height: 18px;
-    margin: 0 2px 8px;
+    margin: 7px 2px 0;
     color: var(--text-muted);
     font-size: 12px;
   }
-  .model-list {
-    overflow: hidden;
-  }
+  .model-page-content { padding-top: 8px; padding-bottom: 110px; }
   .model-group-label {
     padding: 9px 14px 7px;
     color: var(--text-muted);
@@ -719,9 +850,7 @@
     border-bottom: .5px solid rgba(31,30,29,.1);
   }
   .model-choice:last-child { border-bottom: none; }
-  .model-choice.active {
-    background: rgba(217,119,87,.075);
-  }
+  .model-choice.active { background: rgba(217,119,87,.075); }
   .model-choice-select {
     display: flex;
     align-items: center;
@@ -759,6 +888,7 @@
     background: transparent;
     border: none;
     border-radius: 12px;
+    transition: transform var(--motion-fast) var(--ease-out);
     cursor: pointer;
   }
   .model-star svg {
@@ -770,29 +900,73 @@
     stroke-linecap: round;
     stroke-linejoin: round;
   }
-  .model-star[aria-pressed="true"] {
-    color: var(--accent);
+  .model-star[aria-pressed="true"] { color: var(--accent); }
+  .models-scroll-top {
+    position: absolute;
+    z-index: 3;
+    right: auto;
+    bottom: calc(22px + env(safe-area-inset-bottom));
+    left: 50%;
+    display: grid;
+    place-items: center;
+    width: 52px;
+    height: 52px;
+    padding: 0;
+    color: var(--text-secondary);
+    background: rgba(255,255,255,.66);
+    border: .5px solid rgba(31,30,29,.16);
+    border-radius: 50%;
+    box-shadow: 0 10px 32px rgba(31,30,29,.14);
+    backdrop-filter: blur(18px) saturate(1.35);
+    -webkit-backdrop-filter: blur(18px) saturate(1.35);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translate(-50%, 10px);
+    transition:
+      opacity var(--motion-fast) ease,
+      transform var(--motion-fast) var(--ease-out),
+      visibility 0s linear var(--motion-fast);
+    cursor: pointer;
+  }
+  .models-scroll-top.is-visible {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: translate(-50%, 0);
+    transition-delay: 0s;
+  }
+  .models-scroll-top svg { width: 21px; height: 21px; stroke-width: 1.8; }
+  .prompt-page-content { padding-top: 18px; padding-bottom: 48px; }
+  .prompt-editor-card {
+    padding: 15px;
+    background: var(--bg-card);
+    border-radius: 18px;
+    box-shadow: var(--shadow);
   }
   #system-prompt {
+    display: block;
     width: 100%;
-    min-height: 170px;
-    resize: vertical;
-    padding: 13px 14px;
+    min-height: 220px;
+    overflow: hidden;
+    resize: none;
+    padding: 2px;
     color: var(--text-primary);
-    background: rgba(31,30,29,.045);
+    background: transparent;
     border: none;
-    border-radius: 14px;
     outline: none;
     font-family: var(--font-ui);
     font-size: 16px;
-    line-height: 1.55;
+    line-height: 1.6;
   }
   .prompt-meta {
     display: flex;
     justify-content: space-between;
     gap: 10px;
-    margin-top: 8px;
+    margin-top: 12px;
+    padding-top: 11px;
     color: var(--text-muted);
+    border-top: .5px solid rgba(31,30,29,.1);
     font-size: 11px;
   }
   .settings-footer {
@@ -803,7 +977,7 @@
   }
   .settings-save {
     display: block;
-    width: min(100%, 684px);
+    width: min(100%, 564px);
     min-height: 48px;
     margin: 0 auto;
     color: #fff;
@@ -812,10 +986,17 @@
     border-radius: 14px;
     font: inherit;
     font-weight: 650;
+    transition: transform var(--motion-fast) var(--ease-out);
     cursor: pointer;
   }
   .settings-save:disabled { opacity: .45; cursor: default; }
   .settings-save:active { transform: scale(.98); }
+  .settings-back:active,
+  .settings-nav-row:active,
+  .model-star:active,
+  .models-retry:active,
+  .token-step:active { transform: scale(.97); }
+  .models-scroll-top.is-visible:active { transform: translate(-50%, 0) scale(.97); }
 
   /* ===== 访问密码遮罩 ===== */
   .gate {
@@ -870,8 +1051,10 @@
     .model-quick:hover,
     .icon-button:hover,
     .settings-back:hover,
+    .settings-nav-row:hover,
     .model-star:hover,
-    .models-retry:hover { background: rgba(31,30,29,.055); }
+    .models-retry:hover,
+    .token-step:hover { background: rgba(31,30,29,.055); }
     .model-choice:hover { background: rgba(31,30,29,.035); }
     .model-choice.active:hover { background: rgba(217,119,87,.095); }
   }
@@ -904,6 +1087,27 @@
       transition: opacity var(--motion-fast) ease, visibility 0s linear var(--motion-fast);
     }
     .quick-panel.is-open { transform: translateX(-50%); }
+    .models-scroll-top,
+    .models-scroll-top.is-visible {
+      transform: translate(-50%, 0);
+      transition: opacity var(--motion-fast) ease, visibility 0s linear var(--motion-fast);
+    }
+    .settings-back:active,
+    .settings-nav-row:active,
+    .model-star:active,
+    .models-retry:active,
+    .token-step:active,
+    .settings-save:active { transform: none; }
+    .models-scroll-top.is-visible:active { transform: translate(-50%, 0); }
+    :root { scroll-behavior: auto; }
+  }
+
+  @media (prefers-reduced-transparency: reduce) {
+    .models-scroll-top {
+      background: var(--bg-card);
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
   }
 </style>
 </head>
@@ -962,42 +1166,57 @@
       <span aria-hidden="true"></span>
     </header>
     <div class="settings-scroll">
-      <div class="settings-content">
+      <div class="settings-content settings-main-content">
         <section class="settings-section">
-          <p class="settings-section-title">当前模型</p>
-          <div class="current-model-card">
-            <span class="current-model-mark" aria-hidden="true"></span>
-            <span class="current-model-text">
-              <strong class="current-model-name" id="settings-model-name">Claude Opus 4.6</strong>
-              <span class="current-model-id" id="settings-model-id">anthropic/claude-opus-4.6</span>
-            </span>
-          </div>
-        </section>
-
-        <section class="settings-section settings-card">
-          <span class="settings-card-label">推理程度</span>
-          <div class="effort-options" id="settings-effort-options" role="group" aria-label="设置推理程度"></div>
-          <p class="settings-note" id="reasoning-note">越高越适合复杂问题，也会花更多时间和 token。</p>
-        </section>
-
-        <section class="settings-section">
-          <div class="model-search-wrap">
-            <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg>
-            <input id="model-search" type="search" placeholder="搜索模型" autocomplete="off" />
-            <button class="models-retry" id="models-retry" type="button" aria-label="重新拉取模型">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6v5h-5"></path><path d="M18.5 15a7 7 0 1 1-.6-7.7L20 9"></path></svg>
+          <p class="settings-section-title">对话</p>
+          <div class="settings-nav-group">
+            <button class="settings-nav-row" id="settings-model-open" type="button">
+              <span class="settings-nav-icon" aria-hidden="true">
+                <span class="current-model-mark"></span>
+              </span>
+              <span class="settings-nav-copy">
+                <strong class="settings-nav-title" id="settings-model-name">Opus 4.6</strong>
+                <span class="settings-nav-summary settings-model-id" id="settings-model-id">anthropic/claude-opus-4.6</span>
+              </span>
+              <svg class="settings-nav-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+            </button>
+            <button class="settings-nav-row" id="settings-prompt-open" type="button">
+              <span class="settings-nav-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M5 6h14M5 10h14M5 14h9M5 18h7"/></svg>
+              </span>
+              <span class="settings-nav-copy">
+                <strong class="settings-nav-title">系统提示词</strong>
+                <span class="settings-nav-summary" id="settings-prompt-summary">未设置</span>
+              </span>
+              <svg class="settings-nav-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
             </button>
           </div>
-          <output class="models-status" id="models-status"></output>
-          <div class="model-list" id="model-list"></div>
         </section>
 
-        <section class="settings-section settings-card">
-          <label class="settings-card-label" for="system-prompt">系统提示词</label>
-          <textarea id="system-prompt" placeholder="例如：你是我的私人助手。回答直接、可靠，需要联网时说明来源。"></textarea>
-          <div class="prompt-meta">
-            <span>只保存在这台设备，不会写进公开仓库。</span>
-            <span id="prompt-count">0 字</span>
+        <section class="settings-section">
+          <p class="settings-section-title">生成</p>
+          <div class="settings-card generation-card">
+            <div class="generation-block">
+              <span class="settings-card-label">推理程度</span>
+              <div class="effort-options" id="settings-effort-options" role="group" aria-label="设置推理程度"></div>
+              <p class="settings-note" id="reasoning-note">越高越适合复杂问题，也会花更多时间和 token。</p>
+            </div>
+            <div class="generation-block">
+              <div class="max-token-row">
+                <label class="settings-card-label" for="max-completion-tokens">最大生成量</label>
+                <span class="max-token-controls">
+                  <input id="max-completion-tokens" type="number" min="1" step="any" inputmode="numeric" placeholder="自动" aria-describedby="max-tokens-note max-tokens-error" />
+                  <button class="token-step" id="max-tokens-down" type="button" aria-label="减少 1024 token">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg>
+                  </button>
+                  <button class="token-step" id="max-tokens-up" type="button" aria-label="增加 1024 token">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 14 5-5 5 5"/></svg>
+                  </button>
+                </span>
+              </div>
+              <p class="settings-note" id="max-tokens-note">包含内部思考；留空为自动</p>
+              <output class="max-token-error" id="max-tokens-error"></output>
+            </div>
           </div>
         </section>
       </div>
@@ -1005,6 +1224,55 @@
     <footer class="settings-footer">
       <button class="settings-save" id="settings-save" type="button">保存并返回</button>
     </footer>
+  </section>
+
+  <section class="settings-screen settings-child-screen" id="model-screen" role="dialog" aria-modal="true" aria-hidden="true" aria-label="选择模型">
+    <header class="settings-header">
+      <button class="settings-back" id="model-back" type="button" aria-label="返回设置">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+      </button>
+      <h2>选择模型</h2>
+      <span aria-hidden="true"></span>
+    </header>
+    <div class="settings-scroll" id="model-scroll">
+      <div class="model-toolbar">
+        <div class="model-search-wrap">
+          <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg>
+          <input id="model-search" type="search" placeholder="搜索名称、ID 或描述" autocomplete="off" />
+          <button class="models-retry" id="models-retry" type="button" aria-label="重新拉取模型">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6v5h-5"></path><path d="M18.5 15a7 7 0 1 1-.6-7.7L20 9"></path></svg>
+          </button>
+        </div>
+        <output class="models-status" id="models-status"></output>
+      </div>
+      <div class="settings-content model-page-content">
+        <div class="model-list" id="model-list"></div>
+      </div>
+    </div>
+    <button class="models-scroll-top" id="models-scroll-top" type="button" aria-label="返回模型列表顶部">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 14 6-6 6 6"/></svg>
+    </button>
+  </section>
+
+  <section class="settings-screen settings-child-screen" id="prompt-screen" role="dialog" aria-modal="true" aria-hidden="true" aria-label="编辑系统提示词">
+    <header class="settings-header">
+      <button class="settings-back" id="prompt-back" type="button" aria-label="返回设置">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+      </button>
+      <h2>系统提示词</h2>
+      <span aria-hidden="true"></span>
+    </header>
+    <div class="settings-scroll" id="prompt-scroll">
+      <div class="settings-content prompt-page-content">
+        <div class="prompt-editor-card">
+          <textarea id="system-prompt" placeholder="例如：你是我的私人助手。回答直接、可靠，需要联网时说明来源。"></textarea>
+          <div class="prompt-meta">
+            <span>只保存在这台设备，不会写进公开仓库。</span>
+            <span id="prompt-count">0 字</span>
+          </div>
+        </div>
+      </div>
+    </div>
   </section>
 
   <main class="messages" id="messages">
@@ -1030,6 +1298,7 @@
   const MODEL_CATALOG_KEY = "ember_model_catalog";
   const SYSTEM_PROMPT_KEY = "ember_system_prompt";
   const REASONING_EFFORT_KEY = "ember_reasoning_effort";
+  const MAX_COMPLETION_TOKENS_KEY = "ember_max_completion_tokens";
   const SESSION_KEY = "ember_session_id";
   const WEB_KEY = "ember_web";
   const EFFORT_OPTIONS = [
@@ -1048,6 +1317,7 @@
   let fetchedModels = loadModelCatalog();
   let systemPrompt = localStorage.getItem(SYSTEM_PROMPT_KEY) || "";
   let reasoningEffort = loadReasoningEffort();
+  let maxCompletionTokens = loadMaxCompletionTokens();
   let webSearchEnabled = localStorage.getItem(WEB_KEY) !== "0";
   let sessionId = loadSessionId();
   let modelsLoadedThisPage = false;
@@ -1055,6 +1325,7 @@
   let draftModel = currentModel;
   let draftFavorites = favoriteModels.map((item) => ({ ...item }));
   let draftReasoningEffort = reasoningEffort;
+  let draftMaxCompletionTokens = maxCompletionTokens === null ? "" : String(maxCompletionTokens);
   let settingsSnapshot = "";
   let settingsTrigger = null;
 
@@ -1075,14 +1346,29 @@
   const settingsScreen = document.getElementById("settings-screen");
   const settingsBack = document.getElementById("settings-back");
   const settingsSave = document.getElementById("settings-save");
+  const settingsModelOpen = document.getElementById("settings-model-open");
+  const settingsPromptOpen = document.getElementById("settings-prompt-open");
   const settingsModelName = document.getElementById("settings-model-name");
   const settingsModelId = document.getElementById("settings-model-id");
+  const settingsPromptSummary = document.getElementById("settings-prompt-summary");
   const settingsEffortOptions = document.getElementById("settings-effort-options");
   const reasoningNote = document.getElementById("reasoning-note");
+  const maxCompletionTokensInput = document.getElementById("max-completion-tokens");
+  const maxTokensNote = document.getElementById("max-tokens-note");
+  const maxTokensError = document.getElementById("max-tokens-error");
+  const maxTokensDown = document.getElementById("max-tokens-down");
+  const maxTokensUp = document.getElementById("max-tokens-up");
+  const modelScreen = document.getElementById("model-screen");
+  const modelBack = document.getElementById("model-back");
+  const modelScroll = document.getElementById("model-scroll");
   const modelSearch = document.getElementById("model-search");
   const modelsRetry = document.getElementById("models-retry");
   const modelsStatus = document.getElementById("models-status");
   const modelList = document.getElementById("model-list");
+  const modelsScrollTop = document.getElementById("models-scroll-top");
+  const promptScreen = document.getElementById("prompt-screen");
+  const promptBack = document.getElementById("prompt-back");
+  const promptScroll = document.getElementById("prompt-scroll");
   const systemPromptInput = document.getElementById("system-prompt");
   const promptCount = document.getElementById("prompt-count");
   const composer = document.getElementById("composer");
@@ -1105,6 +1391,13 @@
     const saved = localStorage.getItem(REASONING_EFFORT_KEY);
     if (EFFORT_OPTIONS.some((item) => item.value === saved)) return saved;
     return localStorage.getItem(LEGACY_REASONING_KEY) === "0" ? "off" : "medium";
+  }
+
+  function loadMaxCompletionTokens() {
+    const saved = localStorage.getItem(MAX_COMPLETION_TOKENS_KEY);
+    if (saved === null || saved === "") return null;
+    const value = Number(saved);
+    return Number.isInteger(value) && value > 0 ? value : null;
   }
 
   function createSessionId() {
@@ -1147,6 +1440,7 @@
       name: String(item?.name || "").trim(),
       description: String(item?.description || "").trim().slice(0, 600),
       contextLength: Number(item?.contextLength || 0) || null,
+      maxCompletionTokens: Number(item?.maxCompletionTokens || 0) || null,
       pricing: item?.pricing && typeof item.pricing === "object" ? item.pricing : null,
       reasoning: item?.reasoning && typeof item.reasoning === "object" ? item.reasoning : null,
       supportedParameters: Array.isArray(item?.supportedParameters) ? item.supportedParameters : [],
@@ -1160,7 +1454,7 @@
   }
 
   function saveModelCatalog(items) {
-    const safe = items.slice(0, 500).map(normalizeModel).filter(Boolean);
+    const safe = items.map(normalizeModel).filter(Boolean);
     fetchedModels = safe;
     try {
       localStorage.setItem(MODEL_CATALOG_KEY, JSON.stringify(safe));
@@ -1255,19 +1549,62 @@
   function settingsState() {
     return JSON.stringify({
       model: draftModel,
-      favorites: draftFavorites,
       reasoningEffort: draftReasoningEffort,
       systemPrompt: systemPromptInput.value,
+      maxCompletionTokens: draftMaxCompletionTokens,
     });
   }
 
+  function maxTokensValidationMessage() {
+    const raw = draftMaxCompletionTokens.trim();
+    if (!raw) return "";
+    if (!/^\d+$/.test(raw) || !Number.isSafeInteger(Number(raw)) || Number(raw) < 1) {
+      return "请输入大于 0 的整数，或留空使用自动。";
+    }
+    const modelMax = modelById(draftModel)?.maxCompletionTokens;
+    if (modelMax && Number(raw) > modelMax) {
+      return `当前模型最多支持 ${modelMax.toLocaleString()} token。`;
+    }
+    return "";
+  }
+
+  function updateMaxTokensUi() {
+    const modelMax = modelById(draftModel)?.maxCompletionTokens;
+    maxTokensNote.textContent = modelMax
+      ? `包含内部思考；留空为自动 · 当前模型最多 ${modelMax.toLocaleString()}`
+      : "包含内部思考；留空为自动";
+    const message = maxTokensValidationMessage();
+    maxTokensError.textContent = message;
+    maxCompletionTokensInput.setAttribute("aria-invalid", String(Boolean(message)));
+    settingsSave.disabled = Boolean(message);
+    return !message;
+  }
+
   function updateSettingsDirty() {
-    const dirty = settingsState() !== settingsSnapshot;
-    settingsSave.textContent = dirty ? "保存并返回" : "返回聊天";
+    settingsSave.textContent = "保存并返回";
+    updateMaxTokensUi();
   }
 
   function updatePromptCount() {
-    promptCount.textContent = `${systemPromptInput.value.length.toLocaleString()} 字`;
+    const length = systemPromptInput.value.length;
+    promptCount.textContent = `${length.toLocaleString()} 字`;
+    settingsPromptSummary.textContent = systemPromptInput.value.trim()
+      ? `已设置 · ${length.toLocaleString()} 字`
+      : "未设置";
+    updateSettingsDirty();
+  }
+
+  function autoGrowSystemPrompt() {
+    systemPromptInput.style.height = "auto";
+    systemPromptInput.style.height = `${Math.max(systemPromptInput.scrollHeight, 220)}px`;
+  }
+
+  function stepMaxCompletionTokens(direction) {
+    const raw = draftMaxCompletionTokens.trim();
+    const current = /^\d+$/.test(raw) ? Number(raw) : 0;
+    const next = direction > 0 ? current + 1024 : current - 1024;
+    draftMaxCompletionTokens = next > 0 ? String(next) : "";
+    maxCompletionTokensInput.value = draftMaxCompletionTokens;
     updateSettingsDirty();
   }
 
@@ -1288,6 +1625,7 @@
     } else {
       reasoningNote.textContent = "越高越适合复杂问题，也会花更多时间和 token。";
     }
+    updateMaxTokensUi();
   }
 
   function collectVisibleModels() {
@@ -1306,7 +1644,7 @@
     };
     const favorites = [...byId.values()].filter((model) => favoriteIds.has(model.id) && matches(model));
     const others = [...byId.values()].filter((model) => !favoriteIds.has(model.id) && matches(model));
-    return { favorites, others: others.slice(0, Math.max(0, 80 - favorites.length)) };
+    return { favorites, others };
   }
 
   function makeStarIcon() {
@@ -1356,8 +1694,9 @@
             { id: model.id, label: friendlyModelName(model.id) },
           ]);
         }
+        favoriteModels = normalizeFavorites(draftFavorites);
+        localStorage.setItem(FAVORITES_KEY, JSON.stringify(favoriteModels));
         renderModelList();
-        updateSettingsDirty();
       });
 
       const select = () => {
@@ -1441,8 +1780,10 @@
     draftModel = currentModel;
     draftFavorites = favoriteModels.map((item) => ({ ...item }));
     draftReasoningEffort = reasoningEffort;
+    draftMaxCompletionTokens = maxCompletionTokens === null ? "" : String(maxCompletionTokens);
     modelSearch.value = "";
     systemPromptInput.value = systemPrompt;
+    maxCompletionTokensInput.value = draftMaxCompletionTokens;
     updateSettingsModel();
     renderModelList();
     updatePromptCount();
@@ -1454,13 +1795,77 @@
     messagesEl.inert = true;
     composer.inert = true;
     settingsBack.focus();
-    void fetchModels();
+    requestAnimationFrame(autoGrowSystemPrompt);
   }
 
-  function closeSettings({ force = false } = {}) {
+  function openModelScreen() {
+    settingsScreen.inert = true;
+    modelScreen.classList.add("is-open");
+    modelScreen.setAttribute("aria-hidden", "false");
+    modelScroll.scrollTop = 0;
+    modelSearch.value = "";
+    renderModelList();
+    modelsStatus.textContent = fetchedModels.length
+      ? `本地已有 ${fetchedModels.length.toLocaleString()} 个模型，正在刷新…`
+      : "准备拉取 OpenRouter 模型…";
+    modelBack.focus();
+    updateModelScrollTop();
+    void fetchModels({ force: true });
+  }
+
+  function skipPanelMotionOnce(screen) {
+    screen.classList.add("skip-motion");
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      screen.classList.remove("skip-motion");
+    }));
+  }
+
+  function closeModelScreen({ instant = false } = {}) {
+    if (instant) skipPanelMotionOnce(modelScreen);
+    modelScreen.classList.remove("is-open");
+    modelScreen.setAttribute("aria-hidden", "true");
+    settingsScreen.inert = false;
+    settingsModelOpen.focus();
+  }
+
+  function openPromptScreen() {
+    settingsScreen.inert = true;
+    promptScreen.classList.add("is-open");
+    promptScreen.setAttribute("aria-hidden", "false");
+    promptScroll.scrollTop = 0;
+    promptBack.focus();
+    requestAnimationFrame(autoGrowSystemPrompt);
+  }
+
+  function closePromptScreen({ instant = false } = {}) {
+    if (instant) skipPanelMotionOnce(promptScreen);
+    promptScreen.classList.remove("is-open");
+    promptScreen.setAttribute("aria-hidden", "true");
+    settingsScreen.inert = false;
+    updatePromptCount();
+    settingsPromptOpen.focus();
+  }
+
+  function updateModelScrollTop() {
+    const visible = modelScroll.scrollTop > 360;
+    modelsScrollTop.classList.toggle("is-visible", visible);
+  }
+
+  function scrollModelsToTop() {
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    modelScroll.scrollTo({ top: 0, behavior: reducedMotion ? "auto" : "smooth" });
+  }
+
+  function closeSettings({ force = false, instant = false } = {}) {
     if (!force && settingsState() !== settingsSnapshot && !window.confirm("放弃还没保存的设置？")) {
       return;
     }
+    modelScreen.classList.remove("is-open");
+    modelScreen.setAttribute("aria-hidden", "true");
+    promptScreen.classList.remove("is-open");
+    promptScreen.setAttribute("aria-hidden", "true");
+    settingsScreen.inert = false;
+    if (instant) skipPanelMotionOnce(settingsScreen);
     settingsScreen.classList.remove("is-open");
     settingsScreen.setAttribute("aria-hidden", "true");
     document.querySelector(".topbar").inert = false;
@@ -1472,15 +1877,27 @@
   }
 
   function saveSettings() {
+    if (!updateMaxTokensUi()) {
+      maxCompletionTokensInput.focus();
+      return;
+    }
     if (settingsState() !== settingsSnapshot) {
       currentModel = draftModel || DEFAULT_MODEL;
       favoriteModels = normalizeFavorites(draftFavorites);
       reasoningEffort = draftReasoningEffort;
       systemPrompt = systemPromptInput.value.trim();
+      maxCompletionTokens = draftMaxCompletionTokens
+        ? Number(draftMaxCompletionTokens)
+        : null;
       localStorage.setItem(MODEL_KEY, currentModel);
       localStorage.setItem(FAVORITES_KEY, JSON.stringify(favoriteModels));
       localStorage.setItem(REASONING_EFFORT_KEY, reasoningEffort);
       localStorage.setItem(SYSTEM_PROMPT_KEY, systemPrompt);
+      if (maxCompletionTokens === null) {
+        localStorage.removeItem(MAX_COMPLETION_TOKENS_KEY);
+      } else {
+        localStorage.setItem(MAX_COMPLETION_TOKENS_KEY, String(maxCompletionTokens));
+      }
       updateTopbar();
     }
     closeSettings({ force: true });
@@ -1748,6 +2165,7 @@
           reasoningEffort: requestEffort,
           session_id: sessionId,
           webSearch: webSearchEnabled,
+          ...(maxCompletionTokens === null ? {} : { maxCompletionTokens }),
         }),
       });
 
@@ -1860,9 +2278,29 @@
   settingsOpen.addEventListener("click", openSettings);
   settingsBack.addEventListener("click", () => closeSettings());
   settingsSave.addEventListener("click", saveSettings);
+  settingsModelOpen.addEventListener("click", openModelScreen);
+  settingsPromptOpen.addEventListener("click", openPromptScreen);
+  modelBack.addEventListener("click", closeModelScreen);
+  promptBack.addEventListener("click", closePromptScreen);
   modelSearch.addEventListener("input", renderModelList);
   modelsRetry.addEventListener("click", () => void fetchModels({ force: true }));
-  systemPromptInput.addEventListener("input", updatePromptCount);
+  modelScroll.addEventListener("scroll", updateModelScrollTop, { passive: true });
+  modelsScrollTop.addEventListener("click", scrollModelsToTop);
+  systemPromptInput.addEventListener("input", () => {
+    autoGrowSystemPrompt();
+    updatePromptCount();
+  });
+  maxCompletionTokensInput.addEventListener("input", () => {
+    draftMaxCompletionTokens = maxCompletionTokensInput.value.trim();
+    updateSettingsDirty();
+  });
+  maxCompletionTokensInput.addEventListener("keydown", (event) => {
+    if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+    event.preventDefault();
+    stepMaxCompletionTokens(event.key === "ArrowUp" ? 1 : -1);
+  });
+  maxTokensDown.addEventListener("click", () => stepMaxCompletionTokens(-1));
+  maxTokensUp.addEventListener("click", () => stepMaxCompletionTokens(1));
   webToggle.addEventListener("click", () => {
     webSearchEnabled = !webSearchEnabled;
     localStorage.setItem(WEB_KEY, webSearchEnabled ? "1" : "0");
@@ -1875,8 +2313,12 @@
   });
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
-    if (settingsScreen.classList.contains("is-open")) {
-      closeSettings();
+    if (modelScreen.classList.contains("is-open")) {
+      closeModelScreen({ instant: true });
+    } else if (promptScreen.classList.contains("is-open")) {
+      closePromptScreen({ instant: true });
+    } else if (settingsScreen.classList.contains("is-open")) {
+      closeSettings({ instant: true });
     } else if (quickPanel.classList.contains("is-open")) {
       closeQuickPanel();
       modelQuick.focus();

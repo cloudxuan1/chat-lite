@@ -148,11 +148,13 @@ test("buildUpstreamBody：新推理档位是单一真相，并转发 session_id"
     reasoning: false,
     session_id: "session-123",
     webSearch: true,
+    maxCompletionTokens: 16384,
   });
 
   assert.deepStrictEqual(body.reasoning, { effort: "high" });
   assert.strictEqual(body.include_reasoning, undefined);
   assert.strictEqual(body.session_id, "session-123");
+  assert.strictEqual(body.max_completion_tokens, 16384);
   assert.deepStrictEqual(body.plugins, [{ id: "web", max_results: 5 }]);
 });
 
@@ -169,6 +171,7 @@ test("buildUpstreamBody：off 映射为 none，旧布尔字段仅作兼容", () 
   });
   assert.deepStrictEqual(legacyBody.reasoning, { effort: "medium" });
   assert.strictEqual(legacyBody.include_reasoning, undefined);
+  assert.strictEqual(legacyBody.max_completion_tokens, undefined);
 });
 
 test("normalizeModel：只输出前端需要的模型目录字段", () => {
@@ -184,6 +187,7 @@ test("normalizeModel：只输出前端需要的模型目录字段", () => {
     name: "Claude Opus 4.6",
     description: "desc",
     context_length: 200000,
+    top_provider: { max_completion_tokens: 128000 },
     pricing: { prompt: "0.000005", completion: "0.000025" },
     reasoning,
     supported_parameters: ["reasoning", "tools", 123],
@@ -195,11 +199,44 @@ test("normalizeModel：只输出前端需要的模型目录字段", () => {
     name: "Claude Opus 4.6",
     description: "desc",
     contextLength: 200000,
+    maxCompletionTokens: 128000,
     pricing: { prompt: "0.000005", completion: "0.000025" },
     reasoning,
     supportedParameters: ["reasoning", "tools"],
   });
   assert.strictEqual(normalizeModel({ name: "missing id" }), null);
+});
+
+await testAsync("请求拒绝非法最大生成量且不会调用 OpenRouter", async () => {
+  const originalFetch = globalThis.fetch;
+  let upstreamCalled = false;
+  globalThis.fetch = async () => {
+    upstreamCalled = true;
+    throw new Error("不应调用");
+  };
+
+  try {
+    for (const invalid of [0, -1, 1.5, "1024"]) {
+      const response = await worker.fetch(
+        new Request("https://worker.example", {
+          method: "POST",
+          body: JSON.stringify({
+            messages: [{ role: "user", content: "hello" }],
+            password: "correct",
+            maxCompletionTokens: invalid,
+          }),
+        }),
+        {
+          ACCESS_PASSWORD: "correct",
+          OPENROUTER_API_KEY: "test-key",
+        },
+      );
+      assert.strictEqual(response.status, 400);
+    }
+    assert.strictEqual(upstreamCalled, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 await testAsync("请求先校验密码：未授权的模型目录请求不会调用 OpenRouter", async () => {
@@ -240,6 +277,7 @@ await testAsync("模型目录请求无需 messages，返回精简字段", async 
           name: "GPT 5.5",
           description: "desc",
           context_length: 128000,
+          top_provider: { max_completion_tokens: 32768 },
           pricing: { prompt: "1" },
           reasoning: { supported_efforts: ["low", "high"] },
           supported_parameters: ["reasoning"],
@@ -267,6 +305,7 @@ await testAsync("模型目录请求无需 messages，返回精简字段", async 
     assert.strictEqual(response.status, 200);
     assert.strictEqual(result.models.length, 1);
     assert.strictEqual(result.models[0].id, "openai/gpt-5.5");
+    assert.strictEqual(result.models[0].maxCompletionTokens, 32768);
     assert.strictEqual(result.models[0].extra, undefined);
   } finally {
     globalThis.fetch = originalFetch;
