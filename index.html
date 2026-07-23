@@ -55,8 +55,8 @@
     grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     align-items: center;
     gap: 8px;
-    min-height: 64px;
-    padding: 10px 12px 10px 18px;
+    min-height: calc(64px + env(safe-area-inset-top));
+    padding: calc(10px + env(safe-area-inset-top)) 12px 10px 18px;
     border-bottom: 0.5px solid rgba(31,30,29,0.12);
     background: var(--bg-primary);
   }
@@ -545,8 +545,8 @@
     display: grid;
     grid-template-columns: 44px 1fr 44px;
     align-items: center;
-    min-height: 64px;
-    padding: 10px 12px;
+    min-height: calc(64px + env(safe-area-inset-top));
+    padding: calc(10px + env(safe-area-inset-top)) 12px 10px;
     border-bottom: .5px solid rgba(31,30,29,.12);
     background: var(--bg-primary);
   }
@@ -885,6 +885,15 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
+    .model-quick svg,
+    .reasoning-chevron,
+    .citations-chevron {
+      transition: none;
+    }
+    .reasoning-mark,
+    .msg.typing::after {
+      animation: none;
+    }
     .settings-screen {
       transform: none;
       transition: opacity var(--motion-fast) ease, visibility 0s linear var(--motion-fast);
@@ -919,7 +928,7 @@
         <span class="model-quick-label" id="model-quick-label">Opus 4.6</span>
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg>
       </button>
-      <div class="quick-panel" id="quick-panel" aria-hidden="true">
+      <div class="quick-panel" id="quick-panel" role="region" aria-label="模型快捷设置" aria-hidden="true">
         <span class="quick-model-id" id="quick-model-id"></span>
         <span class="control-label">推理程度</span>
         <div class="effort-options" id="quick-effort-options" role="group" aria-label="推理程度"></div>
@@ -1868,7 +1877,7 @@
     if (event.key !== "Escape") return;
     if (settingsScreen.classList.contains("is-open")) {
       closeSettings();
-    } else {
+    } else if (quickPanel.classList.contains("is-open")) {
       closeQuickPanel();
       modelQuick.focus();
     }
