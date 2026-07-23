@@ -23,6 +23,11 @@
 
     --radius: 20px;
     --radius-sm: 8px;
+
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+    --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+    --motion-fast: 160ms;
+    --motion-panel: 240ms;
   }
 
   * { box-sizing: border-box; }
@@ -44,35 +49,73 @@
   /* ===== 顶栏 ===== */
   .topbar {
     flex: none;
-    display: flex;
+    position: relative;
+    z-index: 4;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     align-items: center;
     gap: 8px;
-    padding: 14px 18px;
+    min-height: 64px;
+    padding: 10px 12px 10px 18px;
     border-bottom: 0.5px solid rgba(31,30,29,0.12);
     background: var(--bg-primary);
   }
-  .topbar-spacer { flex: 1; }
-  .tools {
+  .brand-wrap {
     display: flex;
-    gap: 6px;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
   }
-  .tool-toggle {
+  .model-control {
+    position: relative;
+    justify-self: center;
+    min-width: 0;
+  }
+  .model-quick {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    min-width: 44px;
+    max-width: 138px;
+    min-height: 44px;
+    padding: 7px 10px;
     border: none;
-    border-radius: var(--radius-sm);
-    padding: 5px 8px;
+    border-radius: 12px;
     color: var(--text-secondary);
-    background: rgba(31,30,29,0.06);
-    font-size: 13px;
+    background: transparent;
+    font-size: 14px;
+    font-weight: 650;
     cursor: pointer;
   }
-  .tool-toggle[aria-pressed="true"] {
-    color: #fff;
-    background: var(--btn-primary-bg);
+  .model-quick:active,
+  .icon-button:active {
+    transform: scale(.97);
+  }
+  .model-quick-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .model-quick svg {
+    flex: none;
+    width: 15px;
+    height: 15px;
+    transition: transform var(--motion-fast) var(--ease-out);
+  }
+  .model-quick[aria-expanded="true"] svg { transform: rotate(180deg); }
+  .topbar-actions {
+    justify-self: end;
+    display: flex;
+    align-items: center;
+    gap: 2px;
   }
   .tool-clear {
+    min-width: 44px;
+    min-height: 44px;
     border: none;
-    border-radius: var(--radius-sm);
-    padding: 5px 8px;
+    border-radius: 12px;
+    padding: 6px 8px;
     color: var(--text-muted);
     background: transparent;
     font-size: 13px;
@@ -81,6 +124,129 @@
   .tool-clear:disabled {
     opacity: .35;
     cursor: default;
+  }
+  .icon-button {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    color: var(--text-secondary);
+    background: transparent;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: color var(--motion-fast) ease, transform var(--motion-fast) var(--ease-out);
+  }
+  .icon-button svg,
+  .settings-back svg,
+  .search-icon {
+    width: 20px;
+    height: 20px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.65;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .quick-panel {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 50%;
+    width: min(280px, calc(100vw - 24px));
+    padding: 14px;
+    color: var(--text-primary);
+    background: rgba(255,255,255,.97);
+    border-radius: 18px;
+    box-shadow: 0 14px 38px rgba(31,30,29,.15), 0 0 0 .5px rgba(31,30,29,.16);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateX(-50%) translateY(-5px) scale(.98);
+    transform-origin: top center;
+    transition:
+      opacity var(--motion-fast) var(--ease-out),
+      transform var(--motion-fast) var(--ease-out),
+      visibility 0s linear var(--motion-fast);
+  }
+  .quick-panel.is-open {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: translateX(-50%) translateY(0) scale(1);
+    transition-delay: 0s;
+  }
+  .quick-model-id {
+    display: block;
+    margin-bottom: 11px;
+    overflow: hidden;
+    color: var(--text-muted);
+    font-family: 'SF Mono', 'Fira Code', Menlo, Consolas, monospace;
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .control-label {
+    display: block;
+    margin-bottom: 7px;
+    color: var(--text-muted);
+    font-size: 12px;
+  }
+  .effort-options {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
+    padding: 4px;
+    background: rgba(31,30,29,.07);
+    border-radius: 12px;
+  }
+  .effort-option {
+    min-height: 44px;
+    padding: 6px 3px;
+    color: var(--text-secondary);
+    background: transparent;
+    border: none;
+    border-radius: 9px;
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .effort-option[aria-pressed="true"] {
+    color: #fff;
+    background: var(--btn-primary-bg);
+  }
+  .effort-option:disabled {
+    opacity: .35;
+    cursor: default;
+  }
+  .quick-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    min-height: 44px;
+    margin-top: 8px;
+    padding: 5px 3px;
+    color: var(--text-secondary);
+    background: transparent;
+    border: none;
+    border-top: .5px solid rgba(31,30,29,.1);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .quick-state {
+    color: var(--text-muted);
+    font-size: 12px;
+  }
+  .quick-chevron {
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: var(--text-muted);
+    stroke-width: 1.65;
+    stroke-linecap: round;
+    stroke-linejoin: round;
   }
   .spark {
     width: 9px; height: 9px;
@@ -291,6 +457,9 @@
   .cache-badge.hit .num {
     color: var(--accent);
   }
+  .cache-badge.write .num {
+    color: var(--text-secondary);
+  }
   /* 等待首字时的呼吸光标 */
   .msg.typing::after {
     content: '';
@@ -332,7 +501,7 @@
 
   #send {
     flex: none;
-    width: 42px; height: 42px;
+    width: 44px; height: 44px;
     border: none;
     border-radius: 50%;
     background: var(--btn-primary-bg);
@@ -345,11 +514,314 @@
   #send:hover:not(:disabled) { opacity: .85; transform: translateY(-1px); }
   #send:disabled { opacity: .4; cursor: default; }
 
+  /* ===== 全屏设置 ===== */
+  .settings-screen {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    overflow: hidden;
+    background: var(--bg-primary);
+    visibility: hidden;
+    pointer-events: none;
+    opacity: .98;
+    transform: translateX(100%);
+    transition:
+      transform var(--motion-panel) var(--ease-out),
+      opacity var(--motion-panel) var(--ease-out),
+      visibility 0s linear var(--motion-panel);
+  }
+  .settings-screen.is-open {
+    visibility: visible;
+    pointer-events: auto;
+    opacity: 1;
+    transform: translateX(0);
+    transition-delay: 0s;
+  }
+  .settings-header {
+    flex: none;
+    display: grid;
+    grid-template-columns: 44px 1fr 44px;
+    align-items: center;
+    min-height: 64px;
+    padding: 10px 12px;
+    border-bottom: .5px solid rgba(31,30,29,.12);
+    background: var(--bg-primary);
+  }
+  .settings-header h2 {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: 21px;
+    font-weight: 500;
+    line-height: 1.2;
+    text-align: center;
+  }
+  .settings-back {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    color: var(--text-secondary);
+    background: transparent;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+  }
+  .settings-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .settings-content {
+    width: min(100%, 720px);
+    margin: 0 auto;
+    padding: 20px 18px 36px;
+  }
+  .settings-section + .settings-section { margin-top: 20px; }
+  .settings-section-title {
+    margin: 0 0 8px 2px;
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 650;
+  }
+  .current-model-card,
+  .settings-card,
+  .model-list {
+    background: var(--bg-card);
+    border-radius: 18px;
+    box-shadow: var(--shadow);
+  }
+  .current-model-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 72px;
+    padding: 13px 15px;
+  }
+  .current-model-mark {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    border: 5px solid var(--accent);
+    border-radius: 50%;
+  }
+  .current-model-text {
+    min-width: 0;
+  }
+  .current-model-name {
+    display: block;
+    overflow: hidden;
+    font-size: 15px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .current-model-id {
+    display: block;
+    overflow: hidden;
+    color: var(--text-muted);
+    font-family: 'SF Mono', 'Fira Code', Menlo, Consolas, monospace;
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .settings-card {
+    padding: 15px;
+  }
+  .settings-card-label {
+    display: block;
+    margin-bottom: 9px;
+    font-size: 13px;
+    font-weight: 650;
+  }
+  .settings-note {
+    margin: 9px 0 0;
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .model-search-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+    color: var(--text-muted);
+  }
+  .model-search-wrap .search-icon {
+    position: absolute;
+    left: 13px;
+    width: 17px;
+    height: 17px;
+    pointer-events: none;
+  }
+  #model-search {
+    width: 100%;
+    min-height: 46px;
+    padding: 10px 42px 10px 39px;
+    color: var(--text-primary);
+    background: rgba(31,30,29,.06);
+    border: none;
+    border-radius: 14px;
+    outline: none;
+    font: inherit;
+    font-size: 16px;
+  }
+  #model-search::placeholder,
+  #system-prompt::placeholder { color: var(--text-muted); }
+  .models-retry {
+    position: absolute;
+    right: 1px;
+    display: grid;
+    place-items: center;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0;
+    color: var(--text-muted);
+    background: transparent;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+  }
+  .models-retry svg {
+    width: 17px;
+    height: 17px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.65;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .models-status {
+    display: block;
+    min-height: 18px;
+    margin: 0 2px 8px;
+    color: var(--text-muted);
+    font-size: 12px;
+  }
+  .model-list {
+    overflow: hidden;
+  }
+  .model-group-label {
+    padding: 9px 14px 7px;
+    color: var(--text-muted);
+    background: rgba(31,30,29,.035);
+    font-size: 11px;
+    font-weight: 650;
+  }
+  .model-choice {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 44px;
+    align-items: center;
+    min-height: 61px;
+    border-bottom: .5px solid rgba(31,30,29,.1);
+  }
+  .model-choice:last-child { border-bottom: none; }
+  .model-choice.active {
+    background: rgba(217,119,87,.075);
+  }
+  .model-choice-select {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    min-height: 60px;
+    padding: 8px 10px 8px 15px;
+    color: inherit;
+    background: transparent;
+    border: none;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .model-choice-text { min-width: 0; }
+  .model-choice-name,
+  .model-choice-id {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .model-choice-name { font-size: 14px; font-weight: 650; }
+  .model-choice-id {
+    color: var(--text-muted);
+    font-family: 'SF Mono', 'Fira Code', Menlo, Consolas, monospace;
+    font-size: 11px;
+  }
+  .model-star {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    color: #aaa49b;
+    background: transparent;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+  }
+  .model-star svg {
+    width: 19px;
+    height: 19px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.65;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .model-star[aria-pressed="true"] {
+    color: var(--accent);
+  }
+  #system-prompt {
+    width: 100%;
+    min-height: 170px;
+    resize: vertical;
+    padding: 13px 14px;
+    color: var(--text-primary);
+    background: rgba(31,30,29,.045);
+    border: none;
+    border-radius: 14px;
+    outline: none;
+    font-family: var(--font-ui);
+    font-size: 16px;
+    line-height: 1.55;
+  }
+  .prompt-meta {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 8px;
+    color: var(--text-muted);
+    font-size: 11px;
+  }
+  .settings-footer {
+    flex: none;
+    padding: 12px 18px calc(14px + env(safe-area-inset-bottom));
+    border-top: .5px solid rgba(31,30,29,.1);
+    background: var(--bg-primary);
+  }
+  .settings-save {
+    display: block;
+    width: min(100%, 684px);
+    min-height: 48px;
+    margin: 0 auto;
+    color: #fff;
+    background: var(--btn-primary-bg);
+    border: none;
+    border-radius: 14px;
+    font: inherit;
+    font-weight: 650;
+    cursor: pointer;
+  }
+  .settings-save:disabled { opacity: .45; cursor: default; }
+  .settings-save:active { transform: scale(.98); }
+
   /* ===== 访问密码遮罩 ===== */
   .gate {
     position: fixed;
     inset: 0;
-    z-index: 10;
+    z-index: 30;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -393,6 +865,37 @@
     cursor: pointer;
   }
   .gate-err { font-size: 13px; color: #9a3412; min-height: 16px; }
+
+  @media (hover: hover) and (pointer: fine) {
+    .model-quick:hover,
+    .icon-button:hover,
+    .settings-back:hover,
+    .model-star:hover,
+    .models-retry:hover { background: rgba(31,30,29,.055); }
+    .model-choice:hover { background: rgba(31,30,29,.035); }
+    .model-choice.active:hover { background: rgba(217,119,87,.095); }
+  }
+
+  button:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  [role="button"]:focus-visible {
+    outline: 2px solid rgba(217,119,87,.65);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .settings-screen {
+      transform: none;
+      transition: opacity var(--motion-fast) ease, visibility 0s linear var(--motion-fast);
+    }
+    .settings-screen.is-open { transform: none; }
+    .quick-panel {
+      transform: translateX(-50%);
+      transition: opacity var(--motion-fast) ease, visibility 0s linear var(--motion-fast);
+    }
+    .quick-panel.is-open { transform: translateX(-50%); }
+  }
 </style>
 </head>
 <body>
@@ -407,18 +910,96 @@
   </div>
 
   <header class="topbar">
-    <span class="spark"></span>
-    <span class="brand">ember</span>
-    <span class="topbar-spacer"></span>
-    <div class="tools" aria-label="模型能力开关">
-      <button class="tool-toggle" id="reasoning-toggle" type="button" aria-pressed="true">思考</button>
-      <button class="tool-toggle" id="web-toggle" type="button" aria-pressed="true">联网</button>
+    <div class="brand-wrap">
+      <span class="spark"></span>
+      <span class="brand">ember</span>
+    </div>
+    <div class="model-control">
+      <button class="model-quick" id="model-quick" type="button" aria-expanded="false" aria-controls="quick-panel">
+        <span class="model-quick-label" id="model-quick-label">Opus 4.6</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg>
+      </button>
+      <div class="quick-panel" id="quick-panel" aria-hidden="true">
+        <span class="quick-model-id" id="quick-model-id"></span>
+        <span class="control-label">推理程度</span>
+        <div class="effort-options" id="quick-effort-options" role="group" aria-label="推理程度"></div>
+        <button class="quick-row" id="web-toggle" type="button" aria-pressed="true">
+          <span>联网搜索</span>
+          <span class="quick-state" id="web-state">开</span>
+        </button>
+        <button class="quick-row" id="quick-settings" type="button">
+          <span>完整设置</span>
+          <svg class="quick-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"></path></svg>
+        </button>
+      </div>
+    </div>
+    <div class="topbar-actions">
       <button class="tool-clear" id="clear-chat" type="button" disabled>清空</button>
+      <button class="icon-button" id="settings-open" type="button" aria-label="打开设置">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.86 2.86-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21H9.6v-.1A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.86-2.86.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3V9.6h.1A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.88l-.06-.06L7.06 4.2l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3h4v.1A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.86 2.86-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 .6 1 1.7 1.7 0 0 0 1.1.4h.1v4h-.1a1.7 1.7 0 0 0-1.7.6Z"></path>
+        </svg>
+      </button>
     </div>
   </header>
 
+  <section class="settings-screen" id="settings-screen" role="dialog" aria-modal="true" aria-hidden="true" aria-label="设置">
+    <header class="settings-header">
+      <button class="settings-back" id="settings-back" type="button" aria-label="返回聊天">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+      </button>
+      <h2>设置</h2>
+      <span aria-hidden="true"></span>
+    </header>
+    <div class="settings-scroll">
+      <div class="settings-content">
+        <section class="settings-section">
+          <p class="settings-section-title">当前模型</p>
+          <div class="current-model-card">
+            <span class="current-model-mark" aria-hidden="true"></span>
+            <span class="current-model-text">
+              <strong class="current-model-name" id="settings-model-name">Claude Opus 4.6</strong>
+              <span class="current-model-id" id="settings-model-id">anthropic/claude-opus-4.6</span>
+            </span>
+          </div>
+        </section>
+
+        <section class="settings-section settings-card">
+          <span class="settings-card-label">推理程度</span>
+          <div class="effort-options" id="settings-effort-options" role="group" aria-label="设置推理程度"></div>
+          <p class="settings-note" id="reasoning-note">越高越适合复杂问题，也会花更多时间和 token。</p>
+        </section>
+
+        <section class="settings-section">
+          <div class="model-search-wrap">
+            <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg>
+            <input id="model-search" type="search" placeholder="搜索模型" autocomplete="off" />
+            <button class="models-retry" id="models-retry" type="button" aria-label="重新拉取模型">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6v5h-5"></path><path d="M18.5 15a7 7 0 1 1-.6-7.7L20 9"></path></svg>
+            </button>
+          </div>
+          <output class="models-status" id="models-status"></output>
+          <div class="model-list" id="model-list"></div>
+        </section>
+
+        <section class="settings-section settings-card">
+          <label class="settings-card-label" for="system-prompt">系统提示词</label>
+          <textarea id="system-prompt" placeholder="例如：你是我的私人助手。回答直接、可靠，需要联网时说明来源。"></textarea>
+          <div class="prompt-meta">
+            <span>只保存在这台设备，不会写进公开仓库。</span>
+            <span id="prompt-count">0 字</span>
+          </div>
+        </section>
+      </div>
+    </div>
+    <footer class="settings-footer">
+      <button class="settings-save" id="settings-save" type="button">保存并返回</button>
+    </footer>
+  </section>
+
   <main class="messages" id="messages">
-    <div class="hint" id="hint">和 Claude 开始对话</div>
+    <div class="hint" id="hint">开始一段对话</div>
   </main>
 
   <form class="composer" id="composer">
@@ -430,27 +1011,71 @@
   // ===== 可配置常量 =====
   // 部署 Worker 后，把下面这行换成你的 Worker 真实地址（见 worker/README.md）。
   const WORKER_URL = "https://ember-proxy.claude-bflwhp.workers.dev";
-  const MODEL = "anthropic/claude-opus-4.6";
+  const DEFAULT_MODEL = "anthropic/claude-opus-4.6";
 
   const PW_KEY = "ember_pw";  // 访问密码在本设备浏览器的存储键
   const CHAT_KEY = "ember_messages";
-  const REASONING_KEY = "ember_reasoning";
+  const LEGACY_REASONING_KEY = "ember_reasoning";
+  const MODEL_KEY = "ember_model";
+  const FAVORITES_KEY = "ember_model_favorites";
+  const MODEL_CATALOG_KEY = "ember_model_catalog";
+  const SYSTEM_PROMPT_KEY = "ember_system_prompt";
+  const REASONING_EFFORT_KEY = "ember_reasoning_effort";
+  const SESSION_KEY = "ember_session_id";
   const WEB_KEY = "ember_web";
+  const EFFORT_OPTIONS = [
+    { value: "off", label: "关闭" },
+    { value: "low", label: "低" },
+    { value: "medium", label: "中" },
+    { value: "high", label: "高" },
+  ];
 
   // ===== 状态 =====
   const messages = loadMessages(); // 对话历史，保存在本设备浏览器
   let pending = false;        // 是否正在等回复，防止重复发送
   let accessPw = localStorage.getItem(PW_KEY) || "";  // 访问密码，存在本设备浏览器
-  let reasoningEnabled = localStorage.getItem(REASONING_KEY) !== "0";
+  let currentModel = localStorage.getItem(MODEL_KEY) || DEFAULT_MODEL;
+  let favoriteModels = loadFavorites();
+  let fetchedModels = loadModelCatalog();
+  let systemPrompt = localStorage.getItem(SYSTEM_PROMPT_KEY) || "";
+  let reasoningEffort = loadReasoningEffort();
   let webSearchEnabled = localStorage.getItem(WEB_KEY) !== "0";
+  let sessionId = loadSessionId();
+  let modelsLoadedThisPage = false;
+  let modelsLoading = false;
+  let draftModel = currentModel;
+  let draftFavorites = favoriteModels.map((item) => ({ ...item }));
+  let draftReasoningEffort = reasoningEffort;
+  let settingsSnapshot = "";
+  let settingsTrigger = null;
 
   const messagesEl = document.getElementById("messages");
   const hintEl = document.getElementById("hint");
   const input = document.getElementById("input");
   const sendBtn = document.getElementById("send");
-  const reasoningToggle = document.getElementById("reasoning-toggle");
+  const modelQuick = document.getElementById("model-quick");
+  const modelQuickLabel = document.getElementById("model-quick-label");
+  const quickPanel = document.getElementById("quick-panel");
+  const quickModelId = document.getElementById("quick-model-id");
+  const quickEffortOptions = document.getElementById("quick-effort-options");
+  const quickSettings = document.getElementById("quick-settings");
   const webToggle = document.getElementById("web-toggle");
+  const webState = document.getElementById("web-state");
   const clearChatBtn = document.getElementById("clear-chat");
+  const settingsOpen = document.getElementById("settings-open");
+  const settingsScreen = document.getElementById("settings-screen");
+  const settingsBack = document.getElementById("settings-back");
+  const settingsSave = document.getElementById("settings-save");
+  const settingsModelName = document.getElementById("settings-model-name");
+  const settingsModelId = document.getElementById("settings-model-id");
+  const settingsEffortOptions = document.getElementById("settings-effort-options");
+  const reasoningNote = document.getElementById("reasoning-note");
+  const modelSearch = document.getElementById("model-search");
+  const modelsRetry = document.getElementById("models-retry");
+  const modelsStatus = document.getElementById("models-status");
+  const modelList = document.getElementById("model-list");
+  const systemPromptInput = document.getElementById("system-prompt");
+  const promptCount = document.getElementById("prompt-count");
   const composer = document.getElementById("composer");
   const gate = document.getElementById("gate");
   const gateInput = document.getElementById("gate-input");
@@ -458,6 +1083,400 @@
   const gateErr = document.getElementById("gate-err");
 
   // ===== 工具函数 =====
+  function parseStoredJson(key, fallback) {
+    try {
+      const value = JSON.parse(localStorage.getItem(key) || "null");
+      return value ?? fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  function loadReasoningEffort() {
+    const saved = localStorage.getItem(REASONING_EFFORT_KEY);
+    if (EFFORT_OPTIONS.some((item) => item.value === saved)) return saved;
+    return localStorage.getItem(LEGACY_REASONING_KEY) === "0" ? "off" : "medium";
+  }
+
+  function createSessionId() {
+    if (typeof crypto?.randomUUID === "function") return crypto.randomUUID();
+    return `chat-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+  }
+
+  function loadSessionId() {
+    const saved = localStorage.getItem(SESSION_KEY);
+    if (saved && saved.length <= 256) return saved;
+    const created = createSessionId();
+    localStorage.setItem(SESSION_KEY, created);
+    return created;
+  }
+
+  function normalizeFavorites(items) {
+    if (!Array.isArray(items)) return [];
+    const seen = new Set();
+    const normalized = [];
+    for (const item of items) {
+      const id = String(item?.id || item || "").trim();
+      const label = String(item?.label || "").trim();
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      normalized.push({ id, label: label || friendlyModelName(id) });
+    }
+    return normalized;
+  }
+
+  function loadFavorites() {
+    const saved = normalizeFavorites(parseStoredJson(FAVORITES_KEY, []));
+    return saved.length ? saved : [{ id: currentModel || DEFAULT_MODEL, label: friendlyModelName(currentModel || DEFAULT_MODEL) }];
+  }
+
+  function normalizeModel(item) {
+    const id = String(item?.id || "").trim();
+    if (!id) return null;
+    return {
+      id,
+      name: String(item?.name || "").trim(),
+      description: String(item?.description || "").trim().slice(0, 600),
+      contextLength: Number(item?.contextLength || 0) || null,
+      pricing: item?.pricing && typeof item.pricing === "object" ? item.pricing : null,
+      reasoning: item?.reasoning && typeof item.reasoning === "object" ? item.reasoning : null,
+      supportedParameters: Array.isArray(item?.supportedParameters) ? item.supportedParameters : [],
+    };
+  }
+
+  function loadModelCatalog() {
+    const items = parseStoredJson(MODEL_CATALOG_KEY, []);
+    if (!Array.isArray(items)) return [];
+    return items.map(normalizeModel).filter(Boolean);
+  }
+
+  function saveModelCatalog(items) {
+    const safe = items.slice(0, 500).map(normalizeModel).filter(Boolean);
+    fetchedModels = safe;
+    try {
+      localStorage.setItem(MODEL_CATALOG_KEY, JSON.stringify(safe));
+    } catch {
+      // 模型目录只是离线备用，浏览器空间不足时不影响聊天和收藏。
+    }
+  }
+
+  function friendlyModelName(modelId) {
+    let slug = String(modelId || DEFAULT_MODEL).split("/").pop() || "";
+    slug = slug.replace(/:[^:]+$/, "").replace(/^claude-/i, "");
+    slug = slug
+      .replace(/^gpt-/i, "GPT ")
+      .replace(/^gemini-/i, "Gemini ")
+      .replace(/^grok-/i, "Grok ")
+      .replace(/^deepseek-/i, "DeepSeek ")
+      .replace(/^qwen-/i, "Qwen ")
+      .replace(/-/g, " ")
+      .replace(/\b(opus|sonnet|haiku|pro|flash|mini|max)\b/gi, (word) =>
+        word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+      )
+      .replace(/\s+/g, " ")
+      .trim();
+    return slug || "当前模型";
+  }
+
+  function modelById(modelId) {
+    return fetchedModels.find((item) => item.id === modelId) || null;
+  }
+
+  function modelLabel(modelId) {
+    const model = modelById(modelId);
+    return friendlyModelName(model?.id || modelId);
+  }
+
+  function effortAllowed(model, value) {
+    const reasoning = model?.reasoning;
+    if (value === "off") return reasoning?.mandatory !== true;
+    const supported = reasoning?.supported_efforts;
+    if (Array.isArray(supported) && supported.length) return supported.includes(value);
+    if (model && model.supportedParameters.length && !model.supportedParameters.includes("reasoning")) {
+      return false;
+    }
+    return true;
+  }
+
+  function normalizeEffortForModel(value, model) {
+    if (effortAllowed(model, value)) return value;
+    const supported = model?.reasoning?.supported_efforts;
+    const preferred = model?.reasoning?.default_effort;
+    if (preferred && EFFORT_OPTIONS.some((item) => item.value === preferred) && effortAllowed(model, preferred)) {
+      return preferred;
+    }
+    if (Array.isArray(supported)) {
+      for (const option of ["medium", "low", "high"]) {
+        if (supported.includes(option)) return option;
+      }
+    }
+    return model?.reasoning?.mandatory ? "medium" : "off";
+  }
+
+  function renderEffortOptions(container, selected, model, onSelect) {
+    container.replaceChildren();
+    EFFORT_OPTIONS.forEach((option) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "effort-option";
+      button.textContent = option.label;
+      button.dataset.effort = option.value;
+      button.disabled = !effortAllowed(model, option.value);
+      button.setAttribute("aria-pressed", String(option.value === selected));
+      button.addEventListener("click", () => onSelect(option.value));
+      container.appendChild(button);
+    });
+  }
+
+  function updateTopbar() {
+    modelQuickLabel.textContent = modelLabel(currentModel);
+    quickModelId.textContent = currentModel;
+    const model = modelById(currentModel);
+    renderEffortOptions(quickEffortOptions, reasoningEffort, model, setQuickEffort);
+    webToggle.setAttribute("aria-pressed", String(webSearchEnabled));
+    webState.textContent = webSearchEnabled ? "开" : "关";
+  }
+
+  function setQuickEffort(value) {
+    reasoningEffort = normalizeEffortForModel(value, modelById(currentModel));
+    localStorage.setItem(REASONING_EFFORT_KEY, reasoningEffort);
+    updateTopbar();
+  }
+
+  function settingsState() {
+    return JSON.stringify({
+      model: draftModel,
+      favorites: draftFavorites,
+      reasoningEffort: draftReasoningEffort,
+      systemPrompt: systemPromptInput.value,
+    });
+  }
+
+  function updateSettingsDirty() {
+    const dirty = settingsState() !== settingsSnapshot;
+    settingsSave.textContent = dirty ? "保存并返回" : "返回聊天";
+  }
+
+  function updatePromptCount() {
+    promptCount.textContent = `${systemPromptInput.value.length.toLocaleString()} 字`;
+    updateSettingsDirty();
+  }
+
+  function updateSettingsModel() {
+    const model = modelById(draftModel);
+    settingsModelName.textContent = modelLabel(draftModel);
+    settingsModelId.textContent = draftModel;
+    draftReasoningEffort = normalizeEffortForModel(draftReasoningEffort, model);
+    renderEffortOptions(settingsEffortOptions, draftReasoningEffort, model, (value) => {
+      draftReasoningEffort = normalizeEffortForModel(value, model);
+      updateSettingsModel();
+      updateSettingsDirty();
+    });
+    if (model?.reasoning?.mandatory) {
+      reasoningNote.textContent = "这个模型必须推理，不能关闭；这里只显示它支持的档位。";
+    } else if (model && model.supportedParameters.length && !model.supportedParameters.includes("reasoning")) {
+      reasoningNote.textContent = "这个模型没有提供可调推理程度，发送时会关闭推理。";
+    } else {
+      reasoningNote.textContent = "越高越适合复杂问题，也会花更多时间和 token。";
+    }
+  }
+
+  function collectVisibleModels() {
+    const query = modelSearch.value.trim().toLowerCase();
+    const favoriteIds = new Set(draftFavorites.map((item) => item.id));
+    const byId = new Map();
+    for (const favorite of draftFavorites) {
+      const fetched = modelById(favorite.id);
+      byId.set(favorite.id, fetched || normalizeModel({ id: favorite.id, name: favorite.label }));
+    }
+    for (const model of fetchedModels) byId.set(model.id, model);
+    if (!byId.has(draftModel)) byId.set(draftModel, normalizeModel({ id: draftModel }));
+    const matches = (model) => {
+      if (!query) return true;
+      return `${model.id} ${model.name} ${model.description}`.toLowerCase().includes(query);
+    };
+    const favorites = [...byId.values()].filter((model) => favoriteIds.has(model.id) && matches(model));
+    const others = [...byId.values()].filter((model) => !favoriteIds.has(model.id) && matches(model));
+    return { favorites, others: others.slice(0, Math.max(0, 80 - favorites.length)) };
+  }
+
+  function makeStarIcon() {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9Z"></path></svg>';
+  }
+
+  function appendModelGroup(label, models) {
+    if (!models.length) return;
+    const heading = document.createElement("div");
+    heading.className = "model-group-label";
+    heading.textContent = label;
+    modelList.appendChild(heading);
+    for (const model of models) {
+      const row = document.createElement("div");
+      row.className = "model-choice" + (model.id === draftModel ? " active" : "");
+
+      const text = document.createElement("span");
+      text.className = "model-choice-text";
+      const name = document.createElement("strong");
+      name.className = "model-choice-name";
+      name.textContent = friendlyModelName(model.id);
+      const id = document.createElement("span");
+      id.className = "model-choice-id";
+      id.textContent = model.id;
+      text.append(name, id);
+
+      const selectButton = document.createElement("button");
+      selectButton.type = "button";
+      selectButton.className = "model-choice-select";
+      selectButton.setAttribute("aria-pressed", String(model.id === draftModel));
+      selectButton.appendChild(text);
+
+      const favorite = draftFavorites.some((item) => item.id === model.id);
+      const star = document.createElement("button");
+      star.type = "button";
+      star.className = "model-star";
+      star.innerHTML = makeStarIcon();
+      star.setAttribute("aria-label", favorite ? `取消收藏 ${name.textContent}` : `收藏 ${name.textContent}`);
+      star.setAttribute("aria-pressed", String(favorite));
+      star.addEventListener("click", (event) => {
+        event.stopPropagation();
+        if (favorite) {
+          draftFavorites = draftFavorites.filter((item) => item.id !== model.id);
+        } else {
+          draftFavorites = normalizeFavorites([
+            ...draftFavorites,
+            { id: model.id, label: friendlyModelName(model.id) },
+          ]);
+        }
+        renderModelList();
+        updateSettingsDirty();
+      });
+
+      const select = () => {
+        draftModel = model.id;
+        draftReasoningEffort = normalizeEffortForModel(draftReasoningEffort, model);
+        updateSettingsModel();
+        renderModelList();
+        updateSettingsDirty();
+      };
+      selectButton.addEventListener("click", select);
+      row.append(selectButton, star);
+      modelList.appendChild(row);
+    }
+  }
+
+  function renderModelList() {
+    modelList.replaceChildren();
+    const { favorites, others } = collectVisibleModels();
+    appendModelGroup("收藏模型", favorites);
+    appendModelGroup(modelSearch.value.trim() ? "搜索结果" : "全部模型", others);
+    if (!favorites.length && !others.length) {
+      const empty = document.createElement("div");
+      empty.className = "model-group-label";
+      empty.textContent = modelsLoading ? "正在拉取模型…" : "没有找到模型";
+      modelList.appendChild(empty);
+    }
+  }
+
+  async function fetchModels({ force = false } = {}) {
+    if (modelsLoading || (modelsLoadedThisPage && !force)) return;
+    modelsLoading = true;
+    modelsStatus.textContent = "正在从 OpenRouter 拉取模型…";
+    modelsRetry.disabled = true;
+    renderModelList();
+    try {
+      const response = await fetch(WORKER_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "models", password: accessPw }),
+      });
+      if (response.status === 401) {
+        localStorage.removeItem(PW_KEY);
+        accessPw = "";
+        showGate("密码已失效，请重新输入");
+        throw new Error("需要重新输入访问密码");
+      }
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.error || `服务返回 ${response.status}`);
+      }
+      const models = Array.isArray(payload?.models) ? payload.models : [];
+      saveModelCatalog(models);
+      modelsLoadedThisPage = true;
+      modelsStatus.textContent = `已拉取 ${fetchedModels.length.toLocaleString()} 个模型`;
+      updateSettingsModel();
+    } catch (error) {
+      modelsStatus.textContent = `拉取失败：${error.message}。已保留本地模型，可点右侧重试。`;
+    } finally {
+      modelsLoading = false;
+      modelsRetry.disabled = false;
+      renderModelList();
+    }
+  }
+
+  function openQuickPanel() {
+    const open = !quickPanel.classList.contains("is-open");
+    quickPanel.classList.toggle("is-open", open);
+    quickPanel.setAttribute("aria-hidden", String(!open));
+    modelQuick.setAttribute("aria-expanded", String(open));
+  }
+
+  function closeQuickPanel() {
+    quickPanel.classList.remove("is-open");
+    quickPanel.setAttribute("aria-hidden", "true");
+    modelQuick.setAttribute("aria-expanded", "false");
+  }
+
+  function openSettings() {
+    settingsTrigger = document.activeElement;
+    closeQuickPanel();
+    draftModel = currentModel;
+    draftFavorites = favoriteModels.map((item) => ({ ...item }));
+    draftReasoningEffort = reasoningEffort;
+    modelSearch.value = "";
+    systemPromptInput.value = systemPrompt;
+    updateSettingsModel();
+    renderModelList();
+    updatePromptCount();
+    settingsSnapshot = settingsState();
+    updateSettingsDirty();
+    settingsScreen.classList.add("is-open");
+    settingsScreen.setAttribute("aria-hidden", "false");
+    document.querySelector(".topbar").inert = true;
+    messagesEl.inert = true;
+    composer.inert = true;
+    settingsBack.focus();
+    void fetchModels();
+  }
+
+  function closeSettings({ force = false } = {}) {
+    if (!force && settingsState() !== settingsSnapshot && !window.confirm("放弃还没保存的设置？")) {
+      return;
+    }
+    settingsScreen.classList.remove("is-open");
+    settingsScreen.setAttribute("aria-hidden", "true");
+    document.querySelector(".topbar").inert = false;
+    messagesEl.inert = false;
+    composer.inert = false;
+    const returnTarget = settingsTrigger;
+    settingsTrigger = null;
+    if (returnTarget instanceof HTMLElement) returnTarget.focus();
+  }
+
+  function saveSettings() {
+    if (settingsState() !== settingsSnapshot) {
+      currentModel = draftModel || DEFAULT_MODEL;
+      favoriteModels = normalizeFavorites(draftFavorites);
+      reasoningEffort = draftReasoningEffort;
+      systemPrompt = systemPromptInput.value.trim();
+      localStorage.setItem(MODEL_KEY, currentModel);
+      localStorage.setItem(FAVORITES_KEY, JSON.stringify(favoriteModels));
+      localStorage.setItem(REASONING_EFFORT_KEY, reasoningEffort);
+      localStorage.setItem(SYSTEM_PROMPT_KEY, systemPrompt);
+      updateTopbar();
+    }
+    closeSettings({ force: true });
+  }
+
   function loadMessages() {
     try {
       const data = JSON.parse(localStorage.getItem(CHAT_KEY) || "[]");
@@ -613,19 +1632,32 @@
     scrollToBottom();
   }
 
-  // 缓存命中小徽章：挂在回复气泡下方，显示本轮输入里有多少 token 走了缓存（一折计费）。
-  // Opus 长对话过约 4096 token 门槛后才开始命中，前几轮显示 0 是正常的。
-  function addCacheBadge(usage) {
-    const promptTokens = usage?.prompt_tokens;
-    if (!promptTokens) return;
-    const cached = usage?.prompt_tokens_details?.cached_tokens || 0;
+  // 缓存状态小徽章：优先显示读取命中，其次显示本轮新写入；门槛由所选模型决定。
+  function addCacheBadge(usage, modelId) {
+    const details = usage?.prompt_tokens_details;
+    const promptTokens = Number(usage?.prompt_tokens || 0);
+    const cached = Number(details?.cached_tokens || 0);
+    const written = Number(details?.cache_write_tokens || usage?.cache_write_tokens || 0);
+    const isClaude = String(modelId || "").startsWith("anthropic/claude");
+    if (!promptTokens || (!isClaude && !cached && !written)) return;
+
     const el = document.createElement("div");
-    el.className = "cache-badge" + (cached > 0 ? " hit" : "");
-    el.title = "对话攒过约 4096 token 后开始命中缓存，命中部分按一折计费";
+    el.className = "cache-badge";
+    el.title = "缓存是否生效取决于模型门槛和前缀是否保持一致";
     const num = document.createElement("span");
     num.className = "num";
-    num.textContent = `${cached.toLocaleString()} / ${promptTokens.toLocaleString()}`;
-    el.append(cached > 0 ? "⚡ 缓存命中 " : "缓存命中 ", num);
+    if (cached > 0) {
+      el.classList.add("hit");
+      num.textContent = `${cached.toLocaleString()} / ${promptTokens.toLocaleString()}`;
+      el.append("缓存命中 ", num);
+    } else if (written > 0) {
+      el.classList.add("write");
+      num.textContent = written.toLocaleString();
+      el.append("缓存写入 ", num);
+    } else {
+      num.textContent = promptTokens.toLocaleString();
+      el.append("本轮未命中 · 输入 ", num);
+    }
     messagesEl.appendChild(el);
   }
 
@@ -635,10 +1667,6 @@
       .map((item) => item?.text || item?.summary || item?.content || "")
       .filter(Boolean)
       .join("\n");
-  }
-
-  function updateToggle(el, enabled) {
-    el.setAttribute("aria-pressed", String(enabled));
   }
 
   // 解析 SSE 流，每收到一段文字就回调 callbacks，返回完整正文和来源
@@ -682,6 +1710,11 @@
   async function send() {
     const text = input.value.trim();
     if (!text || pending) return;
+    const requestModel = currentModel;
+    const requestEffort = normalizeEffortForModel(reasoningEffort, modelById(requestModel));
+    const requestMessages = systemPrompt.trim()
+      ? [{ role: "system", content: systemPrompt.trim() }, ...messages, { role: "user", content: text }]
+      : [...messages, { role: "user", content: text }];
 
     input.value = "";
     input.style.height = "auto";
@@ -691,7 +1724,7 @@
 
     pending = true;
     sendBtn.disabled = true;
-    const reasoningBox = reasoningEnabled ? addReasoningBlock({ webSearch: webSearchEnabled }) : null;
+    const reasoningBox = requestEffort !== "off" ? addReasoningBlock({ webSearch: webSearchEnabled }) : null;
     const bubble = addBubble("assistant", "");
     bubble.classList.add("typing");
 
@@ -700,10 +1733,11 @@
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          messages,
-          model: MODEL,
+          messages: requestMessages,
+          model: requestModel,
           password: accessPw,
-          reasoning: reasoningEnabled,
+          reasoningEffort: requestEffort,
+          session_id: sessionId,
           webSearch: webSearchEnabled,
         }),
       });
@@ -744,7 +1778,7 @@
         messages.push({ role: "assistant", content: full });
         saveMessages();
         addCitations(annotations);
-        addCacheBadge(usage);
+        addCacheBadge(usage, requestModel);
       } else {
         bubble.classList.add("error");
         bubble.textContent = "⚠️ 没有收到回复内容";
@@ -812,26 +1846,44 @@
     if (e.key === "Enter") { e.preventDefault(); submitGate(); }
   });
 
-  reasoningToggle.addEventListener("click", () => {
-    reasoningEnabled = !reasoningEnabled;
-    localStorage.setItem(REASONING_KEY, reasoningEnabled ? "1" : "0");
-    updateToggle(reasoningToggle, reasoningEnabled);
-  });
+  modelQuick.addEventListener("click", openQuickPanel);
+  quickSettings.addEventListener("click", openSettings);
+  settingsOpen.addEventListener("click", openSettings);
+  settingsBack.addEventListener("click", () => closeSettings());
+  settingsSave.addEventListener("click", saveSettings);
+  modelSearch.addEventListener("input", renderModelList);
+  modelsRetry.addEventListener("click", () => void fetchModels({ force: true }));
+  systemPromptInput.addEventListener("input", updatePromptCount);
   webToggle.addEventListener("click", () => {
     webSearchEnabled = !webSearchEnabled;
     localStorage.setItem(WEB_KEY, webSearchEnabled ? "1" : "0");
-    updateToggle(webToggle, webSearchEnabled);
+    updateTopbar();
+  });
+  document.addEventListener("click", (event) => {
+    if (!event.composedPath().includes(document.querySelector(".model-control"))) {
+      closeQuickPanel();
+    }
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    if (settingsScreen.classList.contains("is-open")) {
+      closeSettings();
+    } else {
+      closeQuickPanel();
+      modelQuick.focus();
+    }
   });
   clearChatBtn.addEventListener("click", () => {
     messages.length = 0;
     localStorage.removeItem(CHAT_KEY);
+    sessionId = createSessionId();
+    localStorage.setItem(SESSION_KEY, sessionId);
     messagesEl.textContent = "";
     messagesEl.appendChild(hintEl);
     clearChatBtn.disabled = true;
     input.focus();
   });
-  updateToggle(reasoningToggle, reasoningEnabled);
-  updateToggle(webToggle, webSearchEnabled);
+  updateTopbar();
   restoreMessages();
 
   // 没存过密码就先弹密码界面（密码不写在代码里，由你打开时手输一次）
