@@ -6,7 +6,7 @@
 
 1. 先校验访问密码，避免公开网页被陌生人拿来消耗额度。
 2. 用 Worker Secret 里的 API key 拉取 OpenRouter 模型目录，前端只负责搜索、收藏和选择。
-3. 转发聊天请求，并传递模型、推理档位、联网搜索和 `session_id`。
+3. 转发聊天请求，并传递模型、推理档位、可选最大生成量、联网搜索和 `session_id`。
 4. 给 Claude 的 system、历史尾部和当前问题添加提示词缓存断点，再把流式回复与 usage 原样透传给前端。
 
 ---
@@ -50,7 +50,7 @@ npx wrangler secret put OPENROUTER_API_KEY   # 按提示粘贴 key
 前端会向同一个地址发送两种 POST：
 
 - `{ action: "models", password }`：返回精简后的模型目录。
-- `{ messages, model, password, reasoningEffort, session_id, webSearch }`：发起流式聊天。
+- `{ messages, model, password, reasoningEffort, session_id, webSearch, maxCompletionTokens? }`：发起流式聊天；可选生成上限会转成 OpenRouter 的 `max_completion_tokens`。
 
 ---
 
@@ -59,4 +59,5 @@ npx wrangler secret put OPENROUTER_API_KEY   # 按提示粘贴 key
 - `ALLOWED_ORIGIN`（worker.js 顶部）写死成了 `https://cloudxuan1.github.io`。如果你的 GitHub Pages 域名不是这个，改成你的，否则浏览器会因 CORS 拦截请求。
 - 默认模型 `anthropic/claude-opus-4.6` 写在 worker.js 顶部；前端未传 model 时才回退到它。
 - `session_id` 最长 256 字符；前端会在清空聊天时生成新值，以提高同一段对话的 provider sticky routing 和缓存命中率。
-- 改缓存断点后先跑 `node worker/cache.test.mjs`；当前测试覆盖模型目录、推理参数、session 转发、三处缓存断点、幂等与不修改入参。
+- `maxCompletionTokens` 不传表示由模型/供应商决定；传入时必须是大于 0 的整数。模型目录会同时返回主供应商的最大输出上限，供前端阻止超限设置。
+- 改 Worker 后先跑 `node worker/cache.test.mjs`；当前 13 项测试覆盖模型目录、生成上限、推理参数、session 转发、三处缓存断点、幂等与不修改入参。
