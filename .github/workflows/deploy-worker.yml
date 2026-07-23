@@ -1,0 +1,28 @@
+# Worker 自动部署：push 改了 worker/ 就自动发布到 Cloudflare，从此告别后台手动粘贴。
+# 前提（一次性）：仓库 Settings → Secrets and variables → Actions 里配好两个 secret：
+#   CLOUDFLARE_API_TOKEN   （Cloudflare 后台创建，模板选 "Edit Cloudflare Workers"）
+#   CLOUDFLARE_ACCOUNT_ID  （Cloudflare 后台右侧栏那串 Account ID）
+# 手机上也能用：GitHub App → 本仓库 → Actions → Deploy Worker → Run workflow 手动重发。
+name: Deploy Worker
+
+on:
+  push:
+    branches: [main, codex/add-reasoning-web]
+    paths:
+      - "worker/**"
+      - ".github/workflows/deploy-worker.yml"
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 跑缓存单元测试（挡住坏代码上线）
+        run: node worker/cache.test.mjs
+      - name: 部署到 Cloudflare
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker

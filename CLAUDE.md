@@ -60,10 +60,12 @@ Claude = 提供创意
 ## 5. 文档结构和更新规则
 
 - 除非要求，1-5 条内容不得修改。
-- 项目文档分两层：
-  - **CLAUDE.md**（本文件）：通用规则 + 项目快照，保持精简。
-  - **docs/项目详情.md**：完整项目信息，按需查阅。
-- 当要求更新时，判断内容属于哪个文件再更新，不要把细节往 CLAUDE.md 塞。
+- 项目文档三件套 + 指针：
+  - **CLAUDE.md**（本文件）：通用规则 + 不变的项目概述，保持精简，不放会变的状态。
+  - **AGENTS.md**：一行指针指向本文件，给 Codex 等其他 AI 读，不写实质内容，防两份漂移。
+  - **docs/交接.md**：唯一状态源——仪表盘（现状快照 + 待办队列 + 常用命令）+ 历史日志（按 commit 倒序）+ 技术参考（架构/部署/Secrets 清单/红线/排障）。当前任务、下一步、进度只看这里。
+  - **docs/项目详情.md**：架构原理、设计系统、技术选型等偏"解释性"的完整参考，按需查阅，不放状态。
+- 当要求更新时，判断内容属于哪个文件再更新，不要把细节往 CLAUDE.md 塞；状态类改动一律进 docs/交接.md。
 - 项目概述除了第一次可修改，后面除非允许不得修改。
 
 ---
@@ -72,10 +74,10 @@ Claude = 提供创意
 
 ## 项目概述
 
-ember —— 跟 Claude Opus 4.6 聊天的单页网页小工具。前端（原生 HTML/CSS/JS）托管在 GitHub Pages，经 Cloudflare Worker 代理调 OpenRouter；打开要输访问密码。单次会话，不存历史，刷新即清空。
+chat-lite（曾用名 ember，2026 年迁仓改名）—— 跟 Claude 聊天的单页网页小工具。前端（原生 HTML/CSS/JS）托管在 GitHub Pages，经 Cloudflare Worker 代理调 OpenRouter；打开要输访问密码。聊天历史存本地浏览器（localStorage），可手动清空。
 
-- 网址：https://cloudxuan1.github.io/ember/
-- 仓库：https://github.com/cloudxuan1/ember （public）
+- 网址：https://cloudxuan1.github.io/chat-lite/
+- 仓库：https://github.com/cloudxuan1/chat-lite （public）
 - 链路：浏览器 → 密码门禁 → Worker（注入 key）→ OpenRouter → Opus 4.6
 
 ## 绝对不能动（摘要）
@@ -84,13 +86,12 @@ ember —— 跟 Claude Opus 4.6 聊天的单页网页小工具。前端（原�
 - Worker 的 `ALLOWED_ORIGIN` 必须等于 Pages 域名，否则 CORS 拦截。
 - 模型 slug 是 `anthropic/claude-opus-4.6`（点，不是横杠）。
 - 仓库已 public，commit 前确认不含 key/密码/隐私。
-- 完整清单见 `docs/项目详情.md`。
+- 完整清单见 `docs/交接.md` 技术参考。
 
 ## 当前任务和下一步
 
-- V1 已上线（聊天 + 密码门禁），可正常使用。
-- V2 候选（未承诺，待定）：system prompt（给模型设身份）、对话持久化、正规登录、Markdown 渲染。
+看 `docs/交接.md` 仪表盘——现状快照、待办队列、常用命令都在那，且是唯一状态源，本文件不重复。
 
 ## 详细项目信息
 
-涉及架构、部署、配置、技术概念、经验教训等，请阅读 `docs/项目详情.md`。
+架构原理、设计系统、技术选型等解释性内容，请阅读 `docs/项目详情.md`；当前状态和下一步看 `docs/交接.md` 仪表盘。

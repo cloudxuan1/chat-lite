@@ -51,6 +51,37 @@
     border-bottom: 0.5px solid rgba(31,30,29,0.12);
     background: var(--bg-primary);
   }
+  .topbar-spacer { flex: 1; }
+  .tools {
+    display: flex;
+    gap: 6px;
+  }
+  .tool-toggle {
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: 5px 8px;
+    color: var(--text-secondary);
+    background: rgba(31,30,29,0.06);
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .tool-toggle[aria-pressed="true"] {
+    color: #fff;
+    background: var(--btn-primary-bg);
+  }
+  .tool-clear {
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: 5px 8px;
+    color: var(--text-muted);
+    background: transparent;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .tool-clear:disabled {
+    opacity: .35;
+    cursor: default;
+  }
   .spark {
     width: 9px; height: 9px;
     border-radius: 50%;
@@ -99,11 +130,166 @@
     box-shadow: var(--shadow);
     border-bottom-left-radius: 6px;
   }
+  .reasoning {
+    align-self: flex-start;
+    max-width: 85%;
+    color: var(--text-secondary);
+    font-size: 13px;
+  }
+  .reasoning-toggle {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    width: 100%;
+    padding: 0;
+    color: var(--text-muted);
+    background: transparent;
+    border: none;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .reasoning-mark {
+    position: relative;
+    flex: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background:
+      conic-gradient(from 0deg, rgba(217,119,87,0), rgba(217,119,87,0.95), rgba(217,119,87,0));
+    animation: spin 1.4s linear infinite;
+  }
+  .reasoning-mark::after {
+    content: '';
+    position: absolute;
+    inset: 5px;
+    border-radius: 50%;
+    background: var(--bg-primary);
+  }
+  .reasoning.is-done .reasoning-mark {
+    border: 1.5px solid rgba(31,30,29,0.32);
+    background: transparent;
+    animation: none;
+  }
+  .reasoning.is-done .reasoning-mark::after {
+    inset: 4px;
+    width: 7px;
+    height: 4px;
+    border-left: 1.5px solid rgba(31,30,29,0.55);
+    border-bottom: 1.5px solid rgba(31,30,29,0.55);
+    border-radius: 0;
+    background: transparent;
+    transform: rotate(-45deg);
+  }
+  .reasoning-title {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .reasoning-done {
+    display: none;
+    color: var(--text-muted);
+  }
+  .reasoning.is-done .reasoning-done {
+    display: inline;
+  }
+  .reasoning-chevron {
+    color: var(--text-muted);
+    transition: transform .18s ease;
+  }
+  .reasoning.is-open .reasoning-chevron {
+    transform: rotate(180deg);
+  }
+  .reasoning-body {
+    display: none;
+    margin: 10px 0 0 9px;
+    padding: 0 0 0 18px;
+    border-left: 1px solid rgba(31,30,29,0.14);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .reasoning.is-open .reasoning-body {
+    display: block;
+  }
+  .reasoning-tools {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 10px 0 0 9px;
+    padding: 0 0 0 18px;
+    border-left: 1px solid rgba(31,30,29,0.14);
+    color: var(--text-muted);
+  }
+  .reasoning:not(.is-open) .reasoning-tools {
+    display: none;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .citations {
+    align-self: flex-start;
+    max-width: 85%;
+    min-width: 0;
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .citations-toggle {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    max-width: 100%;
+    padding: 0;
+    color: var(--text-muted);
+    background: transparent;
+    border: none;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .citations-chevron {
+    flex: none;
+    color: var(--text-muted);
+    transition: transform .18s ease;
+  }
+  .citations.is-open .citations-chevron {
+    transform: rotate(180deg);
+  }
+  .citations-list {
+    display: none;
+    flex-direction: column;
+    gap: 6px;
+    max-width: 100%;
+    margin-top: 8px;
+  }
+  .citations.is-open .citations-list {
+    display: flex;
+  }
+  .citations-list a {
+    max-width: 100%;
+    color: var(--text-secondary);
+    overflow-wrap: anywhere;
+  }
   .msg.error {
     align-self: flex-start;
     background: #fbeae5;
     color: #9a3412;
     box-shadow: none;
+  }
+  .cache-badge {
+    align-self: flex-start;
+    max-width: 85%;
+    margin-top: -6px;
+    padding-left: 15px;
+    color: var(--text-muted);
+    font-size: 11px;
+    line-height: 1.4;
+  }
+  .cache-badge .num {
+    font-family: 'SF Mono', 'Fira Code', Menlo, Consolas, monospace;
+  }
+  .cache-badge.hit .num {
+    color: var(--accent);
   }
   /* 等待首字时的呼吸光标 */
   .msg.typing::after {
@@ -223,6 +409,12 @@
   <header class="topbar">
     <span class="spark"></span>
     <span class="brand">ember</span>
+    <span class="topbar-spacer"></span>
+    <div class="tools" aria-label="模型能力开关">
+      <button class="tool-toggle" id="reasoning-toggle" type="button" aria-pressed="true">思考</button>
+      <button class="tool-toggle" id="web-toggle" type="button" aria-pressed="true">联网</button>
+      <button class="tool-clear" id="clear-chat" type="button" disabled>清空</button>
+    </div>
   </header>
 
   <main class="messages" id="messages">
@@ -241,16 +433,24 @@
   const MODEL = "anthropic/claude-opus-4.6";
 
   const PW_KEY = "ember_pw";  // 访问密码在本设备浏览器的存储键
+  const CHAT_KEY = "ember_messages";
+  const REASONING_KEY = "ember_reasoning";
+  const WEB_KEY = "ember_web";
 
   // ===== 状态 =====
-  const messages = [];        // 对话历史，只存在内存，刷新即清空
+  const messages = loadMessages(); // 对话历史，保存在本设备浏览器
   let pending = false;        // 是否正在等回复，防止重复发送
   let accessPw = localStorage.getItem(PW_KEY) || "";  // 访问密码，存在本设备浏览器
+  let reasoningEnabled = localStorage.getItem(REASONING_KEY) !== "0";
+  let webSearchEnabled = localStorage.getItem(WEB_KEY) !== "0";
 
   const messagesEl = document.getElementById("messages");
   const hintEl = document.getElementById("hint");
   const input = document.getElementById("input");
   const sendBtn = document.getElementById("send");
+  const reasoningToggle = document.getElementById("reasoning-toggle");
+  const webToggle = document.getElementById("web-toggle");
+  const clearChatBtn = document.getElementById("clear-chat");
   const composer = document.getElementById("composer");
   const gate = document.getElementById("gate");
   const gateInput = document.getElementById("gate-input");
@@ -258,6 +458,30 @@
   const gateErr = document.getElementById("gate-err");
 
   // ===== 工具函数 =====
+  function loadMessages() {
+    try {
+      const data = JSON.parse(localStorage.getItem(CHAT_KEY) || "[]");
+      if (!Array.isArray(data)) return [];
+      return data.filter((item) =>
+        (item?.role === "user" || item?.role === "assistant") &&
+        typeof item.content === "string"
+      );
+    } catch {
+      return [];
+    }
+  }
+
+  function saveMessages() {
+    localStorage.setItem(CHAT_KEY, JSON.stringify(messages));
+    clearChatBtn.disabled = messages.length === 0;
+  }
+
+  function restoreMessages() {
+    if (!messages.length) return;
+    messages.forEach((item) => addBubble(item.role, item.content));
+    clearChatBtn.disabled = false;
+  }
+
   function scrollToBottom() {
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }
@@ -272,12 +496,159 @@
     return el;
   }
 
-  // 解析 SSE 流，每收到一段文字就回调 onDelta，返回完整文本
-  async function readStream(body, onDelta) {
+  function addReasoningBlock({ webSearch }) {
+    if (hintEl) hintEl.remove();
+    const root = document.createElement("div");
+    root.className = "reasoning is-open";
+
+    const toggle = document.createElement("button");
+    toggle.className = "reasoning-toggle";
+    toggle.type = "button";
+    toggle.setAttribute("aria-expanded", "true");
+
+    const mark = document.createElement("span");
+    mark.className = "reasoning-mark";
+    mark.setAttribute("aria-hidden", "true");
+
+    const title = document.createElement("span");
+    title.className = "reasoning-title";
+    title.textContent = webSearch ? "策划并搜索相关资料。" : "正在思考。";
+
+    const done = document.createElement("span");
+    done.className = "reasoning-done";
+    done.textContent = "Done";
+
+    const chevron = document.createElement("span");
+    chevron.className = "reasoning-chevron";
+    chevron.setAttribute("aria-hidden", "true");
+    chevron.textContent = "⌄";
+
+    const body = document.createElement("div");
+    body.className = "reasoning-body";
+
+    toggle.append(mark, title, done, chevron);
+    root.append(toggle, body);
+
+    if (webSearch) {
+      const tools = document.createElement("div");
+      tools.className = "reasoning-tools";
+      const item = document.createElement("div");
+      item.textContent = "联网搜索已开启";
+      tools.appendChild(item);
+      root.appendChild(tools);
+    }
+
+    toggle.addEventListener("click", () => {
+      const open = !root.classList.contains("is-open");
+      root.classList.toggle("is-open", open);
+      toggle.setAttribute("aria-expanded", String(open));
+    });
+
+    messagesEl.appendChild(root);
+    scrollToBottom();
+
+    let hasReasoning = false;
+    return {
+      root,
+      append(delta) {
+        hasReasoning = true;
+        if (title.textContent === "正在思考。" || title.textContent === "策划并搜索相关资料。") {
+          title.textContent = webSearch ? "策划并搜索相关资料。" : "整理思路。";
+        }
+        body.textContent += delta;
+      },
+      finish() {
+        root.classList.add("is-done");
+        root.classList.remove("is-open");
+        toggle.setAttribute("aria-expanded", "false");
+        title.textContent = hasReasoning ? "思考完成" : "思考完成";
+      },
+    };
+  }
+
+  function addCitations(annotations) {
+    const links = (annotations || [])
+      .map((item) => item?.url_citation || item)
+      .filter((item) => item?.url)
+      .slice(0, 10);
+    if (!links.length) return;
+
+    const root = document.createElement("div");
+    root.className = "citations";
+
+    const toggle = document.createElement("button");
+    toggle.className = "citations-toggle";
+    toggle.type = "button";
+    toggle.setAttribute("aria-expanded", "false");
+
+    const summary = document.createElement("span");
+    summary.textContent = `联网搜索 · 来源 ${links.length} 条`;
+
+    const chevron = document.createElement("span");
+    chevron.className = "citations-chevron";
+    chevron.setAttribute("aria-hidden", "true");
+    chevron.textContent = "⌄";
+
+    const list = document.createElement("div");
+    list.className = "citations-list";
+    links.forEach((item) => {
+      const a = document.createElement("a");
+      a.href = item.url;
+      a.target = "_blank";
+      a.rel = "noreferrer";
+      a.textContent = item.title || new URL(item.url).hostname;
+      list.appendChild(a);
+    });
+
+    toggle.append(summary, chevron);
+    root.append(toggle, list);
+    toggle.addEventListener("click", () => {
+      const open = !root.classList.contains("is-open");
+      root.classList.toggle("is-open", open);
+      toggle.setAttribute("aria-expanded", String(open));
+      if (open) scrollToBottom();
+    });
+
+    messagesEl.appendChild(root);
+    scrollToBottom();
+  }
+
+  // 缓存命中小徽章：挂在回复气泡下方，显示本轮输入里有多少 token 走了缓存（一折计费）。
+  // Opus 长对话过约 4096 token 门槛后才开始命中，前几轮显示 0 是正常的。
+  function addCacheBadge(usage) {
+    const promptTokens = usage?.prompt_tokens;
+    if (!promptTokens) return;
+    const cached = usage?.prompt_tokens_details?.cached_tokens || 0;
+    const el = document.createElement("div");
+    el.className = "cache-badge" + (cached > 0 ? " hit" : "");
+    el.title = "对话攒过约 4096 token 后开始命中缓存，命中部分按一折计费";
+    const num = document.createElement("span");
+    num.className = "num";
+    num.textContent = `${cached.toLocaleString()} / ${promptTokens.toLocaleString()}`;
+    el.append(cached > 0 ? "⚡ 缓存命中 " : "缓存命中 ", num);
+    messagesEl.appendChild(el);
+  }
+
+  function textFromReasoningDetails(details) {
+    if (!Array.isArray(details)) return "";
+    return details
+      .map((item) => item?.text || item?.summary || item?.content || "")
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  function updateToggle(el, enabled) {
+    el.setAttribute("aria-pressed", String(enabled));
+  }
+
+  // 解析 SSE 流，每收到一段文字就回调 callbacks，返回完整正文和来源
+  async function readStream(body, callbacks) {
     const reader = body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
     let full = "";
+    const annotations = [];
+    let usage = null;                             // OpenRouter 在最后一个数据块里附带 token 账单
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -289,14 +660,22 @@
         if (!t || t.startsWith(":")) continue;    // 跳过空行和注释（如 OpenRouter 的心跳）
         if (!t.startsWith("data:")) continue;
         const data = t.slice(5).trim();
-        if (data === "[DONE]") return full;
+        if (data === "[DONE]") return { full, annotations, usage };
         try {
-          const delta = JSON.parse(data).choices?.[0]?.delta?.content;
-          if (delta) { full += delta; onDelta(delta); }
+          const obj = JSON.parse(data);
+          if (obj.usage) usage = obj.usage;
+          const delta = obj.choices?.[0]?.delta || {};
+          const reasoning = delta.reasoning || delta.reasoning_content || textFromReasoningDetails(delta.reasoning_details);
+          if (reasoning) callbacks.onReasoning(reasoning);
+          if (Array.isArray(delta.annotations)) annotations.push(...delta.annotations);
+          if (delta.content) {
+            full += delta.content;
+            callbacks.onContent(delta.content);
+          }
         } catch { /* 半截 JSON，忽略 */ }
       }
     }
-    return full;
+    return { full, annotations, usage };
   }
 
   // ===== 发送 =====
@@ -308,9 +687,11 @@
     input.style.height = "auto";
     addBubble("user", text);
     messages.push({ role: "user", content: text });
+    saveMessages();
 
     pending = true;
     sendBtn.disabled = true;
+    const reasoningBox = reasoningEnabled ? addReasoningBlock({ webSearch: webSearchEnabled }) : null;
     const bubble = addBubble("assistant", "");
     bubble.classList.add("typing");
 
@@ -318,7 +699,13 @@
       const res = await fetch(WORKER_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages, model: MODEL, password: accessPw }),
+        body: JSON.stringify({
+          messages,
+          model: MODEL,
+          password: accessPw,
+          reasoning: reasoningEnabled,
+          webSearch: webSearchEnabled,
+        }),
       });
 
       // 密码错误：清掉本地密码，待会弹回密码界面
@@ -338,20 +725,32 @@
         throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
       }
 
-      const full = await readStream(res.body, (delta) => {
-        bubble.classList.remove("typing");
-        bubble.textContent += delta;
-        scrollToBottom();
+      const { full, annotations, usage } = await readStream(res.body, {
+        onReasoning(delta) {
+          if (!reasoningBox) return;
+          reasoningBox.append(delta);
+          scrollToBottom();
+        },
+        onContent(delta) {
+          bubble.classList.remove("typing");
+          bubble.textContent += delta;
+          scrollToBottom();
+        },
       });
 
       bubble.classList.remove("typing");
+      reasoningBox?.finish();
       if (full) {
         messages.push({ role: "assistant", content: full });
+        saveMessages();
+        addCitations(annotations);
+        addCacheBadge(usage);
       } else {
         bubble.classList.add("error");
         bubble.textContent = "⚠️ 没有收到回复内容";
       }
     } catch (err) {
+      reasoningBox?.finish();
       bubble.classList.remove("typing");
       bubble.classList.add("error");
       bubble.textContent = "⚠️ " + err.message;
@@ -359,6 +758,7 @@
         localStorage.removeItem(PW_KEY);
         accessPw = "";
         messages.pop();                 // 回滚这条没发成功的消息
+        saveMessages();
         showGate("密码错误，请重新输入");
       }
     } finally {
@@ -411,6 +811,28 @@
   gateInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") { e.preventDefault(); submitGate(); }
   });
+
+  reasoningToggle.addEventListener("click", () => {
+    reasoningEnabled = !reasoningEnabled;
+    localStorage.setItem(REASONING_KEY, reasoningEnabled ? "1" : "0");
+    updateToggle(reasoningToggle, reasoningEnabled);
+  });
+  webToggle.addEventListener("click", () => {
+    webSearchEnabled = !webSearchEnabled;
+    localStorage.setItem(WEB_KEY, webSearchEnabled ? "1" : "0");
+    updateToggle(webToggle, webSearchEnabled);
+  });
+  clearChatBtn.addEventListener("click", () => {
+    messages.length = 0;
+    localStorage.removeItem(CHAT_KEY);
+    messagesEl.textContent = "";
+    messagesEl.appendChild(hintEl);
+    clearChatBtn.disabled = true;
+    input.focus();
+  });
+  updateToggle(reasoningToggle, reasoningEnabled);
+  updateToggle(webToggle, webSearchEnabled);
+  restoreMessages();
 
   // 没存过密码就先弹密码界面（密码不写在代码里，由你打开时手输一次）
   if (!accessPw) showGate();
