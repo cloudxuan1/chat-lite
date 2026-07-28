@@ -108,20 +108,22 @@
     justify-self: end;
     display: flex;
     align-items: center;
-    gap: 2px;
+    gap: 0;
+  }
+  .topbar-actions .icon-button {
+    position: relative;
+    width: 40px;
+    height: 40px;
+  }
+  .topbar-actions .icon-button::after {
+    content: "";
+    position: absolute;
+    inset: -2px 0;
   }
   .tool-clear {
-    min-width: 44px;
-    min-height: 44px;
-    border: none;
-    border-radius: 12px;
-    padding: 6px 8px;
     color: var(--text-muted);
-    background: transparent;
-    font-size: 13px;
-    cursor: pointer;
   }
-  .tool-clear:disabled {
+  .icon-button:disabled {
     opacity: .35;
     cursor: default;
   }
@@ -195,21 +197,28 @@
   .effort-options {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 4px;
-    padding: 4px;
-    background: rgba(31,30,29,.07);
-    border-radius: 12px;
+    gap: 1px;
+    padding: 2px;
+    background: rgba(31,30,29,.055);
+    border: .5px solid rgba(31,30,29,.08);
+    border-radius: 11px;
   }
   .effort-option {
-    min-height: 44px;
+    position: relative;
+    min-height: 40px;
     padding: 6px 3px;
     color: var(--text-secondary);
     background: transparent;
     border: none;
-    border-radius: 9px;
+    border-radius: 8px;
     font: inherit;
     font-size: 12px;
     cursor: pointer;
+  }
+  .effort-option::after {
+    content: "";
+    position: absolute;
+    inset: -2px 0;
   }
   .effort-option[aria-pressed="true"] {
     color: #fff;
@@ -276,26 +285,85 @@
     font-size: 14px;
   }
 
-  .msg {
+  .message-item {
+    display: flex;
+    flex-direction: column;
+    width: fit-content;
     max-width: 85%;
+    min-width: 0;
+  }
+  .message-item.user {
+    align-self: flex-end;
+    align-items: flex-end;
+  }
+  .message-item.assistant {
+    align-self: flex-start;
+    align-items: flex-start;
+  }
+  .msg {
+    max-width: 100%;
     padding: 11px 15px;
     border-radius: var(--radius);
     white-space: pre-wrap;
     word-break: break-word;
   }
   .msg.user {
-    align-self: flex-end;
     background: var(--accent);
     color: #fff;
     border-bottom-right-radius: 6px;
   }
   .msg.assistant {
-    align-self: flex-start;
     background: var(--bg-card);
     color: var(--text-primary);
     box-shadow: var(--shadow);
     border-bottom-left-radius: 6px;
   }
+  .message-tools {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 36px;
+    margin: 0 4px;
+    color: var(--text-muted);
+    font-size: 11px;
+    line-height: 1;
+  }
+  .message-author {
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .message-copy {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 36px;
+    padding: 2px 4px;
+    color: inherit;
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    font: inherit;
+    cursor: pointer;
+    transition: color var(--motion-fast) ease, transform var(--motion-fast) var(--ease-out);
+  }
+  .message-copy::after {
+    content: "";
+    position: absolute;
+    inset: -4px 0;
+  }
+  .message-copy svg {
+    width: 14px;
+    height: 14px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.65;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .message-copy.is-copied { color: var(--accent); }
   .reasoning {
     align-self: flex-start;
     max-width: 85%;
@@ -511,7 +579,6 @@
     cursor: pointer;
     transition: opacity .2s, transform .2s;
   }
-  #send:hover:not(:disabled) { opacity: .85; transform: translateY(-1px); }
   #send:disabled { opacity: .4; cursor: default; }
 
   /* ===== 全屏设置 ===== */
@@ -565,7 +632,8 @@
   .model-star,
   .models-retry,
   .token-step,
-  .models-scroll-top {
+  .models-scroll-top,
+  .message-copy {
     -webkit-tap-highlight-color: transparent;
   }
   .settings-back {
@@ -625,8 +693,8 @@
     align-items: center;
     gap: 12px;
     width: 100%;
-    min-height: 72px;
-    padding: 13px 13px 13px 15px;
+    min-height: 66px;
+    padding: 11px 13px 11px 15px;
     color: var(--text-primary);
     background: transparent;
     border: none;
@@ -996,6 +1064,48 @@
     border-top: .5px solid rgba(31,30,29,.1);
     font-size: 11px;
   }
+  .identity-page-content {
+    max-width: 600px;
+    padding-top: 18px;
+  }
+  .identity-card {
+    padding: 0;
+    overflow: hidden;
+  }
+  .identity-field {
+    display: block;
+    padding: 14px 15px;
+  }
+  .identity-field + .identity-field {
+    border-top: .5px solid rgba(31,30,29,.1);
+  }
+  .identity-label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 13px;
+    font-weight: 650;
+  }
+  .identity-input {
+    display: block;
+    width: 100%;
+    min-height: 42px;
+    padding: 9px 11px;
+    color: var(--text-primary);
+    background: rgba(31,30,29,.045);
+    border: .5px solid rgba(31,30,29,.1);
+    border-radius: 11px;
+    outline: none;
+    font: inherit;
+    font-size: 16px;
+  }
+  .identity-input::placeholder { color: var(--text-muted); }
+  .identity-help {
+    display: block;
+    margin-top: 7px;
+    color: var(--text-muted);
+    font-size: 11px;
+    line-height: 1.5;
+  }
   .settings-footer {
     flex: none;
     padding: 12px 18px calc(14px + env(safe-area-inset-bottom));
@@ -1022,7 +1132,8 @@
   .settings-nav-row:active,
   .model-star:active,
   .models-retry:active,
-  .token-step:active { transform: scale(.97); }
+  .token-step:active,
+  .message-copy:active { transform: scale(.97); }
   .models-scroll-top.is-visible:active { transform: translate(-50%, 0) scale(.97); }
 
   /* ===== 访问密码遮罩 ===== */
@@ -1075,6 +1186,43 @@
   .gate-err { font-size: 13px; color: #9a3412; min-height: 16px; }
 
   @media (min-width: 700px) {
+    .topbar-actions {
+      gap: 2px;
+    }
+    .topbar-actions .icon-button {
+      width: 44px;
+      height: 44px;
+    }
+    .topbar-actions .icon-button::after { inset: 0; }
+    .settings-nav-row {
+      min-height: 72px;
+      padding-top: 13px;
+      padding-bottom: 13px;
+    }
+    .effort-options {
+      padding: 3px;
+      border-radius: 13px;
+    }
+    .effort-option {
+      min-height: 48px;
+      border-radius: 10px;
+      font-size: 14px;
+    }
+    .effort-option::after { inset: 0; }
+    .message-tools {
+      min-height: 40px;
+      font-size: 12px;
+    }
+    .message-copy {
+      min-height: 40px;
+      padding-inline: 6px;
+    }
+    .message-copy::after { inset: -2px 0; }
+    .identity-field { padding: 17px; }
+    .identity-input {
+      min-height: 48px;
+      padding: 11px 13px;
+    }
     .max-token-controls {
       padding: 2px;
       border-radius: 13px;
@@ -1109,7 +1257,9 @@
     .settings-nav-row:hover,
     .model-star:hover,
     .models-retry:hover,
-    .token-step:hover { background: rgba(31,30,29,.055); }
+    .token-step:hover,
+    .message-copy:hover { background: rgba(31,30,29,.055); }
+    #send:hover:not(:disabled) { opacity: .85; transform: translateY(-1px); }
     .model-choice:hover { background: rgba(31,30,29,.035); }
     .model-choice.active:hover { background: rgba(217,119,87,.095); }
   }
@@ -1152,6 +1302,8 @@
     .model-star:active,
     .models-retry:active,
     .token-step:active,
+    .message-copy:active,
+    .icon-button:active,
     .settings-save:active { transform: none; }
     .models-scroll-top.is-visible:active { transform: translate(-50%, 0); }
     :root { scroll-behavior: auto; }
@@ -1202,7 +1354,21 @@
       </div>
     </div>
     <div class="topbar-actions">
-      <button class="tool-clear" id="clear-chat" type="button" disabled>清空</button>
+      <button class="icon-button" id="export-chat" type="button" aria-label="下载全部对话" disabled>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 3v12"></path>
+          <path d="m7.5 10.5 4.5 4.5 4.5-4.5"></path>
+          <path d="M5 20h14"></path>
+        </svg>
+      </button>
+      <button class="icon-button tool-clear" id="clear-chat" type="button" aria-label="清空全部对话" disabled>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 7h16"></path>
+          <path d="m9 7 .7-2h4.6l.7 2"></path>
+          <path d="m7 7 .7 13h8.6L17 7"></path>
+          <path d="M10 11v5M14 11v5"></path>
+        </svg>
+      </button>
       <button class="icon-button" id="settings-open" type="button" aria-label="打开设置">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <circle cx="12" cy="12" r="3"></circle>
@@ -1242,6 +1408,16 @@
               <span class="settings-nav-copy">
                 <strong class="settings-nav-title">系统提示词</strong>
                 <span class="settings-nav-summary" id="settings-prompt-summary">未设置</span>
+              </span>
+              <svg class="settings-nav-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+            </button>
+            <button class="settings-nav-row" id="settings-identity-open" type="button">
+              <span class="settings-nav-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><circle cx="8" cy="9" r="3"></circle><circle cx="16" cy="9" r="3"></circle><path d="M3.5 19c.5-3 2-4.5 4.5-4.5s4 1.5 4.5 4.5"></path><path d="M12 16c.8-1 2-1.5 3.5-1.5 2.5 0 4 1.5 4.5 4.5"></path></svg>
+              </span>
+              <span class="settings-nav-copy">
+                <strong class="settings-nav-title">对话与导出</strong>
+                <span class="settings-nav-summary" id="settings-identity-summary">你 / 助手 · 自动命名</span>
               </span>
               <svg class="settings-nav-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
             </button>
@@ -1330,6 +1506,38 @@
     </div>
   </section>
 
+  <section class="settings-screen settings-child-screen" id="identity-screen" role="dialog" aria-modal="true" aria-hidden="true" aria-label="设置对话与导出">
+    <header class="settings-header">
+      <button class="settings-back" id="identity-back" type="button" aria-label="返回设置">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+      </button>
+      <h2>对话与导出</h2>
+      <span aria-hidden="true"></span>
+    </header>
+    <div class="settings-scroll">
+      <div class="settings-content identity-page-content">
+        <div class="settings-card identity-card">
+          <label class="identity-field" for="user-display-name">
+            <span class="identity-label">你的名称</span>
+            <input class="identity-input" id="user-display-name" type="text" maxlength="30" placeholder="你" autocomplete="off" />
+            <span class="identity-help">显示在你的消息下方，也用于导出的 Markdown 标题。</span>
+          </label>
+          <label class="identity-field" for="assistant-display-name">
+            <span class="identity-label">助手名称</span>
+            <input class="identity-input" id="assistant-display-name" type="text" maxlength="30" placeholder="助手" autocomplete="off" />
+            <span class="identity-help">显示在助手回答下方，也用于导出的 Markdown 标题。</span>
+          </label>
+          <label class="identity-field" for="export-file-name">
+            <span class="identity-label">导出文件名</span>
+            <input class="identity-input" id="export-file-name" type="text" maxlength="80" placeholder="留空则自动生成" autocomplete="off" />
+            <span class="identity-help">自动补上 .md；留空时使用 chat-lite-日期时间。</span>
+          </label>
+        </div>
+        <p class="settings-note">这些设置和对话一样，只保存在这台设备。</p>
+      </div>
+    </div>
+  </section>
+
   <main class="messages" id="messages">
     <div class="hint" id="hint">开始一段对话</div>
   </main>
@@ -1354,6 +1562,9 @@
   const SYSTEM_PROMPT_KEY = "ember_system_prompt";
   const REASONING_EFFORT_KEY = "ember_reasoning_effort";
   const MAX_COMPLETION_TOKENS_KEY = "ember_max_completion_tokens";
+  const USER_NAME_KEY = "ember_user_name";
+  const ASSISTANT_NAME_KEY = "ember_assistant_name";
+  const EXPORT_FILE_NAME_KEY = "ember_export_file_name";
   const SESSION_KEY = "ember_session_id";
   const WEB_KEY = "ember_web";
   const EFFORT_OPTIONS = [
@@ -1373,6 +1584,9 @@
   let systemPrompt = localStorage.getItem(SYSTEM_PROMPT_KEY) || "";
   let reasoningEffort = loadReasoningEffort();
   let maxCompletionTokens = loadMaxCompletionTokens();
+  let userDisplayName = normalizeDisplayName(localStorage.getItem(USER_NAME_KEY), "你");
+  let assistantDisplayName = normalizeDisplayName(localStorage.getItem(ASSISTANT_NAME_KEY), "助手");
+  let exportFileName = normalizeExportFileName(localStorage.getItem(EXPORT_FILE_NAME_KEY));
   let webSearchEnabled = localStorage.getItem(WEB_KEY) !== "0";
   let sessionId = loadSessionId();
   let modelsLoadedThisPage = false;
@@ -1381,6 +1595,9 @@
   let draftFavorites = favoriteModels.map((item) => ({ ...item }));
   let draftReasoningEffort = reasoningEffort;
   let draftMaxCompletionTokens = maxCompletionTokens === null ? "" : String(maxCompletionTokens);
+  let draftUserDisplayName = userDisplayName;
+  let draftAssistantDisplayName = assistantDisplayName;
+  let draftExportFileName = exportFileName;
   let settingsSnapshot = "";
   let settingsTrigger = null;
 
@@ -1396,6 +1613,7 @@
   const quickSettings = document.getElementById("quick-settings");
   const webToggle = document.getElementById("web-toggle");
   const webState = document.getElementById("web-state");
+  const exportChatBtn = document.getElementById("export-chat");
   const clearChatBtn = document.getElementById("clear-chat");
   const settingsOpen = document.getElementById("settings-open");
   const settingsScreen = document.getElementById("settings-screen");
@@ -1403,9 +1621,11 @@
   const settingsSave = document.getElementById("settings-save");
   const settingsModelOpen = document.getElementById("settings-model-open");
   const settingsPromptOpen = document.getElementById("settings-prompt-open");
+  const settingsIdentityOpen = document.getElementById("settings-identity-open");
   const settingsModelName = document.getElementById("settings-model-name");
   const settingsModelId = document.getElementById("settings-model-id");
   const settingsPromptSummary = document.getElementById("settings-prompt-summary");
+  const settingsIdentitySummary = document.getElementById("settings-identity-summary");
   const settingsEffortOptions = document.getElementById("settings-effort-options");
   const reasoningNote = document.getElementById("reasoning-note");
   const maxCompletionTokensInput = document.getElementById("max-completion-tokens");
@@ -1426,6 +1646,11 @@
   const promptScroll = document.getElementById("prompt-scroll");
   const systemPromptInput = document.getElementById("system-prompt");
   const promptCount = document.getElementById("prompt-count");
+  const identityScreen = document.getElementById("identity-screen");
+  const identityBack = document.getElementById("identity-back");
+  const userDisplayNameInput = document.getElementById("user-display-name");
+  const assistantDisplayNameInput = document.getElementById("assistant-display-name");
+  const exportFileNameInput = document.getElementById("export-file-name");
   const composer = document.getElementById("composer");
   const gate = document.getElementById("gate");
   const gateInput = document.getElementById("gate-input");
@@ -1440,6 +1665,45 @@
     } catch {
       return fallback;
     }
+  }
+
+  function normalizeDisplayName(value, fallback) {
+    const normalized = String(value || "")
+      .replace(/[\r\n\t]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 30);
+    return normalized || fallback;
+  }
+
+  function normalizeExportFileName(value) {
+    return String(value || "")
+      .replace(/[\r\n\t]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 80);
+  }
+
+  function safeExportFileBase(value) {
+    return normalizeExportFileName(value)
+      .replace(/\.md$/i, "")
+      .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-")
+      .replace(/^[.\s]+/g, "")
+      .replace(/[.\s]+$/g, "")
+      .trim();
+  }
+
+  function defaultExportFileBase() {
+    const parts = new Intl.DateTimeFormat("zh-CN", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).formatToParts(new Date());
+    const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    return `chat-lite-${values.year}-${values.month}-${values.day}-${values.hour}-${values.minute}`;
   }
 
   function loadReasoningEffort() {
@@ -1607,6 +1871,9 @@
       reasoningEffort: draftReasoningEffort,
       systemPrompt: systemPromptInput.value,
       maxCompletionTokens: draftMaxCompletionTokens,
+      userDisplayName: userDisplayNameInput.value,
+      assistantDisplayName: assistantDisplayNameInput.value,
+      exportFileName: exportFileNameInput.value,
     });
   }
 
@@ -1646,6 +1913,15 @@
     settingsPromptSummary.textContent = systemPromptInput.value.trim()
       ? `已设置 · ${length.toLocaleString()} 字`
       : "未设置";
+    updateSettingsDirty();
+  }
+
+  function updateIdentitySummary() {
+    draftUserDisplayName = normalizeDisplayName(userDisplayNameInput.value, "你");
+    draftAssistantDisplayName = normalizeDisplayName(assistantDisplayNameInput.value, "助手");
+    draftExportFileName = normalizeExportFileName(exportFileNameInput.value);
+    const fileSummary = draftExportFileName ? "自定义文件名" : "自动命名";
+    settingsIdentitySummary.textContent = `${draftUserDisplayName} / ${draftAssistantDisplayName} · ${fileSummary}`;
     updateSettingsDirty();
   }
 
@@ -1836,12 +2112,19 @@
     draftFavorites = favoriteModels.map((item) => ({ ...item }));
     draftReasoningEffort = reasoningEffort;
     draftMaxCompletionTokens = maxCompletionTokens === null ? "" : String(maxCompletionTokens);
+    draftUserDisplayName = userDisplayName;
+    draftAssistantDisplayName = assistantDisplayName;
+    draftExportFileName = exportFileName;
     modelSearch.value = "";
     systemPromptInput.value = systemPrompt;
     maxCompletionTokensInput.value = draftMaxCompletionTokens;
+    userDisplayNameInput.value = draftUserDisplayName;
+    assistantDisplayNameInput.value = draftAssistantDisplayName;
+    exportFileNameInput.value = draftExportFileName;
     updateSettingsModel();
     renderModelList();
     updatePromptCount();
+    updateIdentitySummary();
     settingsSnapshot = settingsState();
     updateSettingsDirty();
     settingsScreen.classList.add("is-open");
@@ -1901,6 +2184,22 @@
     settingsPromptOpen.focus();
   }
 
+  function openIdentityScreen() {
+    settingsScreen.inert = true;
+    identityScreen.classList.add("is-open");
+    identityScreen.setAttribute("aria-hidden", "false");
+    identityBack.focus();
+  }
+
+  function closeIdentityScreen({ instant = false } = {}) {
+    if (instant) skipPanelMotionOnce(identityScreen);
+    identityScreen.classList.remove("is-open");
+    identityScreen.setAttribute("aria-hidden", "true");
+    settingsScreen.inert = false;
+    updateIdentitySummary();
+    settingsIdentityOpen.focus();
+  }
+
   function updateModelScrollTop() {
     const visible = modelScroll.scrollTop > 360;
     modelsScrollTop.classList.toggle("is-visible", visible);
@@ -1919,6 +2218,8 @@
     modelScreen.setAttribute("aria-hidden", "true");
     promptScreen.classList.remove("is-open");
     promptScreen.setAttribute("aria-hidden", "true");
+    identityScreen.classList.remove("is-open");
+    identityScreen.setAttribute("aria-hidden", "true");
     settingsScreen.inert = false;
     if (instant) skipPanelMotionOnce(settingsScreen);
     settingsScreen.classList.remove("is-open");
@@ -1944,16 +2245,27 @@
       maxCompletionTokens = draftMaxCompletionTokens
         ? Number(draftMaxCompletionTokens)
         : null;
+      userDisplayName = normalizeDisplayName(userDisplayNameInput.value, "你");
+      assistantDisplayName = normalizeDisplayName(assistantDisplayNameInput.value, "助手");
+      exportFileName = normalizeExportFileName(exportFileNameInput.value);
       localStorage.setItem(MODEL_KEY, currentModel);
       localStorage.setItem(FAVORITES_KEY, JSON.stringify(favoriteModels));
       localStorage.setItem(REASONING_EFFORT_KEY, reasoningEffort);
       localStorage.setItem(SYSTEM_PROMPT_KEY, systemPrompt);
+      localStorage.setItem(USER_NAME_KEY, userDisplayName);
+      localStorage.setItem(ASSISTANT_NAME_KEY, assistantDisplayName);
+      if (exportFileName) {
+        localStorage.setItem(EXPORT_FILE_NAME_KEY, exportFileName);
+      } else {
+        localStorage.removeItem(EXPORT_FILE_NAME_KEY);
+      }
       if (maxCompletionTokens === null) {
         localStorage.removeItem(MAX_COMPLETION_TOKENS_KEY);
       } else {
         localStorage.setItem(MAX_COMPLETION_TOKENS_KEY, String(maxCompletionTokens));
       }
       updateTopbar();
+      updateMessageLabels();
     }
     closeSettings({ force: true });
   }
@@ -1973,27 +2285,132 @@
 
   function saveMessages() {
     localStorage.setItem(CHAT_KEY, JSON.stringify(messages));
-    clearChatBtn.disabled = messages.length === 0;
+    const empty = messages.length === 0;
+    clearChatBtn.disabled = empty;
+    exportChatBtn.disabled = empty;
   }
 
   function restoreMessages() {
     if (!messages.length) return;
     messages.forEach((item) => addBubble(item.role, item.content));
     clearChatBtn.disabled = false;
+    exportChatBtn.disabled = false;
   }
 
   function scrollToBottom() {
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
+  async function writeClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return;
+      } catch {
+        // Safari 或浏览器权限拒绝时，继续尝试兼容复制。
+      }
+    }
+    const helper = document.createElement("textarea");
+    helper.value = text;
+    helper.setAttribute("readonly", "");
+    helper.style.position = "fixed";
+    helper.style.top = "0";
+    helper.style.left = "-9999px";
+    helper.style.opacity = "0";
+    document.body.appendChild(helper);
+    helper.select();
+    helper.setSelectionRange(0, helper.value.length);
+    const copied = document.execCommand("copy");
+    helper.remove();
+    if (!copied) throw new Error("浏览器未允许复制");
+  }
+
+  function messageRoleName(role) {
+    return role === "user" ? userDisplayName : assistantDisplayName;
+  }
+
+  function makeMessageTools(role, bubble, visible) {
+    const tools = document.createElement("div");
+    tools.className = "message-tools";
+    tools.hidden = !visible;
+
+    const author = document.createElement("span");
+    author.className = "message-author";
+    author.textContent = messageRoleName(role);
+
+    const copy = document.createElement("button");
+    copy.type = "button";
+    copy.className = "message-copy";
+    copy.setAttribute("aria-label", `复制${messageRoleName(role)}的消息`);
+    copy.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="2"></rect><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path></svg><span class="message-copy-label" aria-live="polite">复制</span>';
+    copy.addEventListener("click", async () => {
+      const label = copy.querySelector(".message-copy-label");
+      try {
+        await writeClipboard(bubble.textContent);
+        label.textContent = "已复制";
+        copy.classList.add("is-copied");
+      } catch {
+        label.textContent = "复制失败";
+      }
+      window.setTimeout(() => {
+        label.textContent = "复制";
+        copy.classList.remove("is-copied");
+      }, 1200);
+    });
+
+    tools.append(author, copy);
+    return tools;
+  }
+
+  function revealMessageTools(bubble) {
+    const tools = bubble.closest(".message-item")?.querySelector(".message-tools");
+    if (tools) tools.hidden = false;
+  }
+
+  function updateMessageLabels() {
+    document.querySelectorAll(".message-item").forEach((item) => {
+      const role = item.dataset.role;
+      const author = item.querySelector(".message-author");
+      const copy = item.querySelector(".message-copy");
+      if (author) author.textContent = messageRoleName(role);
+      if (copy) copy.setAttribute("aria-label", `复制${messageRoleName(role)}的消息`);
+    });
+  }
+
   function addBubble(role, text) {
     if (hintEl) hintEl.remove();
+    const root = document.createElement("div");
+    root.className = `message-item ${role}`;
+    root.dataset.role = role;
     const el = document.createElement("div");
     el.className = "msg " + role;
     el.textContent = text;
-    messagesEl.appendChild(el);
+    root.append(el, makeMessageTools(role, el, Boolean(text)));
+    messagesEl.appendChild(root);
     scrollToBottom();
     return el;
+  }
+
+  function buildConversationMarkdown() {
+    return messages
+      .map((item) => `## ${messageRoleName(item.role)}\n\n${item.content.trim()}`)
+      .join("\n\n")
+      .trimEnd() + "\n";
+  }
+
+  function downloadConversation() {
+    if (!messages.length) return;
+    const customBase = safeExportFileBase(exportFileName);
+    const filename = `${customBase || defaultExportFileBase()}.md`;
+    const blob = new Blob([buildConversationMarkdown()], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   function addReasoningBlock({ webSearch }) {
@@ -2259,6 +2676,7 @@
       if (full) {
         messages.push({ role: "assistant", content: full });
         saveMessages();
+        revealMessageTools(bubble);
         addCitations(annotations);
         addCacheBadge(usage, requestModel);
       } else {
@@ -2335,8 +2753,10 @@
   settingsSave.addEventListener("click", saveSettings);
   settingsModelOpen.addEventListener("click", openModelScreen);
   settingsPromptOpen.addEventListener("click", openPromptScreen);
+  settingsIdentityOpen.addEventListener("click", openIdentityScreen);
   modelBack.addEventListener("click", closeModelScreen);
   promptBack.addEventListener("click", closePromptScreen);
+  identityBack.addEventListener("click", closeIdentityScreen);
   modelSearch.addEventListener("input", renderModelList);
   modelsRetry.addEventListener("click", () => void fetchModels({ force: true }));
   modelScroll.addEventListener("scroll", updateModelScrollTop, { passive: true });
@@ -2345,6 +2765,9 @@
     autoGrowSystemPrompt();
     updatePromptCount();
   });
+  userDisplayNameInput.addEventListener("input", updateIdentitySummary);
+  assistantDisplayNameInput.addEventListener("input", updateIdentitySummary);
+  exportFileNameInput.addEventListener("input", updateIdentitySummary);
   maxCompletionTokensInput.addEventListener("input", () => {
     draftMaxCompletionTokens = maxCompletionTokensInput.value.trim();
     updateSettingsDirty();
@@ -2372,6 +2795,8 @@
       closeModelScreen({ instant: true });
     } else if (promptScreen.classList.contains("is-open")) {
       closePromptScreen({ instant: true });
+    } else if (identityScreen.classList.contains("is-open")) {
+      closeIdentityScreen({ instant: true });
     } else if (settingsScreen.classList.contains("is-open")) {
       closeSettings({ instant: true });
     } else if (quickPanel.classList.contains("is-open")) {
@@ -2379,7 +2804,9 @@
       modelQuick.focus();
     }
   });
+  exportChatBtn.addEventListener("click", downloadConversation);
   clearChatBtn.addEventListener("click", () => {
+    if (!window.confirm("清空这台设备上的全部对话？此操作不能撤销。")) return;
     messages.length = 0;
     localStorage.removeItem(CHAT_KEY);
     sessionId = createSessionId();
@@ -2387,6 +2814,7 @@
     messagesEl.textContent = "";
     messagesEl.appendChild(hintEl);
     clearChatBtn.disabled = true;
+    exportChatBtn.disabled = true;
     input.focus();
   });
   updateTopbar();
