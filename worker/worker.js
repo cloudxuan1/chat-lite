@@ -4,7 +4,7 @@
 //
 // 提示词缓存（applyPromptCache）：给消息打上 cache_control 标记，命中时这部分内容
 // 不用按全价重新计费（读缓存约 0.1x 价格），代价是首次写入贵 1.25x。只有前缀字节完全
-// 一致才会命中，门槛是约 4096 token，不满门槛就悄悄跳过、不报错也不多收钱。
+// 一致且达到当前模型的缓存门槛才会命中；不满门槛会跳过，不影响正常回复。
 // 怎么验证命中：连续发两轮消息后，看浏览器 Network 面板里最后一个 SSE chunk，
 // 字段 usage.prompt_tokens_details.cached_tokens > 0 就是命中了。
 
@@ -12,7 +12,9 @@
 const ALLOWED_ORIGIN = "https://cloudxuan1.github.io";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+const OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models";
 const DEFAULT_MODEL = "anthropic/claude-opus-4.6";
+const REASONING_EFFORTS = new Set(["off", "low", "medium", "high"]);
 
 export default {
   async fetch(request, env) {
@@ -30,34 +32,51 @@ export default {
     } catch {
       return json({ error: "请求体不是合法 JSON" }, 400);
     }
-
-    const { messages, model, password, reasoning, webSearch } = payload;
-    if (!Array.isArray(messages) || messages.length === 0) {
-      return json({ error: "messages 必须是非空数组" }, 400);
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+      return json({ error: "请求体必须是对象" }, 400);
     }
 
     // 访问密码校验：挡住公开网址被陌生人直接调用、白嫖你的 API key。
     // 密码存在 Cloudflare Secret（ACCESS_PASSWORD）里；没设或不匹配一律拒绝，绝不调用 OpenRouter。
-    if (!env.ACCESS_PASSWORD || password !== env.ACCESS_PASSWORD) {
+    if (!env.ACCESS_PASSWORD || payload.password !== env.ACCESS_PASSWORD) {
       return json({ error: "访问密码错误" }, 401);
+    }
+
+    if (payload.action === "models") {
+      return fetchModels(env);
+    }
+
+    if (!Array.isArray(payload.messages) || payload.messages.length === 0) {
+      return json({ error: "messages 必须是非空数组" }, 400);
+    }
+    if (
+      payload.reasoningEffort !== undefined
+      && !REASONING_EFFORTS.has(payload.reasoningEffort)
+    ) {
+      return json({ error: "reasoningEffort 必须是 off、low、medium 或 high" }, 400);
+    }
+    if (
+      payload.session_id !== undefined
+      && (
+        typeof payload.session_id !== "string"
+        || payload.session_id.trim().length === 0
+        || payload.session_id.length > 256
+      )
+    ) {
+      return json({ error: "session_id 必须是 1 到 256 个字符" }, 400);
+    }
+    if (
+      payload.maxCompletionTokens !== undefined
+      && (
+        !Number.isSafeInteger(payload.maxCompletionTokens)
+        || payload.maxCompletionTokens < 1
+      )
+    ) {
+      return json({ error: "maxCompletionTokens 必须是大于 0 的整数" }, 400);
     }
 
     let upstream;
     try {
-      const body = {
-        model: model || DEFAULT_MODEL,
-        messages: applyPromptCache(messages, model),
-        stream: true,
-        usage: { include: true },
-      };
-      if (reasoning) {
-        body.include_reasoning = true;
-        body.reasoning = { effort: "medium" };
-      }
-      if (webSearch) {
-        body.plugins = [{ id: "web", max_results: 5 }];
-      }
-
       upstream = await fetch(OPENROUTER_URL, {
         method: "POST",
         headers: {
@@ -66,7 +85,7 @@ export default {
           "HTTP-Referer": ALLOWED_ORIGIN,
           "X-Title": "ember",
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify(buildUpstreamBody(payload)),
       });
     } catch (err) {
       return json({ error: "连接 OpenRouter 失败：" + err.message }, 502);
@@ -82,13 +101,92 @@ export default {
   },
 };
 
+async function fetchModels(env) {
+  let upstream;
+  try {
+    upstream = await fetch(OPENROUTER_MODELS_URL, {
+      headers: {
+        "Authorization": `Bearer ${env.OPENROUTER_API_KEY}`,
+        "HTTP-Referer": ALLOWED_ORIGIN,
+        "X-Title": "ember",
+      },
+    });
+    if (!upstream.ok) {
+      return json({ error: "拉取模型列表失败" }, 502);
+    }
+
+    const result = await upstream.json();
+    if (!Array.isArray(result.data)) {
+      return json({ error: "模型列表格式异常" }, 502);
+    }
+    return json({ models: result.data.map(normalizeModel).filter(Boolean) });
+  } catch {
+    return json({ error: "连接 OpenRouter 模型列表失败" }, 502);
+  }
+}
+
+export function normalizeModel(model) {
+  if (!model || typeof model.id !== "string" || !model.id) {
+    return null;
+  }
+  const providerMax = model.top_provider?.max_completion_tokens;
+  return {
+    id: model.id,
+    name: typeof model.name === "string" && model.name ? model.name : model.id,
+    description: typeof model.description === "string" ? model.description : "",
+    contextLength: Number.isFinite(model.context_length) ? model.context_length : null,
+    maxCompletionTokens: Number.isFinite(providerMax) && providerMax > 0
+      ? Math.floor(providerMax)
+      : null,
+    pricing: model.pricing && typeof model.pricing === "object" ? model.pricing : null,
+    reasoning: model.reasoning && typeof model.reasoning === "object"
+      ? model.reasoning
+      : null,
+    supportedParameters: Array.isArray(model.supported_parameters)
+      ? model.supported_parameters.filter((parameter) => typeof parameter === "string")
+      : [],
+  };
+}
+
+export function buildUpstreamBody(payload) {
+  const body = {
+    model: payload.model || DEFAULT_MODEL,
+    messages: applyPromptCache(payload.messages, payload.model),
+    stream: true,
+    usage: { include: true },
+  };
+
+  const reasoningEffort = normalizeReasoningEffort(payload);
+  if (reasoningEffort) {
+    body.reasoning = { effort: reasoningEffort };
+  }
+  if (payload.webSearch) {
+    body.plugins = [{ id: "web", max_results: 5 }];
+  }
+  if (payload.session_id !== undefined) {
+    body.session_id = payload.session_id;
+  }
+  if (payload.maxCompletionTokens !== undefined) {
+    body.max_completion_tokens = payload.maxCompletionTokens;
+  }
+
+  return body;
+}
+
+function normalizeReasoningEffort(payload) {
+  if (payload.reasoningEffort !== undefined) {
+    return payload.reasoningEffort === "off" ? "none" : payload.reasoningEffort;
+  }
+  if (typeof payload.reasoning === "boolean") {
+    return payload.reasoning ? "medium" : "none";
+  }
+  return undefined;
+}
+
 // 给消息数组打提示词缓存断点，返回新数组，不改入参 messages。
 // 规则：只处理 anthropic/claude 开头的模型（其它供应商可能不认 cache_control，原样放行避免多扣费）；
-// 滚动双断点打在“最后一条”和“倒数第三条”（存在的话，即上一轮的 user 消息）上，
-// 这样前一轮已经写过缓存的前缀这一轮还能命中；不足 3 条消息时只打最后一条。
-// 只把选中的消息 content 从字符串转成块数组，其余消息原样保留字符串，
-// 保证同一条消息在相邻两轮里的字节前缀不变（这是命中缓存的前提）。
-// content 已经不是字符串的（比如已经是数组）原样跳过，防御未来格式变化。
+// 最多打三个语义断点：首条 system、当前问题前一条、当前问题。
+// content 为字符串时转成文本块；已经是块数组时给最后一个块打标。重复调用不会二次包装。
 export function applyPromptCache(messages, model) {
   const effectiveModel = model || DEFAULT_MODEL;
   if (typeof effectiveModel !== "string" || !effectiveModel.startsWith("anthropic/claude")) {
@@ -97,24 +195,55 @@ export function applyPromptCache(messages, model) {
 
   const cacheIndexes = new Set();
   const lastIndex = messages.length - 1;
+  if (messages[0]?.role === "system") cacheIndexes.add(0);
+  if (lastIndex >= 1) cacheIndexes.add(lastIndex - 1);
   if (lastIndex >= 0) cacheIndexes.add(lastIndex);
-  if (messages.length >= 3) cacheIndexes.add(messages.length - 3);
 
   return messages.map((msg, i) => {
-    if (!cacheIndexes.has(i) || typeof msg.content !== "string") {
+    if (!cacheIndexes.has(i)) {
       return msg;
     }
+    const content = addCacheControl(msg.content);
+    if (content === msg.content) return msg;
     return {
       ...msg,
-      content: [
-        {
-          type: "text",
-          text: msg.content,
-          cache_control: { type: "ephemeral" },
-        },
-      ],
+      content,
     };
   });
+}
+
+function addCacheControl(content) {
+  if (typeof content === "string") {
+    return [
+      {
+        type: "text",
+        text: content,
+        cache_control: { type: "ephemeral" },
+      },
+    ];
+  }
+  if (!Array.isArray(content) || content.length === 0) {
+    return content;
+  }
+
+  let targetIndex = -1;
+  for (let i = content.length - 1; i >= 0; i -= 1) {
+    if (content[i] && typeof content[i] === "object" && !Array.isArray(content[i])) {
+      targetIndex = i;
+      break;
+    }
+  }
+  if (targetIndex === -1) return content;
+
+  const target = content[targetIndex];
+  if (target.cache_control?.type === "ephemeral") {
+    return content;
+  }
+  return content.map((block, i) => (
+    i === targetIndex
+      ? { ...block, cache_control: { type: "ephemeral" } }
+      : block
+  ));
 }
 
 function corsHeaders() {
