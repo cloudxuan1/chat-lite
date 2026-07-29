@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='10' fill='%23d97757'/%3E%3C/svg%3E" />
 <title>ember</title>
 <style>
   /* ===== 设计 token（怀旧版 / Claude Theme，取自 DESIGN 设计稿）===== */
@@ -26,6 +27,7 @@
 
     --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
     --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+    --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
     --motion-fast: 160ms;
     --motion-panel: 240ms;
   }
@@ -46,6 +48,317 @@
     -webkit-font-smoothing: antialiased;
   }
 
+  /* ===== 应用框架与会话侧栏 ===== */
+  .app-shell {
+    position: relative;
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .chat-shell {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+  }
+  .app-status {
+    position: fixed;
+    z-index: 40;
+    top: calc(12px + env(safe-area-inset-top));
+    left: 50%;
+    width: min(calc(100vw - 32px), 520px);
+    padding: 10px 14px;
+    color: #7c2d12;
+    background: rgba(255,255,255,.96);
+    border: .5px solid rgba(154,52,18,.22);
+    border-radius: 12px;
+    box-shadow: 0 12px 32px rgba(31,30,29,.12);
+    font-size: 13px;
+    line-height: 1.45;
+    text-align: center;
+    visibility: hidden;
+    pointer-events: none;
+    opacity: 0;
+    transform: translate(-50%, -8px);
+    transition:
+      opacity var(--motion-fast) ease,
+      transform var(--motion-fast) var(--ease-out),
+      visibility 0s linear var(--motion-fast);
+  }
+  .app-status.is-visible {
+    visibility: visible;
+    opacity: 1;
+    transform: translate(-50%, 0);
+    transition-delay: 0s;
+  }
+  .conversation-sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 12;
+    width: min(86vw, 320px);
+    overflow: hidden;
+    color: var(--text-primary);
+    background: var(--bg-primary);
+    border-right: .5px solid rgba(31,30,29,.13);
+    box-shadow: 16px 0 44px rgba(31,30,29,.1);
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateX(-100%);
+    transition:
+      transform var(--motion-panel) var(--ease-drawer),
+      visibility 0s linear var(--motion-panel);
+  }
+  .app-shell.sidebar-is-open .conversation-sidebar {
+    visibility: visible;
+    pointer-events: auto;
+    transform: translateX(0);
+    transition-delay: 0s;
+  }
+  .conversation-sidebar-inner {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    padding:
+      calc(8px + env(safe-area-inset-top))
+      10px
+      calc(10px + env(safe-area-inset-bottom));
+  }
+  .conversation-sidebar-header {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    align-items: center;
+    gap: 2px;
+    min-height: 48px;
+    padding-left: 8px;
+  }
+  .conversation-sidebar-header h2 {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: 21px;
+    font-weight: 500;
+    line-height: 1.2;
+    letter-spacing: .1px;
+  }
+  .conversation-sidebar-action,
+  .conversation-more,
+  .conversation-menu-button,
+  .conversation-rename-action {
+    display: grid;
+    place-items: center;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0;
+    color: var(--text-secondary);
+    background: transparent;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    transition:
+      color var(--motion-fast) ease,
+      background-color var(--motion-fast) ease,
+      transform var(--motion-fast) var(--ease-out);
+  }
+  .conversation-sidebar-action svg,
+  .conversation-more svg,
+  .conversation-menu-button svg,
+  .conversation-rename-action svg {
+    width: 19px;
+    height: 19px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.65;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .conversation-sidebar-action:disabled,
+  .conversation-more:disabled,
+  .conversation-menu-button:disabled,
+  .conversation-rename-action:disabled {
+    opacity: .35;
+    cursor: default;
+  }
+  .conversation-pending-note {
+    min-height: 0;
+    margin: 0 8px;
+    overflow: hidden;
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.4;
+  }
+  .conversation-pending-note:not(:empty) {
+    min-height: 30px;
+    padding: 5px 0 8px;
+  }
+  .conversation-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 3px 0 16px;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+  }
+  .conversation-item {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 44px;
+    align-items: center;
+    min-height: 60px;
+    margin: 2px 0;
+    border-radius: 14px;
+  }
+  .conversation-item.active {
+    background: rgba(217,119,87,.09);
+  }
+  .conversation-select {
+    display: grid;
+    grid-template-columns: 8px minmax(0, 1fr);
+    gap: 8px;
+    align-items: center;
+    min-width: 0;
+    min-height: 60px;
+    padding: 8px 2px 8px 11px;
+    color: inherit;
+    background: transparent;
+    border: none;
+    border-radius: 14px 0 0 14px;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .conversation-select:disabled {
+    cursor: default;
+  }
+  .conversation-current-mark {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: transparent;
+  }
+  .conversation-item.active .conversation-current-mark {
+    background: var(--accent);
+  }
+  .conversation-copy {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    gap: 2px;
+  }
+  .conversation-title {
+    overflow: hidden;
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 610;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .conversation-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    color: var(--text-muted);
+    font-size: 11px;
+    line-height: 1.35;
+  }
+  .conversation-preview {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .conversation-time {
+    flex: none;
+    font-family: 'SF Mono', 'Fira Code', Menlo, Consolas, monospace;
+    font-size: 10px;
+  }
+  .conversation-more {
+    width: 44px;
+    height: 44px;
+  }
+  .conversation-menu {
+    position: absolute;
+    z-index: 2;
+    top: 47px;
+    right: 5px;
+    width: 132px;
+    padding: 5px;
+    background: var(--bg-card);
+    border-radius: 12px;
+    box-shadow: 0 12px 30px rgba(31,30,29,.14), 0 0 0 .5px rgba(31,30,29,.13);
+  }
+  .conversation-menu-button {
+    display: flex;
+    justify-content: flex-start;
+    gap: 8px;
+    width: 100%;
+    padding: 7px 10px;
+    font: inherit;
+    font-size: 13px;
+  }
+  .conversation-menu-button svg {
+    width: 17px;
+    height: 17px;
+  }
+  .conversation-menu-button.danger {
+    color: #9a3412;
+  }
+  .conversation-rename-form {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 44px 44px;
+    align-items: center;
+    min-height: 60px;
+    padding-left: 10px;
+  }
+  .conversation-rename-input {
+    min-width: 0;
+    height: 38px;
+    padding: 7px 10px;
+    color: var(--text-primary);
+    background: var(--bg-card);
+    border: none;
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    font: inherit;
+    font-size: 14px;
+    outline: none;
+  }
+  .conversation-live {
+    min-height: 20px;
+    padding: 0 8px;
+    color: var(--text-muted);
+    font-size: 11px;
+    line-height: 1.4;
+  }
+  .conversation-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 11;
+    padding: 0;
+    background: rgba(20,20,19,.2);
+    border: none;
+    visibility: hidden;
+    pointer-events: none;
+    opacity: 0;
+    transition:
+      opacity var(--motion-fast) ease,
+      visibility 0s linear var(--motion-fast);
+  }
+  .app-shell.sidebar-is-open .conversation-scrim {
+    visibility: visible;
+    pointer-events: auto;
+    opacity: 1;
+    transition-delay: 0s;
+  }
+
   /* ===== 顶栏 ===== */
   .topbar {
     flex: none;
@@ -64,8 +377,21 @@
     display: flex;
     align-items: center;
     gap: 8px;
+    justify-self: start;
     min-width: 0;
+    min-height: 44px;
+    margin-left: -6px;
+    padding: 0 6px;
+    color: inherit;
+    background: transparent;
+    border: none;
+    border-radius: 12px;
+    font: inherit;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: opacity var(--motion-fast) ease;
   }
+  .brand-wrap:active { opacity: .62; }
   .model-control {
     position: relative;
     justify-self: center;
@@ -1250,7 +1576,51 @@
     }
   }
 
+  @media (min-width: 900px) {
+    .conversation-sidebar {
+      position: relative;
+      inset: auto;
+      z-index: 5;
+      flex: none;
+      width: 0;
+      height: 100%;
+      border-right-color: transparent;
+      box-shadow: none;
+      visibility: visible;
+      pointer-events: none;
+      transform: none;
+      transition: none;
+    }
+    .conversation-sidebar-inner {
+      width: 288px;
+      opacity: 0;
+      transform: translateX(-18px);
+      transition:
+        opacity var(--motion-fast) ease,
+        transform var(--motion-panel) var(--ease-out);
+    }
+    .app-shell.sidebar-is-open .conversation-sidebar {
+      width: 288px;
+      border-right-color: rgba(31,30,29,.13);
+      pointer-events: auto;
+      transform: none;
+    }
+    .app-shell.sidebar-is-open .conversation-sidebar-inner {
+      opacity: 1;
+      transform: translateX(0);
+    }
+    .conversation-title { font-size: 15px; }
+    .conversation-meta { font-size: 12px; }
+    .conversation-time { font-size: 11px; }
+    .conversation-scrim { display: none; }
+  }
+
   @media (hover: hover) and (pointer: fine) {
+    .conversation-sidebar-action:hover:not(:disabled),
+    .conversation-more:hover:not(:disabled),
+    .conversation-menu-button:hover:not(:disabled),
+    .conversation-rename-action:hover:not(:disabled),
+    .conversation-select:hover:not(:disabled),
     .model-quick:hover,
     .icon-button:hover,
     .settings-back:hover,
@@ -1273,6 +1643,29 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
+    .conversation-sidebar,
+    .conversation-sidebar-inner,
+    .conversation-scrim,
+    .app-status {
+      transition: opacity var(--motion-fast) ease, visibility 0s linear var(--motion-fast);
+    }
+    .app-status,
+    .app-status.is-visible { transform: translate(-50%, 0); }
+    .conversation-sidebar {
+      transform: none;
+      opacity: 0;
+    }
+    .app-shell.sidebar-is-open .conversation-sidebar {
+      opacity: 1;
+      transform: none;
+    }
+    .conversation-sidebar-inner { transform: none; }
+    .conversation-sidebar-action:active,
+    .conversation-more:active,
+    .conversation-menu-button:active,
+    .conversation-rename-action:active {
+      transform: none;
+    }
     .model-quick svg,
     .reasoning-chevron,
     .citations-chevron {
@@ -1319,21 +1712,44 @@
 </style>
 </head>
 <body>
-  <div class="gate" id="gate" style="display:none">
-    <div class="gate-card">
-      <div class="gate-brand">ember</div>
+  <div class="gate" id="gate" role="dialog" aria-modal="true" aria-labelledby="gate-title" style="display:none">
+    <form class="gate-card" id="gate-form">
+      <div class="gate-brand" id="gate-title">ember</div>
       <div class="gate-hint">请输入访问密码</div>
+      <input type="text" name="username" value="ember" autocomplete="username" hidden />
       <input class="gate-input" id="gate-input" type="password" placeholder="密码" autocomplete="current-password" />
-      <button class="gate-btn" id="gate-btn">进入</button>
+      <button class="gate-btn" id="gate-btn" type="submit">进入</button>
       <div class="gate-err" id="gate-err"></div>
-    </div>
+    </form>
   </div>
 
+  <div class="app-status" id="app-status" role="alert" aria-atomic="true"></div>
+
+  <div class="app-shell" id="app-shell">
+    <aside class="conversation-sidebar" id="conversation-sidebar" aria-label="会话列表" aria-hidden="true">
+      <div class="conversation-sidebar-inner">
+        <header class="conversation-sidebar-header">
+          <h2 id="conversation-sidebar-title">会话</h2>
+          <button class="conversation-sidebar-action" id="conversation-new" type="button" aria-label="新建会话">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+          </button>
+          <button class="conversation-sidebar-action" id="conversation-close" type="button" aria-label="关闭会话列表">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg>
+          </button>
+        </header>
+        <p class="conversation-pending-note" id="conversation-pending-note"></p>
+        <nav class="conversation-list" id="conversation-list" aria-label="最近会话"></nav>
+        <div class="conversation-live" id="conversation-live" aria-live="polite"></div>
+      </div>
+    </aside>
+    <button class="conversation-scrim" id="conversation-scrim" type="button" aria-hidden="true" tabindex="-1"></button>
+
+    <div class="chat-shell" id="chat-shell">
   <header class="topbar">
-    <div class="brand-wrap">
+    <button class="brand-wrap" id="conversations-open" type="button" aria-label="打开会话列表" aria-controls="conversation-sidebar" aria-expanded="false">
       <span class="spark"></span>
       <span class="brand">ember</span>
-    </div>
+    </button>
     <div class="model-control">
       <button class="model-quick" id="model-quick" type="button" aria-expanded="false" aria-controls="quick-panel">
         <span class="model-quick-label" id="model-quick-label">Opus 4.6</span>
@@ -1354,14 +1770,14 @@
       </div>
     </div>
     <div class="topbar-actions">
-      <button class="icon-button" id="export-chat" type="button" aria-label="下载全部对话" disabled>
+      <button class="icon-button" id="export-chat" type="button" aria-label="下载当前会话" disabled>
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M12 3v12"></path>
           <path d="m7.5 10.5 4.5 4.5 4.5-4.5"></path>
           <path d="M5 20h14"></path>
         </svg>
       </button>
-      <button class="icon-button tool-clear" id="clear-chat" type="button" aria-label="清空全部对话" disabled>
+      <button class="icon-button tool-clear" id="clear-chat" type="button" aria-label="清空当前会话" disabled>
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M4 7h16"></path>
           <path d="m9 7 .7-2h4.6l.7 2"></path>
@@ -1546,6 +1962,8 @@
     <textarea id="input" rows="1" placeholder="发消息…" autocomplete="off"></textarea>
     <button type="submit" id="send" aria-label="发送">↑</button>
   </form>
+    </div>
+  </div>
 
 <script>
   // ===== 可配置常量 =====
@@ -1554,7 +1972,10 @@
   const DEFAULT_MODEL = "anthropic/claude-opus-4.6";
 
   const PW_KEY = "ember_pw";  // 访问密码在本设备浏览器的存储键
-  const CHAT_KEY = "ember_messages";
+  const LEGACY_CHAT_KEY = "ember_messages";
+  const CONVERSATIONS_KEY = "ember_conversations_v1";
+  const CORRUPT_CONVERSATIONS_BACKUP_KEY = "ember_conversations_v1_corrupt_backup";
+  const SIDEBAR_OPEN_KEY = "ember_sidebar_desktop_open";
   const LEGACY_REASONING_KEY = "ember_reasoning";
   const MODEL_KEY = "ember_model";
   const FAVORITES_KEY = "ember_model_favorites";
@@ -1565,7 +1986,7 @@
   const USER_NAME_KEY = "ember_user_name";
   const ASSISTANT_NAME_KEY = "ember_assistant_name";
   const EXPORT_FILE_NAME_KEY = "ember_export_file_name";
-  const SESSION_KEY = "ember_session_id";
+  const LEGACY_SESSION_KEY = "ember_session_id";
   const WEB_KEY = "ember_web";
   const EFFORT_OPTIONS = [
     { value: "off", label: "关闭" },
@@ -1575,7 +1996,9 @@
   ];
 
   // ===== 状态 =====
-  const messages = loadMessages(); // 对话历史，保存在本设备浏览器
+  let conversationStoreLoadWarning = "";
+  let conversationStoreRecoveryRaw = "";
+  let conversationStore = loadConversationStore();
   let pending = false;        // 是否正在等回复，防止重复发送
   let accessPw = localStorage.getItem(PW_KEY) || "";  // 访问密码，存在本设备浏览器
   let currentModel = localStorage.getItem(MODEL_KEY) || DEFAULT_MODEL;
@@ -1588,7 +2011,6 @@
   let assistantDisplayName = normalizeDisplayName(localStorage.getItem(ASSISTANT_NAME_KEY), "助手");
   let exportFileName = normalizeExportFileName(localStorage.getItem(EXPORT_FILE_NAME_KEY));
   let webSearchEnabled = localStorage.getItem(WEB_KEY) !== "0";
-  let sessionId = loadSessionId();
   let modelsLoadedThisPage = false;
   let modelsLoading = false;
   let draftModel = currentModel;
@@ -1600,7 +2022,24 @@
   let draftExportFileName = exportFileName;
   let settingsSnapshot = "";
   let settingsTrigger = null;
+  let conversationMenuId = null;
+  let renamingConversationId = null;
+  let conversationSidebarTrigger = null;
+  const desktopSidebarMedia = window.matchMedia("(min-width: 900px)");
+  let sidebarOpen = desktopSidebarMedia.matches && loadSidebarPreference();
 
+  const appStatus = document.getElementById("app-status");
+  const appShell = document.getElementById("app-shell");
+  const chatShell = document.getElementById("chat-shell");
+  const conversationSidebar = document.getElementById("conversation-sidebar");
+  const conversationScrim = document.getElementById("conversation-scrim");
+  const conversationsOpen = document.getElementById("conversations-open");
+  const conversationClose = document.getElementById("conversation-close");
+  const conversationNew = document.getElementById("conversation-new");
+  const conversationList = document.getElementById("conversation-list");
+  const conversationPendingNote = document.getElementById("conversation-pending-note");
+  const conversationLive = document.getElementById("conversation-live");
+  const topbarEl = document.querySelector(".topbar");
   const messagesEl = document.getElementById("messages");
   const hintEl = document.getElementById("hint");
   const input = document.getElementById("input");
@@ -1653,8 +2092,8 @@
   const exportFileNameInput = document.getElementById("export-file-name");
   const composer = document.getElementById("composer");
   const gate = document.getElementById("gate");
+  const gateForm = document.getElementById("gate-form");
   const gateInput = document.getElementById("gate-input");
-  const gateBtn = document.getElementById("gate-btn");
   const gateErr = document.getElementById("gate-err");
 
   // ===== 工具函数 =====
@@ -1724,12 +2163,237 @@
     return `chat-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
   }
 
-  function loadSessionId() {
-    const saved = localStorage.getItem(SESSION_KEY);
-    if (saved && saved.length <= 256) return saved;
-    const created = createSessionId();
-    localStorage.setItem(SESSION_KEY, created);
-    return created;
+  function createConversationId() {
+    if (typeof crypto?.randomUUID === "function") return `conversation-${crypto.randomUUID()}`;
+    return `conversation-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+  }
+
+  function visibleCharacters(value) {
+    const text = String(value || "");
+    if (typeof Intl?.Segmenter === "function") {
+      return Array.from(new Intl.Segmenter("zh-CN", { granularity: "grapheme" }).segment(text), (item) => item.segment);
+    }
+    return Array.from(text);
+  }
+
+  function normalizeConversationTitle(value) {
+    const normalized = String(value || "")
+      .replace(/[\r\n\t]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    return visibleCharacters(normalized).slice(0, 10).join("");
+  }
+
+  function titleFromFirstMessage(messages) {
+    const firstUser = messages.find((item) => item.role === "user" && item.content.trim());
+    return normalizeConversationTitle(firstUser?.content) || "新对话";
+  }
+
+  function normalizeStoredMessages(items) {
+    if (!Array.isArray(items)) return [];
+    return items.filter((item) =>
+      (item?.role === "user" || item?.role === "assistant") &&
+      typeof item.content === "string"
+    ).map((item) => ({ role: item.role, content: item.content }));
+  }
+
+  function validStoredDate(value, fallback) {
+    return typeof value === "string" && Number.isFinite(Date.parse(value))
+      ? value
+      : fallback;
+  }
+
+  function createConversation({ messages = [], sessionId = "", createdAt = new Date().toISOString() } = {}) {
+    const safeMessages = normalizeStoredMessages(messages);
+    const title = titleFromFirstMessage(safeMessages);
+    return {
+      id: createConversationId(),
+      title,
+      titleSource: title === "新对话" ? "default" : "fallback",
+      messages: safeMessages,
+      sessionId: sessionId && sessionId.length <= 256 ? sessionId : createSessionId(),
+      createdAt,
+      updatedAt: createdAt,
+    };
+  }
+
+  function isRecoverableConversationStore(value) {
+    return Boolean(
+      value &&
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      value.version === 1 &&
+      Array.isArray(value.conversations) &&
+      value.conversations.some((item) =>
+        item &&
+        typeof item === "object" &&
+        !Array.isArray(item) &&
+        Array.isArray(item.messages)
+      )
+    );
+  }
+
+  function preserveCorruptConversationStore(rawValue) {
+    if (!rawValue) return true;
+    conversationStoreRecoveryRaw = rawValue;
+    try {
+      if (localStorage.getItem(CORRUPT_CONVERSATIONS_BACKUP_KEY) !== rawValue) {
+        localStorage.setItem(CORRUPT_CONVERSATIONS_BACKUP_KEY, rawValue);
+      }
+      return localStorage.getItem(CORRUPT_CONVERSATIONS_BACKUP_KEY) === rawValue;
+    } catch {
+      return false;
+    }
+  }
+
+  function normalizeConversationStore(value) {
+    const source = value && typeof value === "object" ? value : {};
+    const seenIds = new Set();
+    const seenSessions = new Set();
+    const now = new Date().toISOString();
+    const titleSources = new Set(["default", "fallback", "deepseek", "manual"]);
+    const conversations = [];
+
+    for (const item of Array.isArray(source.conversations) ? source.conversations : []) {
+      if (!item || typeof item !== "object" || !Array.isArray(item.messages)) continue;
+      const messages = normalizeStoredMessages(item?.messages);
+      let id = typeof item?.id === "string" &&
+        item.id.trim().length <= 160 &&
+        /^[A-Za-z0-9._:-]+$/.test(item.id.trim())
+        ? item.id.trim()
+        : "";
+      if (!id || seenIds.has(id)) id = createConversationId();
+      seenIds.add(id);
+
+      let sessionId = typeof item?.sessionId === "string" && item.sessionId.trim().length <= 256
+        ? item.sessionId.trim()
+        : "";
+      if (!sessionId || seenSessions.has(sessionId)) sessionId = createSessionId();
+      seenSessions.add(sessionId);
+
+      const createdAt = validStoredDate(item?.createdAt, now);
+      const updatedAt = validStoredDate(item?.updatedAt, createdAt);
+      const fallbackTitle = titleFromFirstMessage(messages);
+      const title = normalizeConversationTitle(item?.title) || fallbackTitle;
+      const titleSource = titleSources.has(item?.titleSource)
+        ? item.titleSource
+        : title === "新对话" ? "default" : "fallback";
+
+      conversations.push({
+        id,
+        title,
+        titleSource,
+        messages,
+        sessionId,
+        createdAt,
+        updatedAt,
+      });
+    }
+
+    if (!conversations.length) conversations.push(createConversation());
+    const activeId = conversations.some((item) => item.id === source.activeId)
+      ? source.activeId
+      : conversations[0].id;
+    return { version: 1, activeId, conversations };
+  }
+
+  function loadLegacyMessages() {
+    try {
+      return normalizeStoredMessages(JSON.parse(localStorage.getItem(LEGACY_CHAT_KEY) || "[]"));
+    } catch {
+      return [];
+    }
+  }
+
+  function loadLegacySessionId() {
+    const saved = localStorage.getItem(LEGACY_SESSION_KEY);
+    return saved && saved.length <= 256 ? saved : createSessionId();
+  }
+
+  function loadConversationStore() {
+    const stored = localStorage.getItem(CONVERSATIONS_KEY);
+    let mayReplaceStoredValue = !stored;
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        if (isRecoverableConversationStore(parsed)) {
+          const normalized = normalizeConversationStore(parsed);
+          const isCanonical = JSON.stringify(parsed) === JSON.stringify(normalized);
+          const mayReplaceNormalizedValue = isCanonical ||
+            preserveCorruptConversationStore(stored);
+          if (!isCanonical) {
+            conversationStoreLoadWarning = mayReplaceNormalizedValue
+              ? "检测到部分损坏的会话索引；可恢复会话已保留，原数据已留作本机备份。"
+              : "检测到部分损坏的会话索引；为避免覆盖原数据，本次更改暂不能保存。";
+          }
+          if (mayReplaceNormalizedValue) {
+            try {
+              localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(normalized));
+            } catch {
+              conversationStoreLoadWarning = "本地存储已满；刷新前请先下载或删除旧会话。";
+            }
+          }
+          return normalized;
+        }
+      } catch {
+        // 继续走下方的旧版历史恢复。
+      }
+      mayReplaceStoredValue = preserveCorruptConversationStore(stored);
+      conversationStoreLoadWarning = mayReplaceStoredValue
+        ? "检测到损坏的会话索引；旧历史已恢复，原数据已留作本机备份。"
+        : "检测到损坏的会话索引；为避免覆盖原数据，本次更改暂不能保存。";
+    }
+
+    const migrated = normalizeConversationStore({
+      version: 1,
+      conversations: [createConversation({
+        messages: loadLegacyMessages(),
+        sessionId: loadLegacySessionId(),
+      })],
+    });
+    migrated.activeId = migrated.conversations[0].id;
+    if (mayReplaceStoredValue) {
+      try {
+        localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(migrated));
+      } catch {
+        conversationStoreLoadWarning = "暂时无法保存会话索引；旧版历史仍保留在本机。";
+      }
+    }
+    return migrated;
+  }
+
+  function cloneConversationStore() {
+    return JSON.parse(JSON.stringify(conversationStore));
+  }
+
+  function getActiveConversation(store = conversationStore) {
+    return store.conversations.find((item) => item.id === store.activeId) || store.conversations[0];
+  }
+
+  function conversationById(conversationId, store = conversationStore) {
+    return store.conversations.find((item) => item.id === conversationId) || null;
+  }
+
+  function persistConversationStore(nextStore, { keepInMemoryOnFailure = false } = {}) {
+    const normalized = normalizeConversationStore(nextStore);
+    if (
+      conversationStoreRecoveryRaw &&
+      !preserveCorruptConversationStore(conversationStoreRecoveryRaw)
+    ) {
+      showAppStatus("本地存储空间不足，无法备份损坏数据；为避免覆盖，暂未保存这次更改。");
+      return false;
+    }
+    try {
+      localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(normalized));
+      conversationStore = normalized;
+      conversationStoreRecoveryRaw = "";
+      showAppStatus("");
+      return true;
+    } catch {
+      if (keepInMemoryOnFailure) conversationStore = normalized;
+      showAppStatus("本地存储已满，请先下载或删除旧会话。");
+      return false;
+    }
   }
 
   function normalizeFavorites(items) {
@@ -2129,9 +2793,7 @@
     updateSettingsDirty();
     settingsScreen.classList.add("is-open");
     settingsScreen.setAttribute("aria-hidden", "false");
-    document.querySelector(".topbar").inert = true;
-    messagesEl.inert = true;
-    composer.inert = true;
+    syncInteractionState();
     settingsBack.focus();
     requestAnimationFrame(autoGrowSystemPrompt);
   }
@@ -2224,9 +2886,7 @@
     if (instant) skipPanelMotionOnce(settingsScreen);
     settingsScreen.classList.remove("is-open");
     settingsScreen.setAttribute("aria-hidden", "true");
-    document.querySelector(".topbar").inert = false;
-    messagesEl.inert = false;
-    composer.inert = false;
+    syncInteractionState();
     const returnTarget = settingsTrigger;
     settingsTrigger = null;
     if (returnTarget instanceof HTMLElement) returnTarget.focus();
@@ -2270,31 +2930,430 @@
     closeSettings({ force: true });
   }
 
-  function loadMessages() {
-    try {
-      const data = JSON.parse(localStorage.getItem(CHAT_KEY) || "[]");
-      if (!Array.isArray(data)) return [];
-      return data.filter((item) =>
-        (item?.role === "user" || item?.role === "assistant") &&
-        typeof item.content === "string"
-      );
-    } catch {
-      return [];
+  function announceConversation(message) {
+    conversationLive.textContent = "";
+    window.requestAnimationFrame(() => {
+      conversationLive.textContent = message;
+    });
+  }
+
+  function showAppStatus(message) {
+    appStatus.textContent = message || "";
+    appStatus.classList.toggle("is-visible", Boolean(message));
+  }
+
+  function conversationPreview(conversation) {
+    const latest = conversation.messages.at(-1)?.content || "";
+    return latest.replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").trim();
+  }
+
+  function formatConversationTime(value) {
+    const date = new Date(value);
+    if (!Number.isFinite(date.getTime())) return "";
+    const now = new Date();
+    if (date.toDateString() === now.toDateString()) {
+      return new Intl.DateTimeFormat("zh-CN", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      }).format(date);
+    }
+    return new Intl.DateTimeFormat("zh-CN", {
+      month: "numeric",
+      day: "numeric",
+    }).format(date);
+  }
+
+  function sortedConversations() {
+    return [...conversationStore.conversations].sort(
+      (a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)
+    );
+  }
+
+  function renderConversationList() {
+    conversationList.replaceChildren();
+    conversationNew.disabled = pending;
+    conversationPendingNote.textContent = pending ? "回复完成后可切换会话" : "";
+
+    for (const conversation of sortedConversations()) {
+      const item = document.createElement("div");
+      item.className = "conversation-item";
+      item.dataset.conversationId = conversation.id;
+      if (conversation.id === conversationStore.activeId) item.classList.add("active");
+
+      if (renamingConversationId === conversation.id) {
+        const form = document.createElement("form");
+        form.className = "conversation-rename-form";
+        form.dataset.conversationId = conversation.id;
+
+        const renameInput = document.createElement("input");
+        renameInput.className = "conversation-rename-input";
+        renameInput.type = "text";
+        renameInput.maxLength = 10;
+        renameInput.value = conversation.title;
+        renameInput.setAttribute("aria-label", "会话标题");
+
+        const save = document.createElement("button");
+        save.className = "conversation-rename-action";
+        save.type = "submit";
+        save.setAttribute("aria-label", "保存标题");
+        save.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"></path></svg>';
+
+        const cancel = document.createElement("button");
+        cancel.className = "conversation-rename-action";
+        cancel.type = "button";
+        cancel.dataset.action = "cancel-rename";
+        cancel.setAttribute("aria-label", "取消重命名");
+        cancel.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg>';
+
+        form.append(renameInput, save, cancel);
+        item.appendChild(form);
+        conversationList.appendChild(item);
+        continue;
+      }
+
+      const select = document.createElement("button");
+      select.className = "conversation-select";
+      select.type = "button";
+      select.dataset.action = "switch";
+      select.dataset.conversationId = conversation.id;
+      select.disabled = pending;
+      if (conversation.id === conversationStore.activeId) {
+        select.setAttribute("aria-current", "page");
+      }
+
+      const mark = document.createElement("span");
+      mark.className = "conversation-current-mark";
+      mark.setAttribute("aria-hidden", "true");
+
+      const copy = document.createElement("span");
+      copy.className = "conversation-copy";
+      const title = document.createElement("span");
+      title.className = "conversation-title";
+      title.textContent = conversation.title;
+      title.title = conversation.title;
+      const meta = document.createElement("span");
+      meta.className = "conversation-meta";
+      const preview = conversationPreview(conversation);
+      if (preview) {
+        const previewEl = document.createElement("span");
+        previewEl.className = "conversation-preview";
+        previewEl.textContent = preview;
+        meta.appendChild(previewEl);
+      }
+      const time = document.createElement("time");
+      time.className = "conversation-time";
+      time.dateTime = conversation.updatedAt;
+      time.textContent = formatConversationTime(conversation.updatedAt);
+      meta.appendChild(time);
+      copy.append(title, meta);
+      select.append(mark, copy);
+
+      const more = document.createElement("button");
+      more.className = "conversation-more";
+      more.type = "button";
+      more.dataset.action = "menu";
+      more.dataset.conversationId = conversation.id;
+      more.disabled = pending;
+      more.setAttribute("aria-label", `${conversation.title}的更多操作`);
+      more.setAttribute("aria-expanded", String(conversationMenuId === conversation.id));
+      more.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r=".8"></circle><circle cx="12" cy="12" r=".8"></circle><circle cx="19" cy="12" r=".8"></circle></svg>';
+      item.append(select, more);
+
+      if (conversationMenuId === conversation.id) {
+        const menu = document.createElement("div");
+        menu.className = "conversation-menu";
+        menu.setAttribute("role", "group");
+        menu.setAttribute("aria-label", `${conversation.title}的操作`);
+        menu.innerHTML = `
+          <button class="conversation-menu-button" type="button" data-action="rename" data-conversation-id="${conversation.id}">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 20 4.2-1 10.6-10.6-3.2-3.2L5 15.8 4 20Z"></path><path d="m13.8 7 3.2 3.2"></path></svg>
+            <span>重命名</span>
+          </button>
+          <button class="conversation-menu-button danger" type="button" data-action="delete" data-conversation-id="${conversation.id}">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"></path><path d="m9 7 .7-2h4.6l.7 2"></path><path d="m7 7 .7 13h8.6L17 7"></path></svg>
+            <span>删除</span>
+          </button>
+        `;
+        item.appendChild(menu);
+      }
+      conversationList.appendChild(item);
+    }
+
+    if (renamingConversationId) {
+      window.requestAnimationFrame(() => {
+        const renameInput = conversationList.querySelector(".conversation-rename-input");
+        renameInput?.focus();
+        renameInput?.select();
+      });
+    } else if (conversationMenuId) {
+      window.requestAnimationFrame(() => {
+        const menu = [...conversationList.querySelectorAll(".conversation-item")]
+          .find((item) => item.dataset.conversationId === conversationMenuId)
+          ?.querySelector(".conversation-menu");
+        menu?.scrollIntoView({ block: "nearest" });
+        menu?.querySelector(".conversation-menu-button")?.focus();
+      });
     }
   }
 
-  function saveMessages() {
-    localStorage.setItem(CHAT_KEY, JSON.stringify(messages));
-    const empty = messages.length === 0;
-    clearChatBtn.disabled = empty;
-    exportChatBtn.disabled = empty;
+  function focusConversationMore(conversationId) {
+    window.requestAnimationFrame(() => {
+      [...conversationList.querySelectorAll(".conversation-more")]
+        .find((button) => button.dataset.conversationId === conversationId)
+        ?.focus();
+    });
   }
 
-  function restoreMessages() {
-    if (!messages.length) return;
-    messages.forEach((item) => addBubble(item.role, item.content));
-    clearChatBtn.disabled = false;
-    exportChatBtn.disabled = false;
+  function focusConversationSelect(conversationId) {
+    window.requestAnimationFrame(() => {
+      [...conversationList.querySelectorAll(".conversation-select")]
+        .find((button) => button.dataset.conversationId === conversationId)
+        ?.focus();
+    });
+  }
+
+  function loadSidebarPreference() {
+    try {
+      return localStorage.getItem(SIDEBAR_OPEN_KEY) === "1";
+    } catch {
+      return false;
+    }
+  }
+
+  function saveSidebarPreference(isOpen) {
+    try {
+      localStorage.setItem(SIDEBAR_OPEN_KEY, isOpen ? "1" : "0");
+    } catch {
+      // 侧栏偏好是可选项，失败不应阻断打开/关闭。
+    }
+  }
+
+  function updateConversationActionState() {
+    const empty = getActiveConversation().messages.length === 0;
+    clearChatBtn.disabled = pending || empty;
+    exportChatBtn.disabled = pending || empty;
+    sendBtn.disabled = pending;
+  }
+
+  function setPending(value) {
+    pending = value;
+    if (value) {
+      conversationMenuId = null;
+      renamingConversationId = null;
+    }
+    updateConversationActionState();
+    renderConversationList();
+  }
+
+  function renderActiveConversation() {
+    messagesEl.replaceChildren();
+    const conversation = getActiveConversation();
+    if (!conversation.messages.length) {
+      messagesEl.appendChild(hintEl);
+    } else {
+      conversation.messages.forEach((item) => addBubble(item.role, item.content));
+    }
+    updateConversationActionState();
+  }
+
+  function anySettingsScreenOpen() {
+    return settingsScreen.classList.contains("is-open") ||
+      modelScreen.classList.contains("is-open") ||
+      promptScreen.classList.contains("is-open") ||
+      identityScreen.classList.contains("is-open");
+  }
+
+  function gateIsOpen() {
+    return gate.style.display !== "none";
+  }
+
+  function syncInteractionState() {
+    const settingsOpenNow = anySettingsScreenOpen();
+    const mobileSidebarOpen = sidebarOpen && !desktopSidebarMedia.matches;
+    const gateOpenNow = gateIsOpen();
+    chatShell.inert = mobileSidebarOpen || gateOpenNow;
+    topbarEl.inert = settingsOpenNow;
+    messagesEl.inert = settingsOpenNow;
+    composer.inert = settingsOpenNow;
+    conversationSidebar.inert = !sidebarOpen || settingsOpenNow || gateOpenNow;
+  }
+
+  function syncSidebarLayout() {
+    appShell.classList.toggle("sidebar-is-open", sidebarOpen);
+    conversationsOpen.setAttribute("aria-expanded", String(sidebarOpen));
+    conversationsOpen.setAttribute("aria-label", sidebarOpen ? "关闭会话列表" : "打开会话列表");
+    conversationSidebar.setAttribute("aria-hidden", String(!sidebarOpen));
+    conversationScrim.setAttribute("aria-hidden", "true");
+    if (!desktopSidebarMedia.matches && sidebarOpen) {
+      conversationSidebar.setAttribute("role", "dialog");
+      conversationSidebar.setAttribute("aria-modal", "true");
+      conversationSidebar.setAttribute("aria-labelledby", "conversation-sidebar-title");
+    } else {
+      conversationSidebar.setAttribute("role", "region");
+      conversationSidebar.removeAttribute("aria-modal");
+      conversationSidebar.removeAttribute("aria-labelledby");
+    }
+    syncInteractionState();
+  }
+
+  function openConversationSidebar(trigger = conversationsOpen) {
+    closeQuickPanel();
+    conversationSidebarTrigger = trigger;
+    conversationMenuId = null;
+    renamingConversationId = null;
+    sidebarOpen = true;
+    if (desktopSidebarMedia.matches) saveSidebarPreference(true);
+    renderConversationList();
+    syncSidebarLayout();
+    window.requestAnimationFrame(() => {
+      const active = conversationList.querySelector('[aria-current="page"]');
+      (active || conversationClose).focus();
+    });
+  }
+
+  function closeConversationSidebar({ returnFocus = true } = {}) {
+    conversationMenuId = null;
+    renamingConversationId = null;
+    sidebarOpen = false;
+    if (desktopSidebarMedia.matches) saveSidebarPreference(false);
+    renderConversationList();
+    syncSidebarLayout();
+    const returnTarget = conversationSidebarTrigger || conversationsOpen;
+    conversationSidebarTrigger = null;
+    if (returnFocus && returnTarget instanceof HTMLElement) returnTarget.focus();
+  }
+
+  function toggleConversationSidebar() {
+    if (sidebarOpen) closeConversationSidebar();
+    else openConversationSidebar(conversationsOpen);
+  }
+
+  function trapConversationSidebarFocus(event) {
+    if (
+      event.key !== "Tab" ||
+      !sidebarOpen ||
+      desktopSidebarMedia.matches
+    ) return;
+    const focusable = [...conversationSidebar.querySelectorAll(
+      'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    )].filter((element) => element.getClientRects().length > 0);
+    if (!focusable.length) {
+      event.preventDefault();
+      conversationClose.focus();
+      return;
+    }
+    const first = focusable[0];
+    const last = focusable.at(-1);
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    } else if (!conversationSidebar.contains(document.activeElement)) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
+  function switchConversation(conversationId) {
+    if (pending) {
+      announceConversation("回复完成后可切换会话。");
+      return;
+    }
+    if (conversationId === conversationStore.activeId) {
+      if (!desktopSidebarMedia.matches) closeConversationSidebar();
+      return;
+    }
+    if (!conversationById(conversationId)) return;
+    const draft = cloneConversationStore();
+    draft.activeId = conversationId;
+    if (!persistConversationStore(draft)) return;
+    conversationMenuId = null;
+    renamingConversationId = null;
+    renderConversationList();
+    renderActiveConversation();
+    if (!desktopSidebarMedia.matches) closeConversationSidebar();
+  }
+
+  function createNewConversation() {
+    if (pending) {
+      announceConversation("回复完成后可新建会话。");
+      return;
+    }
+    const active = getActiveConversation();
+    if (!active.messages.length && active.titleSource === "default") {
+      if (!desktopSidebarMedia.matches) closeConversationSidebar({ returnFocus: false });
+      input.focus();
+      return;
+    }
+    const draft = cloneConversationStore();
+    const created = createConversation();
+    draft.conversations.push(created);
+    draft.activeId = created.id;
+    if (!persistConversationStore(draft)) return;
+    renderConversationList();
+    renderActiveConversation();
+    announceConversation("已新建会话。");
+    if (!desktopSidebarMedia.matches) closeConversationSidebar({ returnFocus: false });
+    input.focus();
+  }
+
+  function saveConversationTitle(conversationId, rawTitle) {
+    if (pending) {
+      announceConversation("回复完成后可重命名。");
+      return;
+    }
+    const title = normalizeConversationTitle(rawTitle);
+    if (!title) {
+      announceConversation("标题不能为空。");
+      return;
+    }
+    const draft = cloneConversationStore();
+    const target = conversationById(conversationId, draft);
+    if (!target) return;
+    target.title = title;
+    target.titleSource = "manual";
+    if (!persistConversationStore(draft)) return;
+    renamingConversationId = null;
+    conversationMenuId = null;
+    renderConversationList();
+    focusConversationMore(conversationId);
+    announceConversation("标题已保存。");
+  }
+
+  function deleteConversation(conversationId) {
+    if (pending) {
+      announceConversation("回复完成后可删除会话。");
+      return;
+    }
+    const target = conversationById(conversationId);
+    if (!target || !window.confirm(`删除“${target.title}”？此操作不能撤销。`)) return;
+    const deletingActiveConversation = conversationStore.activeId === conversationId;
+    const orderedBeforeDelete = sortedConversations();
+    const deletedIndex = orderedBeforeDelete.findIndex((item) => item.id === conversationId);
+    const draft = cloneConversationStore();
+    draft.conversations = draft.conversations.filter((item) => item.id !== conversationId);
+    if (!draft.conversations.length) draft.conversations.push(createConversation());
+    if (draft.activeId === conversationId) {
+      draft.activeId = [...draft.conversations].sort(
+        (a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)
+      )[0].id;
+    }
+    const adjacentConversationId = (
+      orderedBeforeDelete[deletedIndex + 1] ||
+      orderedBeforeDelete[deletedIndex - 1]
+    )?.id;
+    if (!persistConversationStore(draft)) return;
+    conversationMenuId = null;
+    renamingConversationId = null;
+    renderConversationList();
+    if (deletingActiveConversation) renderActiveConversation();
+    focusConversationSelect(
+      conversationById(adjacentConversationId)?.id || conversationStore.activeId
+    );
+    announceConversation("会话已删除。");
   }
 
   function scrollToBottom() {
@@ -2392,14 +3451,14 @@
   }
 
   function buildConversationMarkdown() {
-    return messages
+    return getActiveConversation().messages
       .map((item) => `## ${messageRoleName(item.role)}\n\n${item.content.trim()}`)
       .join("\n\n")
       .trimEnd() + "\n";
   }
 
   function downloadConversation() {
-    if (!messages.length) return;
+    if (!getActiveConversation().messages.length || pending) return;
     const customBase = safeExportFileBase(exportFileName);
     const filename = `${customBase || defaultExportFileBase()}.md`;
     const blob = new Blob([buildConversationMarkdown()], { type: "text/markdown;charset=utf-8" });
@@ -2604,24 +3663,75 @@
     return { full, annotations, usage };
   }
 
+  async function requestConversationTitle(conversationId, firstMessage) {
+    try {
+      const response = await fetch(WORKER_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "title",
+          password: accessPw,
+          text: firstMessage,
+        }),
+      });
+      if (!response.ok) return;
+      const data = await response.json().catch(() => null);
+      const title = normalizeConversationTitle(data?.title);
+      if (visibleCharacters(title).length < 2) return;
+
+      const draft = cloneConversationStore();
+      const target = conversationById(conversationId, draft);
+      const firstUserMessage = target?.messages.find((item) => item.role === "user");
+      if (!target || target.titleSource !== "fallback" || firstUserMessage?.content !== firstMessage) return;
+      target.title = title;
+      target.titleSource = "deepseek";
+      if (!persistConversationStore(draft)) return;
+      if (!renamingConversationId) renderConversationList();
+    } catch {
+      // 自动标题失败时保留本地十字标题，不打断聊天。
+    }
+  }
+
   // ===== 发送 =====
   async function send() {
     const text = input.value.trim();
     if (!text || pending) return;
+    const activeConversation = getActiveConversation();
+    const requestConversationId = activeConversation.id;
+    const requestSessionId = activeConversation.sessionId;
+    const previousTitle = activeConversation.title;
+    const previousTitleSource = activeConversation.titleSource;
+    const previousUpdatedAt = activeConversation.updatedAt;
+    const requestUserIndex = activeConversation.messages.length;
+    const shouldGenerateTitle = activeConversation.messages.length === 0;
     const requestModel = currentModel;
     const requestEffort = normalizeEffortForModel(reasoningEffort, modelById(requestModel));
+    const history = activeConversation.messages.map((item) => ({ ...item }));
     const requestMessages = systemPrompt.trim()
-      ? [{ role: "system", content: systemPrompt.trim() }, ...messages, { role: "user", content: text }]
-      : [...messages, { role: "user", content: text }];
+      ? [{ role: "system", content: systemPrompt.trim() }, ...history, { role: "user", content: text }]
+      : [...history, { role: "user", content: text }];
+
+    const draft = cloneConversationStore();
+    const draftConversation = conversationById(requestConversationId, draft);
+    if (!draftConversation) return;
+    draftConversation.messages.push({ role: "user", content: text });
+    draftConversation.updatedAt = new Date().toISOString();
+    if (shouldGenerateTitle && draftConversation.titleSource !== "manual") {
+      draftConversation.title = normalizeConversationTitle(text) || "新对话";
+      draftConversation.titleSource = draftConversation.title === "新对话" ? "default" : "fallback";
+    }
+    if (!persistConversationStore(draft)) {
+      input.focus();
+      return;
+    }
 
     input.value = "";
     input.style.height = "auto";
     addBubble("user", text);
-    messages.push({ role: "user", content: text });
-    saveMessages();
+    renderConversationList();
 
-    pending = true;
-    sendBtn.disabled = true;
+    setPending(true);
+    if (shouldGenerateTitle) void requestConversationTitle(requestConversationId, text);
     const reasoningBox = requestEffort !== "off" ? addReasoningBlock({ webSearch: webSearchEnabled }) : null;
     const bubble = addBubble("assistant", "");
     bubble.classList.add("typing");
@@ -2635,7 +3745,7 @@
           model: requestModel,
           password: accessPw,
           reasoningEffort: requestEffort,
-          session_id: sessionId,
+          session_id: requestSessionId,
           webSearch: webSearchEnabled,
           ...(maxCompletionTokens === null ? {} : { maxCompletionTokens }),
         }),
@@ -2662,23 +3772,31 @@
         onReasoning(delta) {
           if (!reasoningBox) return;
           reasoningBox.append(delta);
-          scrollToBottom();
+          if (conversationStore.activeId === requestConversationId) scrollToBottom();
         },
         onContent(delta) {
           bubble.classList.remove("typing");
           bubble.textContent += delta;
-          scrollToBottom();
+          if (conversationStore.activeId === requestConversationId) scrollToBottom();
         },
       });
 
       bubble.classList.remove("typing");
       reasoningBox?.finish();
       if (full) {
-        messages.push({ role: "assistant", content: full });
-        saveMessages();
-        revealMessageTools(bubble);
-        addCitations(annotations);
-        addCacheBadge(usage, requestModel);
+        const completedDraft = cloneConversationStore();
+        const completedConversation = conversationById(requestConversationId, completedDraft);
+        if (completedConversation) {
+          completedConversation.messages.push({ role: "assistant", content: full });
+          completedConversation.updatedAt = new Date().toISOString();
+          persistConversationStore(completedDraft, { keepInMemoryOnFailure: true });
+          renderConversationList();
+        }
+        if (conversationStore.activeId === requestConversationId) {
+          revealMessageTools(bubble);
+          addCitations(annotations);
+          addCacheBadge(usage, requestModel);
+        }
       } else {
         bubble.classList.add("error");
         bubble.textContent = "⚠️ 没有收到回复内容";
@@ -2691,14 +3809,30 @@
       if (err.code === 401) {
         localStorage.removeItem(PW_KEY);
         accessPw = "";
-        messages.pop();                 // 回滚这条没发成功的消息
-        saveMessages();
+        const rollbackDraft = cloneConversationStore();
+        const rollbackConversation = conversationById(requestConversationId, rollbackDraft);
+        if (rollbackConversation) {
+          const indexedMessage = rollbackConversation.messages[requestUserIndex];
+          if (indexedMessage?.role === "user" && indexedMessage.content === text) {
+            rollbackConversation.messages.splice(requestUserIndex, 1);
+          } else {
+            const fallbackIndex = rollbackConversation.messages.findLastIndex(
+              (item) => item.role === "user" && item.content === text
+            );
+            if (fallbackIndex >= 0) rollbackConversation.messages.splice(fallbackIndex, 1);
+          }
+          rollbackConversation.title = previousTitle;
+          rollbackConversation.titleSource = previousTitleSource;
+          rollbackConversation.updatedAt = previousUpdatedAt;
+          persistConversationStore(rollbackDraft, { keepInMemoryOnFailure: true });
+        }
+        renderConversationList();
+        renderActiveConversation();
         showGate("密码错误，请重新输入");
       }
     } finally {
-      pending = false;
-      sendBtn.disabled = false;
-      scrollToBottom();
+      setPending(false);
+      if (conversationStore.activeId === requestConversationId) scrollToBottom();
     }
   }
 
@@ -2727,11 +3861,28 @@
   function showGate(msg) {
     gate.style.display = "flex";
     gateErr.textContent = msg || "";
+    syncInteractionState();
     gateInput.focus();
+  }
+  function focusActiveLayerAfterGate() {
+    let target = input;
+    if (modelScreen.classList.contains("is-open")) {
+      target = modelBack;
+    } else if (promptScreen.classList.contains("is-open")) {
+      target = promptBack;
+    } else if (identityScreen.classList.contains("is-open")) {
+      target = identityBack;
+    } else if (settingsScreen.classList.contains("is-open")) {
+      target = settingsBack;
+    } else if (sidebarOpen && !desktopSidebarMedia.matches) {
+      target = conversationList.querySelector('[aria-current="page"]') || conversationClose;
+    }
+    window.requestAnimationFrame(() => target.focus());
   }
   function hideGate() {
     gate.style.display = "none";
-    input.focus();
+    syncInteractionState();
+    focusActiveLayerAfterGate();
   }
   function submitGate() {
     const v = gateInput.value.trim();
@@ -2741,9 +3892,58 @@
     gateInput.value = "";
     hideGate();
   }
-  gateBtn.addEventListener("click", submitGate);
-  gateInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") { e.preventDefault(); submitGate(); }
+  gateForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    submitGate();
+  });
+
+  conversationsOpen.addEventListener("click", toggleConversationSidebar);
+  conversationClose.addEventListener("click", () => closeConversationSidebar());
+  conversationScrim.addEventListener("click", () => closeConversationSidebar());
+  conversationSidebar.addEventListener("keydown", trapConversationSidebarFocus);
+  conversationNew.addEventListener("click", createNewConversation);
+  conversationList.addEventListener("click", (event) => {
+    const actionTarget = event.target.closest("[data-action]");
+    if (!(actionTarget instanceof HTMLElement) || !conversationList.contains(actionTarget)) return;
+    const action = actionTarget.dataset.action;
+    const conversationId = actionTarget.dataset.conversationId ||
+      actionTarget.closest("[data-conversation-id]")?.dataset.conversationId;
+    if (action === "switch" && conversationId) {
+      switchConversation(conversationId);
+    } else if (action === "menu" && conversationId) {
+      const closingMenu = conversationMenuId === conversationId;
+      conversationMenuId = conversationMenuId === conversationId ? null : conversationId;
+      renamingConversationId = null;
+      renderConversationList();
+      if (closingMenu) focusConversationMore(conversationId);
+    } else if (action === "rename" && conversationId) {
+      conversationMenuId = null;
+      renamingConversationId = conversationId;
+      renderConversationList();
+    } else if (action === "delete" && conversationId) {
+      deleteConversation(conversationId);
+    } else if (action === "cancel-rename") {
+      const cancelledConversationId = renamingConversationId;
+      renamingConversationId = null;
+      renderConversationList();
+      if (cancelledConversationId) focusConversationMore(cancelledConversationId);
+    }
+  });
+  conversationList.addEventListener("submit", (event) => {
+    const form = event.target.closest(".conversation-rename-form");
+    if (!(form instanceof HTMLFormElement)) return;
+    event.preventDefault();
+    const renameInput = form.querySelector(".conversation-rename-input");
+    saveConversationTitle(form.dataset.conversationId, renameInput?.value || "");
+  });
+  desktopSidebarMedia.addEventListener("change", (event) => {
+    sidebarOpen = event.matches
+      ? loadSidebarPreference()
+      : false;
+    conversationMenuId = null;
+    renamingConversationId = null;
+    renderConversationList();
+    syncSidebarLayout();
   });
 
   modelQuick.addEventListener("click", openQuickPanel);
@@ -2788,6 +3988,10 @@
     if (!event.composedPath().includes(document.querySelector(".model-control"))) {
       closeQuickPanel();
     }
+    if (conversationMenuId && !event.target.closest(".conversation-item")) {
+      conversationMenuId = null;
+      renderConversationList();
+    }
   });
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
@@ -2799,6 +4003,18 @@
       closeIdentityScreen({ instant: true });
     } else if (settingsScreen.classList.contains("is-open")) {
       closeSettings({ instant: true });
+    } else if (renamingConversationId) {
+      const cancelledConversationId = renamingConversationId;
+      renamingConversationId = null;
+      renderConversationList();
+      focusConversationMore(cancelledConversationId);
+    } else if (conversationMenuId) {
+      const closedConversationId = conversationMenuId;
+      conversationMenuId = null;
+      renderConversationList();
+      focusConversationMore(closedConversationId);
+    } else if (sidebarOpen) {
+      closeConversationSidebar();
     } else if (quickPanel.classList.contains("is-open")) {
       closeQuickPanel();
       modelQuick.focus();
@@ -2806,22 +4022,29 @@
   });
   exportChatBtn.addEventListener("click", downloadConversation);
   clearChatBtn.addEventListener("click", () => {
-    if (!window.confirm("清空这台设备上的全部对话？此操作不能撤销。")) return;
-    messages.length = 0;
-    localStorage.removeItem(CHAT_KEY);
-    sessionId = createSessionId();
-    localStorage.setItem(SESSION_KEY, sessionId);
-    messagesEl.textContent = "";
-    messagesEl.appendChild(hintEl);
-    clearChatBtn.disabled = true;
-    exportChatBtn.disabled = true;
+    if (pending || !window.confirm("清空当前会话？其他会话不会受影响，此操作不能撤销。")) return;
+    const draft = cloneConversationStore();
+    const active = getActiveConversation(draft);
+    active.messages = [];
+    active.title = "新对话";
+    active.titleSource = "default";
+    active.sessionId = createSessionId();
+    active.updatedAt = new Date().toISOString();
+    if (!persistConversationStore(draft)) return;
+    renderConversationList();
+    renderActiveConversation();
+    announceConversation("当前会话已清空。");
     input.focus();
   });
   updateTopbar();
-  restoreMessages();
+  renderConversationList();
+  renderActiveConversation();
+  syncSidebarLayout();
+  if (conversationStoreLoadWarning) showAppStatus(conversationStoreLoadWarning);
 
   // 没存过密码就先弹密码界面（密码不写在代码里，由你打开时手输一次）
   if (!accessPw) showGate();
+  else syncInteractionState();
 </script>
 </body>
 </html>

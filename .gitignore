@@ -1,1 +1,7 @@
 .DS_Store
+.playwright-cli/
+output/playwright/
+worker/.dev.vars
+worker/.dev.vars.*
+worker/.env
+worker/.env.*

@@ -4,6 +4,7 @@ import {
   applyPromptCache,
   buildUpstreamBody,
   normalizeModel,
+  normalizeTitle,
 } from "./worker.js";
 import worker from "./worker.js";
 
@@ -205,6 +206,301 @@ test("normalizeModel：只输出前端需要的模型目录字段", () => {
     supportedParameters: ["reasoning", "tools"],
   });
   assert.strictEqual(normalizeModel({ name: "missing id" }), null);
+});
+
+test("normalizeTitle：去掉引号、标点、空格和 Emoji，并截断到 10 字", () => {
+  assert.strictEqual(
+    normalizeTitle("“多会话 功能规划✨！！额外内容”"),
+    "多会话功能规划额外内",
+  );
+  assert.strictEqual(normalizeTitle("  GPT-5 设置 😼 "), "GPT5设置");
+  assert.strictEqual(normalizeTitle(null), "");
+});
+
+await testAsync("标题请求沿用密码鉴权，未授权时不会调用 DeepSeek", async () => {
+  const originalFetch = globalThis.fetch;
+  let upstreamCalled = false;
+  globalThis.fetch = async () => {
+    upstreamCalled = true;
+    throw new Error("不应调用");
+  };
+
+  try {
+    const response = await worker.fetch(
+      new Request("https://worker.example", {
+        method: "POST",
+        body: JSON.stringify({
+          action: "title",
+          password: "wrong",
+          text: "帮我规划多个会话",
+        }),
+      }),
+      {
+        ACCESS_PASSWORD: "correct",
+        DEEPSEEK_API_KEY: "deepseek-test-key",
+      },
+    );
+
+    assert.strictEqual(response.status, 401);
+    assert.strictEqual(upstreamCalled, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+await testAsync("标题服务缺少 Secret 时明确报错且不会调用上游", async () => {
+  const originalFetch = globalThis.fetch;
+  let upstreamCalled = false;
+  globalThis.fetch = async () => {
+    upstreamCalled = true;
+    throw new Error("不应调用");
+  };
+
+  try {
+    const response = await worker.fetch(
+      new Request("https://worker.example", {
+        method: "POST",
+        body: JSON.stringify({
+          action: "title",
+          password: "correct",
+          text: "帮我规划多个会话",
+        }),
+      }),
+      { ACCESS_PASSWORD: "correct" },
+    );
+    const result = await response.json();
+
+    assert.strictEqual(response.status, 503);
+    assert.strictEqual(result.error, "标题服务尚未配置");
+    assert.strictEqual(upstreamCalled, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+await testAsync("标题请求拒绝空文本，并在调用上游前截断长输入", async () => {
+  const originalFetch = globalThis.fetch;
+  let upstreamCalled = false;
+  globalThis.fetch = async (url, options) => {
+    upstreamCalled = true;
+    const body = JSON.parse(options.body);
+    assert.strictEqual(Array.from(body.messages[1].content).length, 500);
+    return new Response(JSON.stringify({
+      choices: [{ message: { content: "长文本标题" } }],
+    }), {
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  try {
+    for (const invalid of [undefined, null, "", "   ", 123]) {
+      const response = await worker.fetch(
+        new Request("https://worker.example", {
+          method: "POST",
+          body: JSON.stringify({
+            action: "title",
+            password: "correct",
+            text: invalid,
+          }),
+        }),
+        {
+          ACCESS_PASSWORD: "correct",
+          DEEPSEEK_API_KEY: "deepseek-test-key",
+        },
+      );
+      assert.strictEqual(response.status, 400);
+    }
+    assert.strictEqual(upstreamCalled, false);
+
+    const response = await worker.fetch(
+      new Request("https://worker.example", {
+        method: "POST",
+        body: JSON.stringify({
+          action: "title",
+          password: "correct",
+          text: "甲".repeat(600),
+        }),
+      }),
+      {
+        ACCESS_PASSWORD: "correct",
+        DEEPSEEK_API_KEY: "deepseek-test-key",
+      },
+    );
+
+    assert.strictEqual(response.status, 200);
+    assert.strictEqual(upstreamCalled, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+await testAsync("标题请求关闭 thinking、限制输出，并规范化 DeepSeek 结果", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalTimeout = globalThis.AbortSignal?.timeout;
+  if (globalThis.AbortSignal) {
+    globalThis.AbortSignal.timeout = (milliseconds) => {
+      assert.strictEqual(milliseconds, 8000);
+      return new AbortController().signal;
+    };
+  }
+  globalThis.fetch = async (url, options) => {
+    assert.strictEqual(url, "https://api.deepseek.com/chat/completions");
+    assert.strictEqual(options.method, "POST");
+    assert.strictEqual(
+      options.headers.Authorization,
+      "Bearer deepseek-test-key",
+    );
+
+    const body = JSON.parse(options.body);
+    assert.strictEqual(body.model, "deepseek-v4-flash");
+    assert.deepStrictEqual(body.thinking, { type: "disabled" });
+    assert.strictEqual(body.stream, false);
+    assert.strictEqual(body.max_tokens, 32);
+    assert.strictEqual(body.messages[1].content, "帮我规划多个会话");
+    if (typeof globalThis.AbortSignal?.timeout === "function") {
+      assert.ok(options.signal instanceof globalThis.AbortSignal);
+      assert.strictEqual(options.signal.aborted, false);
+    }
+
+    return new Response(JSON.stringify({
+      choices: [{
+        message: { content: "“多会话 功能规划✨！！额外内容”" },
+      }],
+    }), {
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  try {
+    const response = await worker.fetch(
+      new Request("https://worker.example", {
+        method: "POST",
+        body: JSON.stringify({
+          action: "title",
+          password: "correct",
+          text: "帮我规划多个会话",
+        }),
+      }),
+      {
+        ACCESS_PASSWORD: "correct",
+        DEEPSEEK_API_KEY: "deepseek-test-key",
+      },
+    );
+    const result = await response.json();
+
+    assert.strictEqual(response.status, 200);
+    assert.strictEqual(result.title, "多会话功能规划额外内");
+    assert.ok(Array.from(result.title).length <= 10);
+    assert.strictEqual(
+      response.headers.get("Access-Control-Allow-Origin"),
+      "https://cloudxuan1.github.io",
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (globalThis.AbortSignal) {
+      globalThis.AbortSignal.timeout = originalTimeout;
+    }
+  }
+});
+
+await testAsync("环境不支持 AbortSignal.timeout 时标题请求仍可用", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalTimeout = globalThis.AbortSignal?.timeout;
+  if (globalThis.AbortSignal) {
+    globalThis.AbortSignal.timeout = undefined;
+  }
+  globalThis.fetch = async (url, options) => {
+    assert.strictEqual(options.signal, undefined);
+    return new Response(JSON.stringify({
+      choices: [{ message: { content: "会话标题" } }],
+    }), {
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  try {
+    const response = await worker.fetch(
+      new Request("https://worker.example", {
+        method: "POST",
+        body: JSON.stringify({
+          action: "title",
+          password: "correct",
+          text: "帮我规划多个会话",
+        }),
+      }),
+      {
+        ACCESS_PASSWORD: "correct",
+        DEEPSEEK_API_KEY: "deepseek-test-key",
+      },
+    );
+
+    assert.strictEqual(response.status, 200);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (globalThis.AbortSignal) {
+      globalThis.AbortSignal.timeout = originalTimeout;
+    }
+  }
+});
+
+await testAsync("DeepSeek 上游失败统一返回不泄露详情的 502", async () => {
+  const originalFetch = globalThis.fetch;
+  const leakedDetail = "upstream-secret-detail";
+  globalThis.fetch = async () => new Response(leakedDetail, { status: 429 });
+
+  try {
+    const response = await worker.fetch(
+      new Request("https://worker.example", {
+        method: "POST",
+        body: JSON.stringify({
+          action: "title",
+          password: "correct",
+          text: "帮我规划多个会话",
+        }),
+      }),
+      {
+        ACCESS_PASSWORD: "correct",
+        DEEPSEEK_API_KEY: "deepseek-test-key",
+      },
+    );
+    const result = await response.json();
+
+    assert.strictEqual(response.status, 502);
+    assert.strictEqual(result.error, "DeepSeek 标题服务请求失败");
+    assert.strictEqual(JSON.stringify(result).includes(leakedDetail), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+await testAsync("DeepSeek 返回无效标题时统一返回 502", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    choices: [{ message: { content: "✨！！" } }],
+  }), {
+    headers: { "Content-Type": "application/json" },
+  });
+
+  try {
+    const response = await worker.fetch(
+      new Request("https://worker.example", {
+        method: "POST",
+        body: JSON.stringify({
+          action: "title",
+          password: "correct",
+          text: "帮我规划多个会话",
+        }),
+      }),
+      {
+        ACCESS_PASSWORD: "correct",
+        DEEPSEEK_API_KEY: "deepseek-test-key",
+      },
+    );
+
+    assert.strictEqual(response.status, 502);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 await testAsync("请求拒绝非法最大生成量且不会调用 OpenRouter", async () => {

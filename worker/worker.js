@@ -13,7 +13,12 @@ const ALLOWED_ORIGIN = "https://cloudxuan1.github.io";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models";
+const DEEPSEEK_URL = "https://api.deepseek.com/chat/completions";
 const DEFAULT_MODEL = "anthropic/claude-opus-4.6";
+const DEEPSEEK_TITLE_MODEL = "deepseek-v4-flash";
+const TITLE_INPUT_MAX_CHARS = 500;
+const TITLE_MAX_CHARS = 10;
+const TITLE_REQUEST_TIMEOUT_MS = 8000;
 const REASONING_EFFORTS = new Set(["off", "low", "medium", "high"]);
 
 export default {
@@ -44,6 +49,9 @@ export default {
 
     if (payload.action === "models") {
       return fetchModels(env);
+    }
+    if (payload.action === "title") {
+      return generateTitle(payload, env);
     }
 
     if (!Array.isArray(payload.messages) || payload.messages.length === 0) {
@@ -101,6 +109,71 @@ export default {
   },
 };
 
+async function generateTitle(payload, env) {
+  if (!env.DEEPSEEK_API_KEY) {
+    return json({ error: "标题服务尚未配置" }, 503);
+  }
+  if (typeof payload.text !== "string" || payload.text.trim().length === 0) {
+    return json({ error: "text 必须是非空字符串" }, 400);
+  }
+
+  const text = Array.from(payload.text.trim())
+    .slice(0, TITLE_INPUT_MAX_CHARS)
+    .join("");
+
+  let upstream;
+  try {
+    const requestOptions = {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${env.DEEPSEEK_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: DEEPSEEK_TITLE_MODEL,
+        messages: [
+          {
+            role: "system",
+            content: [
+              "你是会话标题生成器。",
+              "根据用户第一条消息生成准确的中文短标题。",
+              "标题必须是 2 到 10 个可见字符。",
+              "只输出标题，不要引号、标点、空格或 Emoji。",
+            ].join(""),
+          },
+          { role: "user", content: text },
+        ],
+        thinking: { type: "disabled" },
+        stream: false,
+        max_tokens: 32,
+      }),
+    };
+    if (typeof globalThis.AbortSignal?.timeout === "function") {
+      requestOptions.signal = globalThis.AbortSignal.timeout(TITLE_REQUEST_TIMEOUT_MS);
+    }
+    upstream = await fetch(DEEPSEEK_URL, requestOptions);
+  } catch {
+    return json({ error: "连接 DeepSeek 标题服务失败" }, 502);
+  }
+
+  if (!upstream.ok) {
+    return json({ error: "DeepSeek 标题服务请求失败" }, 502);
+  }
+
+  let result;
+  try {
+    result = await upstream.json();
+  } catch {
+    return json({ error: "DeepSeek 标题服务返回格式异常" }, 502);
+  }
+
+  const title = normalizeTitle(result?.choices?.[0]?.message?.content);
+  if (Array.from(title).length < 2) {
+    return json({ error: "DeepSeek 标题服务未返回有效标题" }, 502);
+  }
+  return json({ title });
+}
+
 async function fetchModels(env) {
   let upstream;
   try {
@@ -123,6 +196,14 @@ async function fetchModels(env) {
   } catch {
     return json({ error: "连接 OpenRouter 模型列表失败" }, 502);
   }
+}
+
+export function normalizeTitle(value) {
+  if (typeof value !== "string") return "";
+  const visibleCharacters = value
+    .normalize("NFKC")
+    .replace(/[^\p{L}\p{N}]/gu, "");
+  return Array.from(visibleCharacters).slice(0, TITLE_MAX_CHARS).join("");
 }
 
 export function normalizeModel(model) {
