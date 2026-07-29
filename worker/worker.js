@@ -17,7 +17,7 @@ const DEEPSEEK_URL = "https://api.deepseek.com/chat/completions";
 const DEFAULT_MODEL = "anthropic/claude-opus-4.6";
 const DEEPSEEK_TITLE_MODEL = "deepseek-v4-flash";
 const TITLE_INPUT_MAX_CHARS = 500;
-const TITLE_MAX_CHARS = 10;
+const TITLE_MAX_CHARS = 48;
 const TITLE_REQUEST_TIMEOUT_MS = 8000;
 const REASONING_EFFORTS = new Set(["off", "low", "medium", "high"]);
 
@@ -136,9 +136,10 @@ async function generateTitle(payload, env) {
             role: "system",
             content: [
               "你是会话标题生成器。",
-              "根据用户第一条消息生成准确的中文短标题。",
-              "标题必须是 2 到 10 个可见字符。",
-              "只输出标题，不要引号、标点、空格或 Emoji。",
+              "根据用户第一条消息生成准确、自然的会话标题。",
+              "中文通常 8 到 18 个汉字，英文可以更长；不要为了凑短删掉关键信息。",
+              "允许必要的空格、逗号、句号和连字符。",
+              "只输出一行标题，不要用引号包裹，不要 Emoji。",
             ].join(""),
           },
           { role: "user", content: text },
@@ -168,7 +169,7 @@ async function generateTitle(payload, env) {
   }
 
   const title = normalizeTitle(result?.choices?.[0]?.message?.content);
-  if (Array.from(title).length < 2) {
+  if ((title.match(/[\p{L}\p{N}]/gu) || []).length < 2) {
     return json({ error: "DeepSeek 标题服务未返回有效标题" }, 502);
   }
   return json({ title });
@@ -201,9 +202,18 @@ async function fetchModels(env) {
 export function normalizeTitle(value) {
   if (typeof value !== "string") return "";
   const visibleCharacters = value
-    .normalize("NFKC")
-    .replace(/[^\p{L}\p{N}]/gu, "");
-  return Array.from(visibleCharacters).slice(0, TITLE_MAX_CHARS).join("");
+    .normalize("NFC")
+    .replace(/[\r\n\t]+/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/[\p{Extended_Pictographic}\p{Emoji_Modifier}\uFE0E\uFE0F\u200D]/gu, "")
+    .replace(/^[\s"'“”‘’「」『』《》【】]+|[\s"'“”‘’「」『』《》【】]+$/gu, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const title = Array.from(visibleCharacters)
+    .slice(0, TITLE_MAX_CHARS)
+    .join("")
+    .trim();
+  return /[\p{L}\p{N}]/u.test(title) ? title : "";
 }
 
 export function normalizeModel(model) {

@@ -208,12 +208,16 @@ test("normalizeModel：只输出前端需要的模型目录字段", () => {
   assert.strictEqual(normalizeModel({ name: "missing id" }), null);
 });
 
-test("normalizeTitle：去掉引号、标点、空格和 Emoji，并截断到 10 字", () => {
+test("normalizeTitle：保留必要标点和空格，去掉包裹引号与 Emoji", () => {
   assert.strictEqual(
     normalizeTitle("“多会话 功能规划✨！！额外内容”"),
-    "多会话功能规划额外内",
+    "多会话 功能规划！！额外内容",
   );
-  assert.strictEqual(normalizeTitle("  GPT-5 设置 😼 "), "GPT5设置");
+  assert.strictEqual(
+    normalizeTitle("  GPT-5 settings, session 1 😼 "),
+    "GPT-5 settings, session 1",
+  );
+  assert.strictEqual(normalizeTitle("A".repeat(60)), "A".repeat(48));
   assert.strictEqual(normalizeTitle(null), "");
 });
 
@@ -389,8 +393,8 @@ await testAsync("标题请求关闭 thinking、限制输出，并规范化 DeepS
     const result = await response.json();
 
     assert.strictEqual(response.status, 200);
-    assert.strictEqual(result.title, "多会话功能规划额外内");
-    assert.ok(Array.from(result.title).length <= 10);
+    assert.strictEqual(result.title, "多会话 功能规划！！额外内容");
+    assert.ok(Array.from(result.title).length <= 48);
     assert.strictEqual(
       response.headers.get("Access-Control-Allow-Origin"),
       "https://cloudxuan1.github.io",

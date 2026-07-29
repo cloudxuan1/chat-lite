@@ -6,7 +6,7 @@
 
 1. 先校验访问密码，避免公开网页被陌生人拿来消耗额度。
 2. 用 Worker Secret 里的 API key 拉取 OpenRouter 模型目录，前端只负责搜索、收藏和选择。
-3. 用 `DEEPSEEK_API_KEY` 调 `deepseek-v4-flash` 为新会话生成 2–10 字短标题；关闭 thinking，8 秒超时，失败不影响聊天。
+3. 用 `DEEPSEEK_API_KEY` 调 `deepseek-v4-flash` 为新会话生成自然短标题；中文通常 8–18 字，英文可更长并保留必要标点和空格；关闭 thinking，8 秒超时，失败不影响聊天。
 4. 转发聊天请求，并传递模型、推理档位、可选最大生成量、联网搜索和每会话独立的 `session_id`。
 5. 给 Claude 的 system、历史尾部和当前问题添加提示词缓存断点，再把流式回复与 usage 原样透传给前端。
 
