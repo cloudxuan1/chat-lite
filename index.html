@@ -57,6 +57,7 @@
   /* ===== 应用框架与会话侧栏 ===== */
   .app-shell {
     position: relative;
+    isolation: isolate;
     display: flex;
     flex: 1;
     min-width: 0;
@@ -112,7 +113,10 @@
     box-shadow: 16px 0 44px rgba(31,30,29,.1);
     visibility: hidden;
     pointer-events: none;
-    transform: translateX(-100%);
+    transform: translate3d(-100%, 0, 0);
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+    will-change: transform;
     transition:
       transform var(--motion-panel) var(--ease-drawer),
       visibility 0s linear var(--motion-panel);
@@ -120,7 +124,7 @@
   .app-shell.sidebar-is-open .conversation-sidebar {
     visibility: visible;
     pointer-events: auto;
-    transform: translateX(0);
+    transform: translate3d(0, 0, 0);
     transition-delay: 0s;
   }
   .conversation-sidebar-inner {
@@ -349,20 +353,29 @@
     inset: 0;
     z-index: 11;
     padding: 0;
-    background: rgba(20,20,19,.2);
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
     border: none;
+    -webkit-tap-highlight-color: transparent;
     visibility: hidden;
     pointer-events: none;
-    opacity: 0;
-    transition:
-      opacity var(--motion-fast) ease,
-      visibility 0s linear var(--motion-fast);
+    transition: visibility 0s linear var(--motion-panel);
   }
   .app-shell.sidebar-is-open .conversation-scrim {
     visibility: visible;
     pointer-events: auto;
-    opacity: 1;
     transition-delay: 0s;
+  }
+
+  @media (max-width: 899px) {
+    .chat-shell {
+      opacity: 1;
+      transition: opacity var(--motion-panel) var(--ease-drawer);
+    }
+    .app-shell.sidebar-is-open .chat-shell {
+      opacity: .52;
+    }
   }
 
   /* ===== 顶栏 ===== */
@@ -1595,6 +1608,9 @@
       visibility: visible;
       pointer-events: none;
       transform: none;
+      -webkit-backface-visibility: visible;
+      backface-visibility: visible;
+      will-change: auto;
       transition: none;
     }
     .conversation-sidebar-inner {
@@ -1652,6 +1668,7 @@
     .conversation-sidebar,
     .conversation-sidebar-inner,
     .conversation-scrim,
+    .chat-shell,
     .app-status {
       transition: opacity var(--motion-fast) ease, visibility 0s linear var(--motion-fast);
     }
