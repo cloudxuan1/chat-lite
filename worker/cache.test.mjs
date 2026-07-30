@@ -111,6 +111,25 @@ test("数组 content：标记最后一个块，重复调用保持幂等", () => 
   assert.deepStrictEqual(first[2].content[0].cache_control, { type: "ephemeral" });
 });
 
+test("多模态 content：缓存断点只标记最后一个文本块，不标记图片", () => {
+  const messages = [{
+    role: "user",
+    content: [
+      { type: "text", text: "请看图" },
+      {
+        type: "image_url",
+        image_url: { url: "data:image/png;base64,AAAA" },
+      },
+    ],
+  }];
+
+  const result = applyPromptCache(messages, "anthropic/claude-opus-5");
+
+  assert.deepStrictEqual(result[0].content[0].cache_control, { type: "ephemeral" });
+  assert.strictEqual(result[0].content[1].cache_control, undefined);
+  assert.strictEqual(messages[0].content[0].cache_control, undefined);
+});
+
 test("非 Claude 模型：消息数组和对象均原样返回", () => {
   const messages = [
     { role: "system", content: "system" },
@@ -149,6 +168,8 @@ test("buildUpstreamBody：显式开启并返回推理，同时使用新联网搜
     reasoning: false,
     session_id: "session-123",
     webSearch: true,
+    webSearchMaxUses: 3,
+    webSearchMaxResults: 12,
     maxCompletionTokens: 16384,
   });
 
@@ -164,8 +185,8 @@ test("buildUpstreamBody：显式开启并返回推理，同时使用新联网搜
   assert.deepStrictEqual(body.tools, [{
     type: "openrouter:web_search",
     parameters: {
-      max_results: 5,
-      max_uses: 1,
+      max_results: 12,
+      max_uses: 3,
     },
   }]);
 });
@@ -191,6 +212,17 @@ test("buildUpstreamBody：关闭推理用 none，旧布尔开启使用显式开�
   assert.strictEqual(legacyBody.max_completion_tokens, undefined);
 });
 
+test("buildUpstreamBody：联网搜索自动模式不发送项目侧限制", () => {
+  const body = buildUpstreamBody({
+    messages: [{ role: "user", content: "请自行搜索" }],
+    webSearch: true,
+  });
+
+  assert.deepStrictEqual(body.tools, [{
+    type: "openrouter:web_search",
+  }]);
+});
+
 test("normalizeModel：只输出前端需要的模型目录字段", () => {
   const reasoning = {
     supported_efforts: ["low", "medium", "high"],
@@ -208,7 +240,10 @@ test("normalizeModel：只输出前端需要的模型目录字段", () => {
     pricing: { prompt: "0.000005", completion: "0.000025" },
     reasoning,
     supported_parameters: ["reasoning", "tools", 123],
-    architecture: { tokenizer: "Claude" },
+    architecture: {
+      tokenizer: "Claude",
+      input_modalities: ["text", "image", 123],
+    },
   });
 
   assert.deepStrictEqual(result, {
@@ -220,6 +255,7 @@ test("normalizeModel：只输出前端需要的模型目录字段", () => {
     pricing: { prompt: "0.000005", completion: "0.000025" },
     reasoning,
     supportedParameters: ["reasoning", "tools"],
+    inputModalities: ["text", "image"],
   });
   assert.strictEqual(normalizeModel({ name: "missing id" }), null);
 });
@@ -537,8 +573,8 @@ await testAsync("聊天请求把显式推理和新联网搜索工具发给 OpenR
     assert.deepStrictEqual(body.tools, [{
       type: "openrouter:web_search",
       parameters: {
-        max_results: 5,
-        max_uses: 1,
+        max_results: 12,
+        max_uses: 3,
       },
     }]);
     assert.strictEqual(body.plugins, undefined);
@@ -557,6 +593,8 @@ await testAsync("聊天请求把显式推理和新联网搜索工具发给 OpenR
           password: "correct",
           reasoningEffort: "high",
           webSearch: true,
+          webSearchMaxUses: 3,
+          webSearchMaxResults: 12,
         }),
       }),
       {
@@ -568,6 +606,37 @@ await testAsync("聊天请求把显式推理和新联网搜索工具发给 OpenR
     assert.strictEqual(response.status, 200);
     assert.strictEqual(response.headers.get("Content-Type"), "text/event-stream");
     assert.strictEqual(await response.text(), "data: [DONE]\n\n");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+await testAsync("联网搜索自动模式不发送次数和结果限制", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    const body = JSON.parse(options.body);
+    assert.deepStrictEqual(body.tools, [{ type: "openrouter:web_search" }]);
+    return new Response("data: [DONE]\n\n", {
+      headers: { "Content-Type": "text/event-stream" },
+    });
+  };
+
+  try {
+    const response = await worker.fetch(
+      new Request("https://worker.example", {
+        method: "POST",
+        body: JSON.stringify({
+          messages: [{ role: "user", content: "请自行搜索" }],
+          password: "correct",
+          webSearch: true,
+        }),
+      }),
+      {
+        ACCESS_PASSWORD: "correct",
+        OPENROUTER_API_KEY: "test-key",
+      },
+    );
+    assert.strictEqual(response.status, 200);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -590,6 +659,144 @@ await testAsync("请求拒绝非法最大生成量且不会调用 OpenRouter", a
             messages: [{ role: "user", content: "hello" }],
             password: "correct",
             maxCompletionTokens: invalid,
+          }),
+        }),
+        {
+          ACCESS_PASSWORD: "correct",
+          OPENROUTER_API_KEY: "test-key",
+        },
+      );
+      assert.strictEqual(response.status, 400);
+    }
+    assert.strictEqual(upstreamCalled, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+await testAsync("请求拒绝非法联网搜索限制且不会调用 OpenRouter", async () => {
+  const originalFetch = globalThis.fetch;
+  let upstreamCalled = false;
+  globalThis.fetch = async () => {
+    upstreamCalled = true;
+    throw new Error("不应调用");
+  };
+
+  try {
+    const invalidPayloads = [
+      { webSearchMaxUses: 0 },
+      { webSearchMaxUses: 31 },
+      { webSearchMaxUses: "3" },
+      { webSearchMaxResults: 0 },
+      { webSearchMaxResults: 26 },
+      { webSearchMaxResults: 1.5 },
+    ];
+    for (const invalid of invalidPayloads) {
+      const response = await worker.fetch(
+        new Request("https://worker.example", {
+          method: "POST",
+          body: JSON.stringify({
+            messages: [{ role: "user", content: "hello" }],
+            password: "correct",
+            ...invalid,
+          }),
+        }),
+        {
+          ACCESS_PASSWORD: "correct",
+          OPENROUTER_API_KEY: "test-key",
+        },
+      );
+      assert.strictEqual(response.status, 400);
+    }
+    assert.strictEqual(upstreamCalled, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+await testAsync("多图消息允许八张并原样发给 OpenRouter", async () => {
+  const originalFetch = globalThis.fetch;
+  const images = Array.from({ length: 8 }, (_, index) => ({
+    type: "image_url",
+    image_url: { url: `data:image/png;base64,AAAA${index}` },
+  }));
+  globalThis.fetch = async (url, options) => {
+    const body = JSON.parse(options.body);
+    assert.strictEqual(body.messages[0].content.length, 9);
+    assert.deepStrictEqual(
+      body.messages[0].content.slice(1).map((item) => item.image_url.url),
+      images.map((item) => item.image_url.url),
+    );
+    assert.deepStrictEqual(body.messages[0].content[0].cache_control, { type: "ephemeral" });
+    assert.strictEqual(body.messages[0].content[1].cache_control, undefined);
+    return new Response("data: [DONE]\n\n", {
+      headers: { "Content-Type": "text/event-stream" },
+    });
+  };
+
+  try {
+    const response = await worker.fetch(
+      new Request("https://worker.example", {
+        method: "POST",
+        body: JSON.stringify({
+          messages: [{
+            role: "user",
+            content: [{ type: "text", text: "按顺序看这些图" }, ...images],
+          }],
+          model: "anthropic/claude-opus-5",
+          password: "correct",
+        }),
+      }),
+      {
+        ACCESS_PASSWORD: "correct",
+        OPENROUTER_API_KEY: "test-key",
+      },
+    );
+    assert.strictEqual(response.status, 200);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+await testAsync("图片请求拒绝第九张、非 data URL 和超过 6MB", async () => {
+  const originalFetch = globalThis.fetch;
+  let upstreamCalled = false;
+  globalThis.fetch = async () => {
+    upstreamCalled = true;
+    throw new Error("不应调用");
+  };
+
+  const invalidContents = [
+    [
+      { type: "text", text: "太多图" },
+      ...Array.from({ length: 9 }, () => ({
+        type: "image_url",
+        image_url: { url: "data:image/jpeg;base64,AAAA" },
+      })),
+    ],
+    [
+      { type: "text", text: "外链图" },
+      { type: "image_url", image_url: { url: "https://example.com/image.png" } },
+    ],
+    [
+      { type: "text", text: "太大" },
+      {
+        type: "image_url",
+        image_url: {
+          url: `data:image/png;base64,${"A".repeat(Math.ceil((6 * 1024 * 1024 + 1) * 4 / 3))}`,
+        },
+      },
+    ],
+  ];
+
+  try {
+    for (const content of invalidContents) {
+      const response = await worker.fetch(
+        new Request("https://worker.example", {
+          method: "POST",
+          body: JSON.stringify({
+            messages: [{ role: "user", content }],
+            password: "correct",
           }),
         }),
         {
@@ -647,6 +854,7 @@ await testAsync("模型目录请求无需 messages，返回精简字段", async 
           pricing: { prompt: "1" },
           reasoning: { supported_efforts: ["low", "high"] },
           supported_parameters: ["reasoning"],
+          architecture: { input_modalities: ["text", "image"] },
           extra: "不应转发",
         },
       ],
@@ -672,6 +880,7 @@ await testAsync("模型目录请求无需 messages，返回精简字段", async 
     assert.strictEqual(result.models.length, 1);
     assert.strictEqual(result.models[0].id, "openai/gpt-5.5");
     assert.strictEqual(result.models[0].maxCompletionTokens, 32768);
+    assert.deepStrictEqual(result.models[0].inputModalities, ["text", "image"]);
     assert.strictEqual(result.models[0].extra, undefined);
   } finally {
     globalThis.fetch = originalFetch;

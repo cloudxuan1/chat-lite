@@ -20,6 +20,11 @@ const TITLE_INPUT_MAX_CHARS = 500;
 const TITLE_MAX_CHARS = 48;
 const TITLE_REQUEST_TIMEOUT_MS = 8000;
 const REASONING_EFFORTS = new Set(["off", "low", "medium", "high"]);
+const WEB_SEARCH_MAX_USES = 30;
+const WEB_SEARCH_MAX_RESULTS = 25;
+const MAX_IMAGES_PER_MESSAGE = 8;
+const MAX_IMAGE_BYTES_PER_MESSAGE = 6 * 1024 * 1024;
+const IMAGE_DATA_URL_PATTERN = /^data:image\/(?:png|jpeg|webp|gif);base64,/i;
 
 export default {
   async fetch(request, env) {
@@ -81,6 +86,16 @@ export default {
       )
     ) {
       return json({ error: "maxCompletionTokens 必须是大于 0 的整数" }, 400);
+    }
+    if (!optionalIntegerInRange(payload.webSearchMaxUses, 1, WEB_SEARCH_MAX_USES)) {
+      return json({ error: `webSearchMaxUses 必须是 1 到 ${WEB_SEARCH_MAX_USES} 的整数` }, 400);
+    }
+    if (!optionalIntegerInRange(payload.webSearchMaxResults, 1, WEB_SEARCH_MAX_RESULTS)) {
+      return json({ error: `webSearchMaxResults 必须是 1 到 ${WEB_SEARCH_MAX_RESULTS} 的整数` }, 400);
+    }
+    const imageValidationError = validateImageMessages(payload.messages);
+    if (imageValidationError) {
+      return json({ error: imageValidationError }, 400);
     }
 
     let upstream;
@@ -236,6 +251,9 @@ export function normalizeModel(model) {
     supportedParameters: Array.isArray(model.supported_parameters)
       ? model.supported_parameters.filter((parameter) => typeof parameter === "string")
       : [],
+    inputModalities: Array.isArray(model.architecture?.input_modalities)
+      ? model.architecture.input_modalities.filter((modality) => typeof modality === "string")
+      : [],
   };
 }
 
@@ -258,13 +276,16 @@ export function buildUpstreamBody(payload) {
     };
   }
   if (payload.webSearch) {
-    body.tools = [{
-      type: "openrouter:web_search",
-      parameters: {
-        max_results: 5,
-        max_uses: 1,
-      },
-    }];
+    const parameters = {};
+    if (payload.webSearchMaxUses !== undefined) {
+      parameters.max_uses = payload.webSearchMaxUses;
+    }
+    if (payload.webSearchMaxResults !== undefined) {
+      parameters.max_results = payload.webSearchMaxResults;
+    }
+    const tool = { type: "openrouter:web_search" };
+    if (Object.keys(parameters).length) tool.parameters = parameters;
+    body.tools = [tool];
   }
   if (payload.session_id !== undefined) {
     body.session_id = payload.session_id;
@@ -284,6 +305,44 @@ function normalizeReasoningEffort(payload) {
     return payload.reasoning ? "medium" : "none";
   }
   return undefined;
+}
+
+function optionalIntegerInRange(value, min, max) {
+  return value === undefined || (
+    Number.isSafeInteger(value)
+    && value >= min
+    && value <= max
+  );
+}
+
+function base64DataUrlBytes(url) {
+  const payload = url.slice(url.indexOf(",") + 1);
+  const padding = payload.endsWith("==") ? 2 : payload.endsWith("=") ? 1 : 0;
+  return Math.floor(payload.length * 3 / 4) - padding;
+}
+
+function validateImageMessages(messages) {
+  for (const message of messages) {
+    if (!Array.isArray(message?.content)) continue;
+    let imageCount = 0;
+    let imageBytes = 0;
+    for (const block of message.content) {
+      if (block?.type !== "image_url") continue;
+      const url = block.image_url?.url;
+      if (typeof url !== "string" || !IMAGE_DATA_URL_PATTERN.test(url)) {
+        return "图片格式只支持 PNG、JPEG、WebP 或 GIF";
+      }
+      imageCount += 1;
+      imageBytes += base64DataUrlBytes(url);
+      if (imageCount > MAX_IMAGES_PER_MESSAGE) {
+        return `每条消息最多发送 ${MAX_IMAGES_PER_MESSAGE} 张图片`;
+      }
+      if (imageBytes > MAX_IMAGE_BYTES_PER_MESSAGE) {
+        return "每条消息的图片合计不能超过 6MB";
+      }
+    }
+  }
+  return "";
 }
 
 // 给消息数组打提示词缓存断点，返回新数组，不改入参 messages。
@@ -331,7 +390,12 @@ function addCacheControl(content) {
 
   let targetIndex = -1;
   for (let i = content.length - 1; i >= 0; i -= 1) {
-    if (content[i] && typeof content[i] === "object" && !Array.isArray(content[i])) {
+    if (
+      content[i]
+      && typeof content[i] === "object"
+      && !Array.isArray(content[i])
+      && content[i].type === "text"
+    ) {
       targetIndex = i;
       break;
     }
