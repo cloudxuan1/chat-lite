@@ -7,7 +7,7 @@
 1. 先校验访问密码，避免公开网页被陌生人拿来消耗额度。
 2. 用 Worker Secret 里的 API key 拉取 OpenRouter 模型目录，前端只负责搜索、收藏和选择。
 3. 用 `DEEPSEEK_API_KEY` 调 `deepseek-v4-flash` 为新会话生成自然短标题；中文通常 8–18 字，英文可更长并保留必要标点和空格；关闭 thinking，8 秒超时，失败不影响聊天。
-4. 转发聊天请求，并传递模型、推理档位、可选最大生成量、联网搜索和每会话独立的 `session_id`。
+4. 转发聊天请求：非关闭档位会明确开启并要求返回 reasoning；联网使用 OpenRouter 的 `openrouter:web_search` server tool；同时传递模型、可选最大生成量和每会话独立的 `session_id`。
 5. 给 Claude 的 system、历史尾部和当前问题添加提示词缓存断点，再把流式回复与 usage 原样透传给前端。
 
 ---
@@ -64,5 +64,7 @@ npx wrangler secret put ACCESS_PASSWORD      # 按提示粘贴访问口令
 - 默认模型 `anthropic/claude-opus-4.6` 写在 worker.js 顶部；前端未传 model 时才回退到它。
 - `session_id` 最长 256 字符；每个本地会话独立生成，清空当前会话时重建，以提高同一段对话的 provider sticky routing 和缓存命中率，同时避免跨会话串线。
 - `maxCompletionTokens` 不传表示由模型/供应商决定；传入时必须是大于 0 的整数。模型目录会同时返回主供应商的最大输出上限，供前端阻止超限设置。
+- `reasoningEffort` 非关闭时转成 `{ enabled:true, effort, exclude:false }`，避免依赖模型或供应商的默认显示规则；关闭时按 OpenRouter 契约发送 `{ effort:"none" }`。
+- `webSearch` 开启时使用 `tools: [{ type:"openrouter:web_search" }]`，最多搜索一次、每次最多取 5 个结果；不再使用已弃用的 `plugins: [{ id:"web" }]`。
 - `deepseek-v4-flash` 与 `thinking: { type: "disabled" }` 按 DeepSeek 当前 Chat Completions 契约配置；标题上游错误统一收敛，不把响应详情或 Secret 透给前端。
-- 改 Worker 后先跑 `node worker/cache.test.mjs`；当前 21 项测试覆盖标题鉴权/超时/清洗/错误收敛，以及模型目录、生成上限、推理参数、session 转发、三处缓存断点、幂等与不修改入参。
+- 改 Worker 后先跑 `node worker/cache.test.mjs`；当前 22 项测试覆盖标题鉴权/超时/清洗/错误收敛，以及模型目录、生成上限、显式推理、新联网搜索工具、session 转发、三处缓存断点、幂等与不修改入参。

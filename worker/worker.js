@@ -248,11 +248,23 @@ export function buildUpstreamBody(payload) {
   };
 
   const reasoningEffort = normalizeReasoningEffort(payload);
-  if (reasoningEffort) {
-    body.reasoning = { effort: reasoningEffort };
+  if (reasoningEffort === "none") {
+    body.reasoning = { effort: "none" };
+  } else if (reasoningEffort) {
+    body.reasoning = {
+      enabled: true,
+      effort: reasoningEffort,
+      exclude: false,
+    };
   }
   if (payload.webSearch) {
-    body.plugins = [{ id: "web", max_results: 5 }];
+    body.tools = [{
+      type: "openrouter:web_search",
+      parameters: {
+        max_results: 5,
+        max_uses: 1,
+      },
+    }];
   }
   if (payload.session_id !== undefined) {
     body.session_id = payload.session_id;

@@ -141,10 +141,10 @@ test("applyPromptCache 不修改原数组、消息对象或 content 块", () => 
   assert.strictEqual(typeof messages[1].content, "string");
 });
 
-test("buildUpstreamBody：新推理档位是单一真相，并转发 session_id", () => {
+test("buildUpstreamBody：显式开启并返回推理，同时使用新联网搜索工具", () => {
   const body = buildUpstreamBody({
     messages: [{ role: "user", content: "hello" }],
-    model: "openai/gpt-5.5",
+    model: "anthropic/claude-opus-5",
     reasoningEffort: "high",
     reasoning: false,
     session_id: "session-123",
@@ -152,25 +152,41 @@ test("buildUpstreamBody：新推理档位是单一真相，并转发 session_id"
     maxCompletionTokens: 16384,
   });
 
-  assert.deepStrictEqual(body.reasoning, { effort: "high" });
+  assert.deepStrictEqual(body.reasoning, {
+    enabled: true,
+    effort: "high",
+    exclude: false,
+  });
   assert.strictEqual(body.include_reasoning, undefined);
   assert.strictEqual(body.session_id, "session-123");
   assert.strictEqual(body.max_completion_tokens, 16384);
-  assert.deepStrictEqual(body.plugins, [{ id: "web", max_results: 5 }]);
+  assert.strictEqual(body.plugins, undefined);
+  assert.deepStrictEqual(body.tools, [{
+    type: "openrouter:web_search",
+    parameters: {
+      max_results: 5,
+      max_uses: 1,
+    },
+  }]);
 });
 
-test("buildUpstreamBody：off 映射为 none，旧布尔字段仅作兼容", () => {
+test("buildUpstreamBody：关闭推理用 none，旧布尔开启使用显式开关", () => {
   const offBody = buildUpstreamBody({
     messages: [{ role: "user", content: "hello" }],
     reasoningEffort: "off",
   });
   assert.deepStrictEqual(offBody.reasoning, { effort: "none" });
+  assert.strictEqual(offBody.tools, undefined);
 
   const legacyBody = buildUpstreamBody({
     messages: [{ role: "user", content: "hello" }],
     reasoning: true,
   });
-  assert.deepStrictEqual(legacyBody.reasoning, { effort: "medium" });
+  assert.deepStrictEqual(legacyBody.reasoning, {
+    enabled: true,
+    effort: "medium",
+    exclude: false,
+  });
   assert.strictEqual(legacyBody.include_reasoning, undefined);
   assert.strictEqual(legacyBody.max_completion_tokens, undefined);
 });
@@ -502,6 +518,56 @@ await testAsync("DeepSeek 返回无效标题时统一返回 502", async () => {
     );
 
     assert.strictEqual(response.status, 502);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+await testAsync("聊天请求把显式推理和新联网搜索工具发给 OpenRouter", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    assert.strictEqual(url, "https://openrouter.ai/api/v1/chat/completions");
+    assert.strictEqual(options.headers.Authorization, "Bearer test-key");
+    const body = JSON.parse(options.body);
+    assert.deepStrictEqual(body.reasoning, {
+      enabled: true,
+      effort: "high",
+      exclude: false,
+    });
+    assert.deepStrictEqual(body.tools, [{
+      type: "openrouter:web_search",
+      parameters: {
+        max_results: 5,
+        max_uses: 1,
+      },
+    }]);
+    assert.strictEqual(body.plugins, undefined);
+    return new Response("data: [DONE]\n\n", {
+      headers: { "Content-Type": "text/event-stream" },
+    });
+  };
+
+  try {
+    const response = await worker.fetch(
+      new Request("https://worker.example", {
+        method: "POST",
+        body: JSON.stringify({
+          messages: [{ role: "user", content: "请联网搜索" }],
+          model: "anthropic/claude-opus-5",
+          password: "correct",
+          reasoningEffort: "high",
+          webSearch: true,
+        }),
+      }),
+      {
+        ACCESS_PASSWORD: "correct",
+        OPENROUTER_API_KEY: "test-key",
+      },
+    );
+
+    assert.strictEqual(response.status, 200);
+    assert.strictEqual(response.headers.get("Content-Type"), "text/event-stream");
+    assert.strictEqual(await response.text(), "data: [DONE]\n\n");
   } finally {
     globalThis.fetch = originalFetch;
   }

@@ -3574,9 +3574,15 @@
   }
 
   function addCitations(annotations) {
+    const seenUrls = new Set();
     const links = (annotations || [])
       .map((item) => item?.url_citation || item)
       .filter((item) => item?.url)
+      .filter((item) => {
+        if (seenUrls.has(item.url)) return false;
+        seenUrls.add(item.url);
+        return true;
+      })
       .slice(0, 10);
     if (!links.length) return;
 
@@ -3649,12 +3655,29 @@
     messagesEl.appendChild(el);
   }
 
-  function textFromReasoningDetails(details) {
-    if (!Array.isArray(details)) return "";
-    return details
-      .map((item) => item?.text || item?.summary || item?.content || "")
-      .filter(Boolean)
-      .join("\n");
+  function textFromResponseValue(value) {
+    if (typeof value === "string") return value;
+    if (Array.isArray(value)) {
+      return value.map(textFromResponseValue).filter(Boolean).join("");
+    }
+    if (!value || typeof value !== "object" || value.type === "reasoning.encrypted") {
+      return "";
+    }
+    return textFromResponseValue(value.text) ||
+      textFromResponseValue(value.summary) ||
+      textFromResponseValue(value.content);
+  }
+
+  function textFromReasoningDelta(delta) {
+    return textFromResponseValue(delta?.reasoning) ||
+      textFromResponseValue(delta?.reasoning_content) ||
+      textFromResponseValue(delta?.reasoning_details);
+  }
+
+  function appendAnnotations(target, ...groups) {
+    groups.forEach((group) => {
+      if (Array.isArray(group)) target.push(...group);
+    });
   }
 
   // 解析 SSE 流，每收到一段文字就回调 callbacks，返回完整正文和来源
@@ -3680,13 +3703,21 @@
         try {
           const obj = JSON.parse(data);
           if (obj.usage) usage = obj.usage;
-          const delta = obj.choices?.[0]?.delta || {};
-          const reasoning = delta.reasoning || delta.reasoning_content || textFromReasoningDetails(delta.reasoning_details);
+          const choice = obj.choices?.[0] || {};
+          const delta = choice.delta || choice.message || {};
+          const reasoning = textFromReasoningDelta(delta);
           if (reasoning) callbacks.onReasoning(reasoning);
-          if (Array.isArray(delta.annotations)) annotations.push(...delta.annotations);
-          if (delta.content) {
-            full += delta.content;
-            callbacks.onContent(delta.content);
+          appendAnnotations(
+            annotations,
+            delta.annotations,
+            choice.annotations,
+            choice.message && choice.message !== delta ? choice.message.annotations : null,
+            obj.annotations,
+          );
+          const content = textFromResponseValue(delta.content);
+          if (content) {
+            full += content;
+            callbacks.onContent(content);
           }
         } catch { /* 半截 JSON，忽略 */ }
       }
