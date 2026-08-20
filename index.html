@@ -703,6 +703,7 @@
     box-shadow: var(--shadow);
     border-bottom-left-radius: 6px;
   }
+  .message-tools[hidden] { display: none; }
   .message-tools {
     display: flex;
     align-items: center;
@@ -719,7 +720,9 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .message-copy {
+  .message-copy,
+  .message-edit,
+  .message-edit-action {
     position: relative;
     display: flex;
     align-items: center;
@@ -734,12 +737,15 @@
     cursor: pointer;
     transition: color var(--motion-fast) ease, transform var(--motion-fast) var(--ease-out);
   }
-  .message-copy::after {
+  .message-copy::after,
+  .message-edit::after,
+  .message-edit-action::after {
     content: "";
     position: absolute;
     inset: -4px 0;
   }
-  .message-copy svg {
+  .message-copy svg,
+  .message-edit svg {
     width: 14px;
     height: 14px;
     fill: none;
@@ -749,6 +755,21 @@
     stroke-linejoin: round;
   }
   .message-copy.is-copied { color: var(--accent); }
+  .message-edit-action.is-save { color: var(--accent); }
+  .message-item.is-editing { width: 100%; }
+  .message-edit-area {
+    display: block;
+    width: 100%;
+    min-height: 66px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    line-height: inherit;
+    resize: none;
+    outline: none;
+  }
   .reasoning {
     align-self: flex-start;
     max-width: 85%;
@@ -1111,7 +1132,9 @@
   .models-retry,
   .token-step,
   .models-scroll-top,
-  .message-copy {
+  .message-copy,
+  .message-edit,
+  .message-edit-action {
     -webkit-tap-highlight-color: transparent;
   }
   .settings-back {
@@ -1694,7 +1717,9 @@
   .model-star:active,
   .models-retry:active,
   .token-step:active,
-  .message-copy:active { transform: scale(.97); }
+  .message-copy:active,
+  .message-edit:active,
+  .message-edit-action:active { transform: scale(.97); }
   .models-scroll-top.is-visible:active { transform: translate(-50%, 0) scale(.97); }
 
   /* ===== 访问密码遮罩 ===== */
@@ -1774,11 +1799,15 @@
       min-height: 40px;
       font-size: 12px;
     }
-    .message-copy {
+    .message-copy,
+    .message-edit,
+    .message-edit-action {
       min-height: 40px;
       padding-inline: 6px;
     }
-    .message-copy::after { inset: -2px 0; }
+    .message-copy::after,
+    .message-edit::after,
+    .message-edit-action::after { inset: -2px 0; }
     .identity-field { padding: 17px; }
     .identity-input {
       min-height: 48px;
@@ -1866,7 +1895,9 @@
     .model-star:hover,
     .models-retry:hover,
     .token-step:hover,
-    .message-copy:hover { background: rgba(31,30,29,.055); }
+    .message-copy:hover,
+    .message-edit:hover,
+    .message-edit-action:hover { background: rgba(31,30,29,.055); }
     #send:hover:not(:disabled) { opacity: .85; transform: translateY(-1px); }
     .model-choice:hover { background: rgba(31,30,29,.035); }
     .model-choice.active:hover { background: rgba(217,119,87,.095); }
@@ -1935,6 +1966,8 @@
     .models-retry:active,
     .token-step:active,
     .message-copy:active,
+    .message-edit:active,
+    .message-edit-action:active,
     .icon-button:active,
     .settings-save:active { transform: none; }
     .models-scroll-top.is-visible:active { transform: translate(-50%, 0); }
@@ -3865,8 +3898,8 @@
     if (!conversation.messages.length) {
       messagesEl.appendChild(hintEl);
     } else {
-      conversation.messages.forEach((item) =>
-        addBubble(item.role, item.content, item.attachments || [], conversation.id)
+      conversation.messages.forEach((item, index) =>
+        addBubble(item.role, item.content, item.attachments || [], conversation.id, index)
       );
     }
     updateConversationActionState();
@@ -4139,6 +4172,95 @@
     }
   }
 
+  // 就地编辑一条消息的正文：气泡变输入框，保存写回会话并落盘，取消/Esc/纯文字清空则还原
+  function startEditMessage(root) {
+    // 回复流式输出时（pending）不允许编辑，避免改到正在发送的上下文
+    if (pending || !root || root.classList.contains("is-editing")) return;
+    const index = Number(root.dataset.msgIndex);
+    if (!Number.isInteger(index)) return;
+    const conversation = getActiveConversation();
+    const convId = conversation.id;
+    const message = conversation.messages[index];
+    if (!message) return;
+
+    const bubble = root.querySelector(".msg");
+    if (!bubble) return;
+    const textTarget = bubble.querySelector(".message-text") || bubble;
+    const hasImages = Boolean(bubble.querySelector(".message-images"));
+    const originalTools = root.querySelector(".message-tools");
+
+    const area = document.createElement("textarea");
+    area.className = "message-edit-area";
+    area.value = message.content;
+    area.setAttribute("aria-label", `编辑${messageRoleName(message.role)}的消息`);
+    textTarget.textContent = "";
+    textTarget.appendChild(area);
+    root.classList.add("is-editing");
+
+    const autoGrow = () => {
+      area.style.height = "auto";
+      area.style.height = area.scrollHeight + "px";
+    };
+    area.addEventListener("input", autoGrow);
+    autoGrow();
+    area.focus();
+    area.setSelectionRange(area.value.length, area.value.length);
+
+    const actions = document.createElement("div");
+    actions.className = "message-tools";
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.type = "button";
+    cancelBtn.className = "message-edit-action";
+    cancelBtn.textContent = "取消";
+
+    const saveBtn = document.createElement("button");
+    saveBtn.type = "button";
+    saveBtn.className = "message-edit-action is-save";
+    saveBtn.textContent = "保存";
+
+    const exitEdit = () => {
+      root.classList.remove("is-editing");
+      actions.remove();
+      if (originalTools) originalTools.hidden = false;
+    };
+
+    const cancelEdit = () => {
+      textTarget.textContent = message.content;
+      exitEdit();
+    };
+
+    const saveEdit = () => {
+      const value = area.value.trim();
+      // 纯文字消息不允许清空；带图消息可以只留图、去掉文字说明
+      if (!value && !hasImages) { cancelEdit(); return; }
+      const draft = cloneConversationStore();
+      const draftConversation = conversationById(convId, draft);
+      if (draftConversation && draftConversation.messages[index]) {
+        draftConversation.messages[index].content = value;
+      }
+      persistConversationStore(draft, { keepInMemoryOnFailure: true });
+      // 就地更新，保留当前会话里已经显示的思考/来源/缓存徽章，不整段重渲染
+      textTarget.textContent = value;
+      exitEdit();
+      const copy = originalTools?.querySelector(".message-copy");
+      if (copy) {
+        copy.dataset.copyText = value;
+        copy.hidden = !value;
+      }
+    };
+
+    cancelBtn.addEventListener("click", cancelEdit);
+    saveBtn.addEventListener("click", saveEdit);
+    area.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") { e.preventDefault(); cancelEdit(); }
+    });
+
+    actions.append(cancelBtn, saveBtn);
+    if (originalTools) originalTools.hidden = true;
+    root.append(actions);
+  }
+
   function makeMessageTools(role, bubble, visible, copyText = "") {
     const tools = document.createElement("div");
     tools.className = "message-tools";
@@ -4151,13 +4273,14 @@
     const copy = document.createElement("button");
     copy.type = "button";
     copy.className = "message-copy";
+    copy.dataset.copyText = copyText;
     copy.hidden = !copyText;
     copy.setAttribute("aria-label", `复制${messageRoleName(role)}的消息`);
     copy.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="2"></rect><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path></svg><span class="message-copy-label" aria-live="polite">复制</span>';
     copy.addEventListener("click", async () => {
       const label = copy.querySelector(".message-copy-label");
       try {
-        await writeClipboard(copyText);
+        await writeClipboard(copy.dataset.copyText || "");
         label.textContent = "已复制";
         copy.classList.add("is-copied");
       } catch {
@@ -4169,7 +4292,17 @@
       }, 1200);
     });
 
-    tools.append(author, copy);
+    const edit = document.createElement("button");
+    edit.type = "button";
+    edit.className = "message-edit";
+    edit.setAttribute("aria-label", `编辑${messageRoleName(role)}的消息`);
+    edit.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg><span class="message-edit-label">编辑</span>';
+    edit.addEventListener("click", () => {
+      const root = edit.closest(".message-item");
+      if (root) startEditMessage(root);
+    });
+
+    tools.append(author, copy, edit);
     return tools;
   }
 
@@ -4185,6 +4318,8 @@
       const copy = item.querySelector(".message-copy");
       if (author) author.textContent = messageRoleName(role);
       if (copy) copy.setAttribute("aria-label", `复制${messageRoleName(role)}的消息`);
+      const edit = item.querySelector(".message-edit");
+      if (edit) edit.setAttribute("aria-label", `编辑${messageRoleName(role)}的消息`);
     });
   }
 
@@ -4224,11 +4359,12 @@
     scrollToBottom();
   }
 
-  function addBubble(role, text, attachments = [], conversationId = "") {
+  function addBubble(role, text, attachments = [], conversationId = "", messageIndex = null) {
     if (hintEl) hintEl.remove();
     const root = document.createElement("div");
     root.className = `message-item ${role}`;
     root.dataset.role = role;
+    if (messageIndex !== null) root.dataset.msgIndex = String(messageIndex);
     const el = document.createElement("div");
     el.className = "msg " + role;
     if (attachments.length) {
@@ -4829,7 +4965,7 @@
     input.value = "";
     input.style.height = "auto";
     clearPendingImages();
-    addBubble("user", text, requestAttachments, requestConversationId);
+    addBubble("user", text, requestAttachments, requestConversationId, requestUserIndex);
     renderConversationList();
     showComposerStatus("");
 
@@ -4838,7 +4974,7 @@
       void requestConversationTitle(requestConversationId, text);
     }
     const reasoningBox = requestEffort !== "off" ? addReasoningBlock({ webSearch: webSearchEnabled }) : null;
-    const bubble = addBubble("assistant", "");
+    const bubble = addBubble("assistant", "", [], requestConversationId, requestUserIndex + 1);
     bubble.classList.add("typing");
 
     try {
