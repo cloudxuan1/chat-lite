@@ -2243,8 +2243,8 @@
           </label>
           <label class="identity-field" for="export-file-name">
             <span class="identity-label">导出文件名</span>
-            <input class="identity-input" id="export-file-name" type="text" maxlength="80" placeholder="留空则自动生成" autocomplete="off" />
-            <span class="identity-help">自动补上 .md；留空时使用 chat-lite-日期时间。</span>
+            <input class="identity-input" id="export-file-name" type="text" maxlength="80" placeholder="留空则用会话名" autocomplete="off" />
+            <span class="identity-help">自动补上 .md；留空时用当前会话名，会话没名字时才用日期时间。</span>
           </label>
         </div>
         <p class="settings-note">这些设置和对话一样，只保存在这台设备。</p>
@@ -4405,9 +4405,12 @@
   }
 
   function downloadConversation() {
-    if (!getActiveConversation().messages.length || pending) return;
+    const conversation = getActiveConversation();
+    if (!conversation.messages.length || pending) return;
+    // 文件名优先级：设置里手填的固定名 > 当前会话名 > 日期时间兜底
     const customBase = safeExportFileBase(exportFileName);
-    const filename = `${customBase || defaultExportFileBase()}.md`;
+    const titleBase = safeExportFileBase(conversation.title);
+    const filename = `${customBase || titleBase || defaultExportFileBase()}.md`;
     const blob = new Blob([buildConversationMarkdown()], { type: "text/markdown;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
