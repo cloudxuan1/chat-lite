@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#faf9f5" />
+<meta name="color-scheme" content="light" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='10' fill='%23d97757'/%3E%3C/svg%3E" />
 <title>ember</title>
 <style>
   /* ===== 设计 token（怀旧版 / Claude Theme，取自 DESIGN 设计稿）===== */
@@ -26,12 +29,17 @@
 
     --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
     --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+    --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
     --motion-fast: 160ms;
     --motion-panel: 240ms;
   }
 
   * { box-sizing: border-box; }
-  html, body { height: 100%; margin: 0; }
+  html, body {
+    height: 100%;
+    margin: 0;
+    background: var(--bg-primary);
+  }
 
   body {
     display: flex;
@@ -44,6 +52,330 @@
     font-size: 15px;
     line-height: 1.6;
     -webkit-font-smoothing: antialiased;
+  }
+
+  /* ===== 应用框架与会话侧栏 ===== */
+  .app-shell {
+    position: relative;
+    isolation: isolate;
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .chat-shell {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+  }
+  .app-status {
+    position: fixed;
+    z-index: 40;
+    top: calc(12px + env(safe-area-inset-top));
+    left: 50%;
+    width: min(calc(100vw - 32px), 520px);
+    padding: 10px 14px;
+    color: #7c2d12;
+    background: rgba(255,255,255,.96);
+    border: .5px solid rgba(154,52,18,.22);
+    border-radius: 12px;
+    box-shadow: 0 12px 32px rgba(31,30,29,.12);
+    font-size: 13px;
+    line-height: 1.45;
+    text-align: center;
+    visibility: hidden;
+    pointer-events: none;
+    opacity: 0;
+    transform: translate(-50%, -8px);
+    transition:
+      opacity var(--motion-fast) ease,
+      transform var(--motion-fast) var(--ease-out),
+      visibility 0s linear var(--motion-fast);
+  }
+  .app-status.is-visible {
+    visibility: visible;
+    opacity: 1;
+    transform: translate(-50%, 0);
+    transition-delay: 0s;
+  }
+  .conversation-sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 12;
+    width: min(86vw, 320px);
+    overflow: hidden;
+    color: var(--text-primary);
+    background: var(--bg-primary);
+    border-right: .5px solid rgba(31,30,29,.13);
+    box-shadow: 16px 0 44px rgba(31,30,29,.1);
+    visibility: hidden;
+    pointer-events: none;
+    transform: translate3d(-100%, 0, 0);
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+    will-change: transform;
+    transition:
+      transform var(--motion-panel) var(--ease-drawer),
+      visibility 0s linear var(--motion-panel);
+  }
+  .app-shell.sidebar-is-open .conversation-sidebar {
+    visibility: visible;
+    pointer-events: auto;
+    transform: translate3d(0, 0, 0);
+    transition-delay: 0s;
+  }
+  .conversation-sidebar-inner {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    padding:
+      calc(8px + env(safe-area-inset-top))
+      10px
+      calc(10px + env(safe-area-inset-bottom));
+  }
+  .conversation-sidebar-header {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    align-items: center;
+    gap: 2px;
+    min-height: 48px;
+    padding-left: 8px;
+  }
+  .conversation-sidebar-header h2 {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: 21px;
+    font-weight: 500;
+    line-height: 1.2;
+    letter-spacing: .1px;
+  }
+  .conversation-sidebar-action,
+  .conversation-more,
+  .conversation-menu-button,
+  .conversation-rename-action {
+    display: grid;
+    place-items: center;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0;
+    color: var(--text-secondary);
+    background: transparent;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    transition:
+      color var(--motion-fast) ease,
+      background-color var(--motion-fast) ease,
+      transform var(--motion-fast) var(--ease-out);
+  }
+  .conversation-sidebar-action svg,
+  .conversation-more svg,
+  .conversation-menu-button svg,
+  .conversation-rename-action svg {
+    width: 19px;
+    height: 19px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.65;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .conversation-sidebar-action:disabled,
+  .conversation-more:disabled,
+  .conversation-menu-button:disabled,
+  .conversation-rename-action:disabled {
+    opacity: .35;
+    cursor: default;
+  }
+  .conversation-pending-note {
+    min-height: 0;
+    margin: 0 8px;
+    overflow: hidden;
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.4;
+  }
+  .conversation-pending-note:not(:empty) {
+    min-height: 30px;
+    padding: 5px 0 8px;
+  }
+  .conversation-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 3px 0 16px;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+  }
+  .conversation-item {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 44px;
+    align-items: center;
+    min-height: 60px;
+    margin: 2px 0;
+    border-radius: 14px;
+  }
+  .conversation-item.active {
+    background: rgba(217,119,87,.09);
+  }
+  .conversation-select {
+    display: grid;
+    grid-template-columns: 8px minmax(0, 1fr);
+    gap: 8px;
+    align-items: center;
+    min-width: 0;
+    min-height: 60px;
+    padding: 8px 2px 8px 11px;
+    color: inherit;
+    background: transparent;
+    border: none;
+    border-radius: 14px 0 0 14px;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .conversation-select:disabled {
+    cursor: default;
+  }
+  .conversation-current-mark {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: transparent;
+  }
+  .conversation-item.active .conversation-current-mark {
+    background: var(--accent);
+  }
+  .conversation-copy {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    gap: 2px;
+  }
+  .conversation-title {
+    overflow: hidden;
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 610;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .conversation-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    color: var(--text-muted);
+    font-size: 11px;
+    line-height: 1.35;
+  }
+  .conversation-preview {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .conversation-time {
+    flex: none;
+    font-family: 'SF Mono', 'Fira Code', Menlo, Consolas, monospace;
+    font-size: 10px;
+  }
+  .conversation-more {
+    width: 44px;
+    height: 44px;
+  }
+  .conversation-menu {
+    position: absolute;
+    z-index: 2;
+    top: 47px;
+    right: 5px;
+    width: 132px;
+    padding: 5px;
+    background: var(--bg-card);
+    border-radius: 12px;
+    box-shadow: 0 12px 30px rgba(31,30,29,.14), 0 0 0 .5px rgba(31,30,29,.13);
+  }
+  .conversation-menu-button {
+    display: flex;
+    justify-content: flex-start;
+    gap: 8px;
+    width: 100%;
+    padding: 7px 10px;
+    font: inherit;
+    font-size: 13px;
+  }
+  .conversation-menu-button svg {
+    width: 17px;
+    height: 17px;
+  }
+  .conversation-menu-button.danger {
+    color: #9a3412;
+  }
+  .conversation-rename-form {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 44px 44px;
+    align-items: center;
+    min-height: 60px;
+    padding-left: 10px;
+  }
+  .conversation-rename-input {
+    min-width: 0;
+    height: 38px;
+    padding: 7px 10px;
+    color: var(--text-primary);
+    background: var(--bg-card);
+    border: none;
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    font: inherit;
+    font-size: 14px;
+    outline: none;
+  }
+  .conversation-live {
+    min-height: 20px;
+    padding: 0 8px;
+    color: var(--text-muted);
+    font-size: 11px;
+    line-height: 1.4;
+  }
+  .conversation-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 11;
+    padding: 0;
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+    border: none;
+    -webkit-tap-highlight-color: transparent;
+    visibility: hidden;
+    pointer-events: none;
+    transition: visibility 0s linear var(--motion-panel);
+  }
+  .app-shell.sidebar-is-open .conversation-scrim {
+    visibility: visible;
+    pointer-events: auto;
+    transition-delay: 0s;
+  }
+
+  @media (max-width: 899px) {
+    .chat-shell {
+      opacity: 1;
+      transition: opacity var(--motion-panel) var(--ease-drawer);
+    }
+    .app-shell.sidebar-is-open .chat-shell {
+      opacity: .52;
+    }
   }
 
   /* ===== 顶栏 ===== */
@@ -64,8 +396,21 @@
     display: flex;
     align-items: center;
     gap: 8px;
+    justify-self: start;
     min-width: 0;
+    min-height: 44px;
+    margin-left: -6px;
+    padding: 0 6px;
+    color: inherit;
+    background: transparent;
+    border: none;
+    border-radius: 12px;
+    font: inherit;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: opacity var(--motion-fast) ease;
   }
+  .brand-wrap:active { opacity: .62; }
   .model-control {
     position: relative;
     justify-self: center;
@@ -307,6 +652,46 @@
     white-space: pre-wrap;
     word-break: break-word;
   }
+  .msg.has-images {
+    min-width: min(280px, 72vw);
+    padding: 6px;
+  }
+  .msg.has-images .message-text:not(:empty) {
+    display: block;
+    padding: 6px 9px 9px;
+  }
+  .message-images {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 5px;
+    overflow: hidden;
+    border-radius: calc(var(--radius) - 4px);
+  }
+  .message-images.single { grid-template-columns: 1fr; }
+  .message-image {
+    display: block;
+    width: 100%;
+    height: 132px;
+    object-fit: cover;
+    background: rgba(31,30,29,.06);
+    border-radius: 8px;
+  }
+  .message-images.single .message-image {
+    height: auto;
+    max-height: 360px;
+    object-fit: contain;
+  }
+  .message-image-missing {
+    display: grid;
+    place-items: center;
+    min-height: 88px;
+    padding: 12px;
+    color: var(--text-muted);
+    background: rgba(31,30,29,.05);
+    border-radius: 8px;
+    font-size: 12px;
+    text-align: center;
+  }
   .msg.user {
     background: var(--accent);
     color: #fff;
@@ -543,13 +928,106 @@
   /* ===== 底部输入栏 ===== */
   .composer {
     flex: none;
-    display: flex;
-    align-items: flex-end;
-    gap: 10px;
     padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
     border-top: 0.5px solid rgba(31,30,29,0.12);
     background: var(--bg-primary);
   }
+  .composer-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+  }
+  .image-attach {
+    position: relative;
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 44px;
+    margin-left: -6px;
+    padding: 0;
+    color: var(--text-secondary);
+    background: transparent;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: color var(--motion-fast) ease, transform var(--motion-fast) var(--ease-out);
+    -webkit-tap-highlight-color: transparent;
+  }
+  .image-attach::after {
+    content: "";
+    position: absolute;
+    inset: 0 -2px;
+  }
+  .image-attach svg {
+    width: 20px;
+    height: 20px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.65;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .image-attach:disabled { opacity: .35; cursor: default; }
+  .composer-attachments {
+    display: none;
+    gap: 8px;
+    max-width: 100%;
+    margin: 0 0 9px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .composer-attachments::-webkit-scrollbar { display: none; }
+  .composer-attachments.has-images { display: flex; }
+  .composer-image {
+    position: relative;
+    flex: 0 0 76px;
+    width: 76px;
+    height: 76px;
+  }
+  .composer-image img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    background: rgba(31,30,29,.06);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+  }
+  .composer-image-remove {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    color: #fff;
+    background: rgba(31,30,29,.8);
+    border: 2px solid var(--bg-primary);
+    border-radius: 50%;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .composer-image-remove svg {
+    width: 12px;
+    height: 12px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+  }
+  .composer-status {
+    display: block;
+    min-height: 0;
+    margin: 7px 2px 0 42px;
+    color: var(--text-muted);
+    font-size: 11px;
+    line-height: 1.4;
+  }
+  .composer-status:empty { display: none; }
+  .composer-status.is-error { color: #9a3412; }
   #input {
     flex: 1;
     resize: none;
@@ -1106,6 +1584,89 @@
     font-size: 11px;
     line-height: 1.5;
   }
+  .tool-page-content {
+    max-width: 600px;
+    padding-top: 18px;
+  }
+  .tool-settings-card {
+    padding: 0;
+    overflow: hidden;
+  }
+  .tool-setting {
+    display: block;
+    padding: 15px;
+  }
+  .tool-setting + .tool-setting {
+    border-top: .5px solid rgba(31,30,29,.1);
+  }
+  .tool-setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+  }
+  .tool-setting-row > .settings-card-label { margin: 0; }
+  .setting-number-controls {
+    position: relative;
+    flex: none;
+    display: flex;
+    align-items: center;
+    padding: 1px;
+    background: rgba(31,30,29,.045);
+    border: .5px solid rgba(31,30,29,.13);
+    border-radius: 11px;
+  }
+  .setting-number-input {
+    width: 78px;
+    min-height: 40px;
+    padding: 8px 7px;
+    color: var(--text-primary);
+    background: transparent;
+    border: 0;
+    border-radius: 10px 0 0 10px;
+    outline: none;
+    font: 13px 'SF Mono', 'Fira Code', Menlo, Consolas, monospace;
+    text-align: center;
+    appearance: textfield;
+  }
+  .setting-number-input::-webkit-inner-spin-button,
+  .setting-number-input::-webkit-outer-spin-button { appearance: none; margin: 0; }
+  .setting-number-input::placeholder { color: var(--text-muted); }
+  .tool-setting-error {
+    display: block;
+    min-height: 17px;
+    margin: 7px 1px 0;
+    color: #9a3412;
+    font-size: 11px;
+    line-height: 1.4;
+  }
+  .quality-options {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1px;
+    padding: 2px;
+    background: rgba(31,30,29,.055);
+    border: .5px solid rgba(31,30,29,.08);
+    border-radius: 11px;
+  }
+  .quality-option {
+    position: relative;
+    min-height: 42px;
+    padding: 7px 10px;
+    color: var(--text-secondary);
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .quality-option[aria-pressed="true"] {
+    color: #fff;
+    background: var(--btn-primary-bg);
+  }
+  .quality-option:active { transform: scale(.98); }
   .settings-footer {
     flex: none;
     padding: 12px 18px calc(14px + env(safe-area-inset-bottom));
@@ -1250,7 +1811,54 @@
     }
   }
 
+  @media (min-width: 900px) {
+    .conversation-sidebar {
+      position: relative;
+      inset: auto;
+      z-index: 5;
+      flex: none;
+      width: 0;
+      height: 100%;
+      border-right-color: transparent;
+      box-shadow: none;
+      visibility: visible;
+      pointer-events: none;
+      transform: none;
+      -webkit-backface-visibility: visible;
+      backface-visibility: visible;
+      will-change: auto;
+      transition: none;
+    }
+    .conversation-sidebar-inner {
+      width: 288px;
+      opacity: 0;
+      transform: translateX(-18px);
+      transition:
+        opacity var(--motion-fast) ease,
+        transform var(--motion-panel) var(--ease-out);
+    }
+    .app-shell.sidebar-is-open .conversation-sidebar {
+      width: 288px;
+      border-right-color: rgba(31,30,29,.13);
+      pointer-events: auto;
+      transform: none;
+    }
+    .app-shell.sidebar-is-open .conversation-sidebar-inner {
+      opacity: 1;
+      transform: translateX(0);
+    }
+    .conversation-title { font-size: 15px; }
+    .conversation-meta { font-size: 12px; }
+    .conversation-time { font-size: 11px; }
+    .conversation-scrim { display: none; }
+  }
+
   @media (hover: hover) and (pointer: fine) {
+    .conversation-sidebar-action:hover:not(:disabled),
+    .conversation-more:hover:not(:disabled),
+    .conversation-menu-button:hover:not(:disabled),
+    .conversation-rename-action:hover:not(:disabled),
+    .conversation-select:hover:not(:disabled),
     .model-quick:hover,
     .icon-button:hover,
     .settings-back:hover,
@@ -1273,6 +1881,30 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
+    .conversation-sidebar,
+    .conversation-sidebar-inner,
+    .conversation-scrim,
+    .chat-shell,
+    .app-status {
+      transition: opacity var(--motion-fast) ease, visibility 0s linear var(--motion-fast);
+    }
+    .app-status,
+    .app-status.is-visible { transform: translate(-50%, 0); }
+    .conversation-sidebar {
+      transform: none;
+      opacity: 0;
+    }
+    .app-shell.sidebar-is-open .conversation-sidebar {
+      opacity: 1;
+      transform: none;
+    }
+    .conversation-sidebar-inner { transform: none; }
+    .conversation-sidebar-action:active,
+    .conversation-more:active,
+    .conversation-menu-button:active,
+    .conversation-rename-action:active {
+      transform: none;
+    }
     .model-quick svg,
     .reasoning-chevron,
     .citations-chevron {
@@ -1319,21 +1951,44 @@
 </style>
 </head>
 <body>
-  <div class="gate" id="gate" style="display:none">
-    <div class="gate-card">
-      <div class="gate-brand">ember</div>
+  <div class="gate" id="gate" role="dialog" aria-modal="true" aria-labelledby="gate-title" style="display:none">
+    <form class="gate-card" id="gate-form">
+      <div class="gate-brand" id="gate-title">ember</div>
       <div class="gate-hint">请输入访问密码</div>
+      <input type="text" name="username" value="ember" autocomplete="username" hidden />
       <input class="gate-input" id="gate-input" type="password" placeholder="密码" autocomplete="current-password" />
-      <button class="gate-btn" id="gate-btn">进入</button>
+      <button class="gate-btn" id="gate-btn" type="submit">进入</button>
       <div class="gate-err" id="gate-err"></div>
-    </div>
+    </form>
   </div>
 
+  <div class="app-status" id="app-status" role="alert" aria-atomic="true"></div>
+
+  <div class="app-shell" id="app-shell">
+    <aside class="conversation-sidebar" id="conversation-sidebar" aria-label="会话列表" aria-hidden="true">
+      <div class="conversation-sidebar-inner">
+        <header class="conversation-sidebar-header">
+          <h2 id="conversation-sidebar-title">会话</h2>
+          <button class="conversation-sidebar-action" id="conversation-new" type="button" aria-label="新建会话">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+          </button>
+          <button class="conversation-sidebar-action" id="conversation-close" type="button" aria-label="关闭会话列表">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg>
+          </button>
+        </header>
+        <p class="conversation-pending-note" id="conversation-pending-note"></p>
+        <nav class="conversation-list" id="conversation-list" aria-label="最近会话"></nav>
+        <div class="conversation-live" id="conversation-live" aria-live="polite"></div>
+      </div>
+    </aside>
+    <button class="conversation-scrim" id="conversation-scrim" type="button" aria-hidden="true" tabindex="-1"></button>
+
+    <div class="chat-shell" id="chat-shell">
   <header class="topbar">
-    <div class="brand-wrap">
+    <button class="brand-wrap" id="conversations-open" type="button" aria-label="打开会话列表" aria-controls="conversation-sidebar" aria-expanded="false">
       <span class="spark"></span>
       <span class="brand">ember</span>
-    </div>
+    </button>
     <div class="model-control">
       <button class="model-quick" id="model-quick" type="button" aria-expanded="false" aria-controls="quick-panel">
         <span class="model-quick-label" id="model-quick-label">Opus 4.6</span>
@@ -1354,14 +2009,14 @@
       </div>
     </div>
     <div class="topbar-actions">
-      <button class="icon-button" id="export-chat" type="button" aria-label="下载全部对话" disabled>
+      <button class="icon-button" id="export-chat" type="button" aria-label="下载当前会话" disabled>
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M12 3v12"></path>
           <path d="m7.5 10.5 4.5 4.5 4.5-4.5"></path>
           <path d="M5 20h14"></path>
         </svg>
       </button>
-      <button class="icon-button tool-clear" id="clear-chat" type="button" aria-label="清空全部对话" disabled>
+      <button class="icon-button tool-clear" id="clear-chat" type="button" aria-label="清空当前会话" disabled>
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M4 7h16"></path>
           <path d="m9 7 .7-2h4.6l.7 2"></path>
@@ -1418,6 +2073,32 @@
               <span class="settings-nav-copy">
                 <strong class="settings-nav-title">对话与导出</strong>
                 <span class="settings-nav-summary" id="settings-identity-summary">你 / 助手 · 自动命名</span>
+              </span>
+              <svg class="settings-nav-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+            </button>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <p class="settings-section-title">工具</p>
+          <div class="settings-nav-group">
+            <button class="settings-nav-row" id="settings-web-open" type="button">
+              <span class="settings-nav-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"></circle><path d="m16 16 4 4"></path><path d="M8 11h6M11 8v6"></path></svg>
+              </span>
+              <span class="settings-nav-copy">
+                <strong class="settings-nav-title">联网搜索</strong>
+                <span class="settings-nav-summary" id="settings-web-summary">开启 · 自动</span>
+              </span>
+              <svg class="settings-nav-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+            </button>
+            <button class="settings-nav-row" id="settings-image-open" type="button">
+              <span class="settings-nav-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"></rect><circle cx="9" cy="10" r="1.5"></circle><path d="m5.5 17 4.5-4 3.2 2.8 2.4-2.2 2.9 3.4"></path></svg>
+              </span>
+              <span class="settings-nav-copy">
+                <strong class="settings-nav-title">图片发送</strong>
+                <span class="settings-nav-summary" id="settings-image-summary">最多 8 张 · 自动压缩</span>
               </span>
               <svg class="settings-nav-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
             </button>
@@ -1538,14 +2219,98 @@
     </div>
   </section>
 
+  <section class="settings-screen settings-child-screen" id="web-settings-screen" role="dialog" aria-modal="true" aria-hidden="true" aria-label="设置联网搜索">
+    <header class="settings-header">
+      <button class="settings-back" id="web-settings-back" type="button" aria-label="返回设置">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+      </button>
+      <h2>联网搜索</h2>
+      <span aria-hidden="true"></span>
+    </header>
+    <div class="settings-scroll">
+      <div class="settings-content tool-page-content">
+        <div class="settings-card tool-settings-card">
+          <div class="tool-setting">
+            <div class="tool-setting-row">
+              <label class="settings-card-label" for="web-search-max-uses">最大搜索次数</label>
+              <span class="setting-number-controls">
+                <input class="setting-number-input" id="web-search-max-uses" type="number" min="1" max="30" step="1" inputmode="numeric" placeholder="自动" aria-describedby="web-search-max-uses-note web-search-max-uses-error" />
+                <button class="token-step" id="web-search-max-uses-down" type="button" aria-label="减少一次搜索">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg>
+                </button>
+                <button class="token-step" id="web-search-max-uses-up" type="button" aria-label="增加一次搜索">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 14 5-5 5 5"/></svg>
+                </button>
+              </span>
+            </div>
+            <p class="settings-note" id="web-search-max-uses-note">留空为自动，由模型按问题需要决定搜索次数。</p>
+            <output class="tool-setting-error" id="web-search-max-uses-error"></output>
+          </div>
+          <div class="tool-setting">
+            <div class="tool-setting-row">
+              <label class="settings-card-label" for="web-search-max-results">每次结果数</label>
+              <span class="setting-number-controls">
+                <input class="setting-number-input" id="web-search-max-results" type="number" min="1" max="25" step="1" inputmode="numeric" placeholder="自动" aria-describedby="web-search-max-results-note web-search-max-results-error" />
+                <button class="token-step" id="web-search-max-results-down" type="button" aria-label="减少一条搜索结果">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg>
+                </button>
+                <button class="token-step" id="web-search-max-results-up" type="button" aria-label="增加一条搜索结果">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 14 5-5 5 5"/></svg>
+                </button>
+              </span>
+            </div>
+            <p class="settings-note" id="web-search-max-results-note">留空使用 OpenRouter 默认值；部分模型的原生搜索会忽略这个设置。</p>
+            <output class="tool-setting-error" id="web-search-max-results-error"></output>
+          </div>
+        </div>
+        <p class="settings-note">开关仍在顶部模型下拉菜单；这里保存的是搜索开启时使用的限制。</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="settings-screen settings-child-screen" id="image-settings-screen" role="dialog" aria-modal="true" aria-hidden="true" aria-label="设置图片发送">
+    <header class="settings-header">
+      <button class="settings-back" id="image-settings-back" type="button" aria-label="返回设置">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+      </button>
+      <h2>图片发送</h2>
+      <span aria-hidden="true"></span>
+    </header>
+    <div class="settings-scroll">
+      <div class="settings-content tool-page-content">
+        <div class="settings-card tool-settings-card">
+          <div class="tool-setting">
+            <span class="settings-card-label">图片质量</span>
+            <div class="quality-options" id="image-quality-options" role="group" aria-label="图片发送质量">
+              <button class="quality-option" type="button" data-quality="auto" aria-pressed="true">自动压缩</button>
+              <button class="quality-option" type="button" data-quality="original" aria-pressed="false">保留原图</button>
+            </div>
+            <p class="settings-note" id="image-quality-note">自动压缩会在发送前缩小大图，更快也更省上传量。</p>
+          </div>
+        </div>
+        <p class="settings-note">每条消息最多 8 张，图片合计不超过 6MB。图片只保存在这台设备。</p>
+      </div>
+    </div>
+  </section>
+
   <main class="messages" id="messages">
     <div class="hint" id="hint">开始一段对话</div>
   </main>
 
   <form class="composer" id="composer">
-    <textarea id="input" rows="1" placeholder="发消息…" autocomplete="off"></textarea>
-    <button type="submit" id="send" aria-label="发送">↑</button>
+    <div class="composer-attachments" id="composer-attachments" aria-label="待发送图片"></div>
+    <div class="composer-row">
+      <input id="image-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden />
+      <button class="image-attach" id="image-attach" type="button" aria-label="添加图片">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"></rect><circle cx="9" cy="10" r="1.5"></circle><path d="m5.5 17 4.5-4 3.2 2.8 2.4-2.2 2.9 3.4"></path></svg>
+      </button>
+      <textarea id="input" rows="1" placeholder="发消息…" autocomplete="off"></textarea>
+      <button type="submit" id="send" aria-label="发送">↑</button>
+    </div>
+    <output class="composer-status" id="composer-status" aria-live="polite"></output>
   </form>
+    </div>
+  </div>
 
 <script>
   // ===== 可配置常量 =====
@@ -1554,7 +2319,11 @@
   const DEFAULT_MODEL = "anthropic/claude-opus-4.6";
 
   const PW_KEY = "ember_pw";  // 访问密码在本设备浏览器的存储键
-  const CHAT_KEY = "ember_messages";
+  const LEGACY_CHAT_KEY = "ember_messages";
+  const CONVERSATIONS_KEY = "ember_conversations_v1";
+  const CORRUPT_CONVERSATIONS_BACKUP_KEY = "ember_conversations_v1_corrupt_backup";
+  const CONVERSATION_TITLE_MAX_CHARACTERS = 48;
+  const SIDEBAR_OPEN_KEY = "ember_sidebar_desktop_open";
   const LEGACY_REASONING_KEY = "ember_reasoning";
   const MODEL_KEY = "ember_model";
   const FAVORITES_KEY = "ember_model_favorites";
@@ -1565,8 +2334,23 @@
   const USER_NAME_KEY = "ember_user_name";
   const ASSISTANT_NAME_KEY = "ember_assistant_name";
   const EXPORT_FILE_NAME_KEY = "ember_export_file_name";
-  const SESSION_KEY = "ember_session_id";
+  const LEGACY_SESSION_KEY = "ember_session_id";
   const WEB_KEY = "ember_web";
+  const WEB_MAX_USES_KEY = "ember_web_max_uses";
+  const WEB_MAX_RESULTS_KEY = "ember_web_max_results";
+  const IMAGE_QUALITY_KEY = "ember_image_quality";
+  const IMAGE_DB_NAME = "ember_images_v1";
+  const IMAGE_DB_STORE = "images";
+  const MAX_IMAGES_PER_MESSAGE = 8;
+  const MAX_IMAGE_BYTES_PER_MESSAGE = 6 * 1024 * 1024;
+  const AUTO_IMAGE_MAX_DIMENSION = 2200;
+  const AUTO_IMAGE_QUALITY = .88;
+  const SUPPORTED_IMAGE_TYPES = new Set([
+    "image/png",
+    "image/jpeg",
+    "image/webp",
+    "image/gif",
+  ]);
   const EFFORT_OPTIONS = [
     { value: "off", label: "关闭" },
     { value: "low", label: "低" },
@@ -1575,7 +2359,9 @@
   ];
 
   // ===== 状态 =====
-  const messages = loadMessages(); // 对话历史，保存在本设备浏览器
+  let conversationStoreLoadWarning = "";
+  let conversationStoreRecoveryRaw = "";
+  let conversationStore = loadConversationStore();
   let pending = false;        // 是否正在等回复，防止重复发送
   let accessPw = localStorage.getItem(PW_KEY) || "";  // 访问密码，存在本设备浏览器
   let currentModel = localStorage.getItem(MODEL_KEY) || DEFAULT_MODEL;
@@ -1588,7 +2374,9 @@
   let assistantDisplayName = normalizeDisplayName(localStorage.getItem(ASSISTANT_NAME_KEY), "助手");
   let exportFileName = normalizeExportFileName(localStorage.getItem(EXPORT_FILE_NAME_KEY));
   let webSearchEnabled = localStorage.getItem(WEB_KEY) !== "0";
-  let sessionId = loadSessionId();
+  let webSearchMaxUses = loadBoundedInteger(WEB_MAX_USES_KEY, 1, 30);
+  let webSearchMaxResults = loadBoundedInteger(WEB_MAX_RESULTS_KEY, 1, 25);
+  let imageQuality = normalizeImageQuality(localStorage.getItem(IMAGE_QUALITY_KEY));
   let modelsLoadedThisPage = false;
   let modelsLoading = false;
   let draftModel = currentModel;
@@ -1598,9 +2386,34 @@
   let draftUserDisplayName = userDisplayName;
   let draftAssistantDisplayName = assistantDisplayName;
   let draftExportFileName = exportFileName;
+  let draftWebSearchMaxUses = webSearchMaxUses === null ? "" : String(webSearchMaxUses);
+  let draftWebSearchMaxResults = webSearchMaxResults === null ? "" : String(webSearchMaxResults);
+  let draftImageQuality = imageQuality;
   let settingsSnapshot = "";
   let settingsTrigger = null;
+  let conversationMenuId = null;
+  let renamingConversationId = null;
+  let conversationSidebarTrigger = null;
+  let pendingImages = [];
+  let imageProcessingQueue = Promise.resolve();
+  let imageProcessingJobs = 0;
+  let imageCapabilityLookupAttempted = false;
+  let messageObjectUrls = [];
+  const desktopSidebarMedia = window.matchMedia("(min-width: 900px)");
+  let sidebarOpen = desktopSidebarMedia.matches && loadSidebarPreference();
 
+  const appStatus = document.getElementById("app-status");
+  const appShell = document.getElementById("app-shell");
+  const chatShell = document.getElementById("chat-shell");
+  const conversationSidebar = document.getElementById("conversation-sidebar");
+  const conversationScrim = document.getElementById("conversation-scrim");
+  const conversationsOpen = document.getElementById("conversations-open");
+  const conversationClose = document.getElementById("conversation-close");
+  const conversationNew = document.getElementById("conversation-new");
+  const conversationList = document.getElementById("conversation-list");
+  const conversationPendingNote = document.getElementById("conversation-pending-note");
+  const conversationLive = document.getElementById("conversation-live");
+  const topbarEl = document.querySelector(".topbar");
   const messagesEl = document.getElementById("messages");
   const hintEl = document.getElementById("hint");
   const input = document.getElementById("input");
@@ -1622,10 +2435,14 @@
   const settingsModelOpen = document.getElementById("settings-model-open");
   const settingsPromptOpen = document.getElementById("settings-prompt-open");
   const settingsIdentityOpen = document.getElementById("settings-identity-open");
+  const settingsWebOpen = document.getElementById("settings-web-open");
+  const settingsImageOpen = document.getElementById("settings-image-open");
   const settingsModelName = document.getElementById("settings-model-name");
   const settingsModelId = document.getElementById("settings-model-id");
   const settingsPromptSummary = document.getElementById("settings-prompt-summary");
   const settingsIdentitySummary = document.getElementById("settings-identity-summary");
+  const settingsWebSummary = document.getElementById("settings-web-summary");
+  const settingsImageSummary = document.getElementById("settings-image-summary");
   const settingsEffortOptions = document.getElementById("settings-effort-options");
   const reasoningNote = document.getElementById("reasoning-note");
   const maxCompletionTokensInput = document.getElementById("max-completion-tokens");
@@ -1651,10 +2468,28 @@
   const userDisplayNameInput = document.getElementById("user-display-name");
   const assistantDisplayNameInput = document.getElementById("assistant-display-name");
   const exportFileNameInput = document.getElementById("export-file-name");
+  const webSettingsScreen = document.getElementById("web-settings-screen");
+  const webSettingsBack = document.getElementById("web-settings-back");
+  const webSearchMaxUsesInput = document.getElementById("web-search-max-uses");
+  const webSearchMaxUsesError = document.getElementById("web-search-max-uses-error");
+  const webSearchMaxUsesDown = document.getElementById("web-search-max-uses-down");
+  const webSearchMaxUsesUp = document.getElementById("web-search-max-uses-up");
+  const webSearchMaxResultsInput = document.getElementById("web-search-max-results");
+  const webSearchMaxResultsError = document.getElementById("web-search-max-results-error");
+  const webSearchMaxResultsDown = document.getElementById("web-search-max-results-down");
+  const webSearchMaxResultsUp = document.getElementById("web-search-max-results-up");
+  const imageSettingsScreen = document.getElementById("image-settings-screen");
+  const imageSettingsBack = document.getElementById("image-settings-back");
+  const imageQualityOptions = document.getElementById("image-quality-options");
+  const imageQualityNote = document.getElementById("image-quality-note");
   const composer = document.getElementById("composer");
+  const imageFileInput = document.getElementById("image-file");
+  const imageAttach = document.getElementById("image-attach");
+  const composerAttachments = document.getElementById("composer-attachments");
+  const composerStatus = document.getElementById("composer-status");
   const gate = document.getElementById("gate");
+  const gateForm = document.getElementById("gate-form");
   const gateInput = document.getElementById("gate-input");
-  const gateBtn = document.getElementById("gate-btn");
   const gateErr = document.getElementById("gate-err");
 
   // ===== 工具函数 =====
@@ -1665,6 +2500,138 @@
     } catch {
       return fallback;
     }
+  }
+
+  function loadBoundedInteger(key, min, max) {
+    const raw = localStorage.getItem(key);
+    if (raw === null || raw === "") return null;
+    const value = Number(raw);
+    return Number.isSafeInteger(value) && value >= min && value <= max
+      ? value
+      : null;
+  }
+
+  function normalizeImageQuality(value) {
+    return value === "original" ? "original" : "auto";
+  }
+
+  function createImageId() {
+    if (typeof crypto?.randomUUID === "function") return `image-${crypto.randomUUID()}`;
+    return `image-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+  }
+
+  function openImageDb() {
+    return new Promise((resolve, reject) => {
+      if (!window.indexedDB) {
+        reject(new Error("这个浏览器不支持本地图片存储"));
+        return;
+      }
+      const request = indexedDB.open(IMAGE_DB_NAME, 1);
+      request.onupgradeneeded = () => {
+        if (!request.result.objectStoreNames.contains(IMAGE_DB_STORE)) {
+          request.result.createObjectStore(IMAGE_DB_STORE, { keyPath: "id" });
+        }
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error || new Error("打开图片存储失败"));
+    });
+  }
+
+  function transactionDone(transaction) {
+    return new Promise((resolve, reject) => {
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error || new Error("图片存储失败"));
+      transaction.onabort = () => reject(transaction.error || new Error("图片存储已取消"));
+    });
+  }
+
+  async function putImageRecords(records) {
+    if (!records.length) return;
+    const db = await openImageDb();
+    try {
+      const transaction = db.transaction(IMAGE_DB_STORE, "readwrite");
+      const done = transactionDone(transaction);
+      const store = transaction.objectStore(IMAGE_DB_STORE);
+      records.forEach((record) => store.put(record));
+      await done;
+    } finally {
+      db.close();
+    }
+  }
+
+  async function getImageRecords(attachments) {
+    if (!attachments.length) return [];
+    const db = await openImageDb();
+    try {
+      const transaction = db.transaction(IMAGE_DB_STORE, "readonly");
+      const done = transactionDone(transaction);
+      const store = transaction.objectStore(IMAGE_DB_STORE);
+      const results = await Promise.all(attachments.map((attachment) => new Promise((resolve) => {
+        const request = store.get(attachment.id);
+        request.onsuccess = () => resolve(request.result || null);
+        request.onerror = () => resolve(null);
+      })));
+      await done;
+      return results;
+    } finally {
+      db.close();
+    }
+  }
+
+  async function deleteImageRecords(attachments) {
+    const ids = attachments.map((attachment) => attachment?.id).filter(Boolean);
+    if (!ids.length) return;
+    const db = await openImageDb();
+    try {
+      const transaction = db.transaction(IMAGE_DB_STORE, "readwrite");
+      const done = transactionDone(transaction);
+      const store = transaction.objectStore(IMAGE_DB_STORE);
+      ids.forEach((id) => store.delete(id));
+      await done;
+    } finally {
+      db.close();
+    }
+  }
+
+  async function listImageRecordIds() {
+    const db = await openImageDb();
+    try {
+      const transaction = db.transaction(IMAGE_DB_STORE, "readonly");
+      const done = transactionDone(transaction);
+      const request = transaction.objectStore(IMAGE_DB_STORE).getAllKeys();
+      const ids = await new Promise((resolve, reject) => {
+        request.onsuccess = () => resolve(request.result || []);
+        request.onerror = () => reject(request.error || new Error("读取图片索引失败"));
+      });
+      await done;
+      return ids.filter((id) => typeof id === "string");
+    } finally {
+      db.close();
+    }
+  }
+
+  async function cleanupOrphanedImageRecords() {
+    const liveIds = new Set(
+      conversationStore.conversations.flatMap((conversation) =>
+        conversation.messages.flatMap((message) =>
+          (message.attachments || []).map((attachment) => attachment.id)
+        )
+      )
+    );
+    const storedIds = await listImageRecordIds();
+    const orphaned = storedIds
+      .filter((id) => !liveIds.has(id))
+      .map((id) => ({ id }));
+    if (orphaned.length) await deleteImageRecords(orphaned);
+  }
+
+  function blobToDataUrl(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(reader.error || new Error("读取图片失败"));
+      reader.readAsDataURL(blob);
+    });
   }
 
   function normalizeDisplayName(value, fallback) {
@@ -1724,12 +2691,285 @@
     return `chat-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
   }
 
-  function loadSessionId() {
-    const saved = localStorage.getItem(SESSION_KEY);
-    if (saved && saved.length <= 256) return saved;
-    const created = createSessionId();
-    localStorage.setItem(SESSION_KEY, created);
-    return created;
+  function createConversationId() {
+    if (typeof crypto?.randomUUID === "function") return `conversation-${crypto.randomUUID()}`;
+    return `conversation-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+  }
+
+  function visibleCharacters(value) {
+    const text = String(value || "");
+    if (typeof Intl?.Segmenter === "function") {
+      return Array.from(new Intl.Segmenter("zh-CN", { granularity: "grapheme" }).segment(text), (item) => item.segment);
+    }
+    return Array.from(text);
+  }
+
+  function normalizeConversationTitle(value) {
+    const normalized = String(value || "")
+      .replace(/[\r\n\t]+/g, " ")
+      .replace(/\s+/g, " ")
+      .replace(/[\p{Extended_Pictographic}\p{Emoji_Modifier}\uFE0E\uFE0F\u200D]/gu, "")
+      .replace(/^[\s"'“”‘’「」『』《》【】]+|[\s"'“”‘’「」『』《》【】]+$/gu, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    const title = visibleCharacters(normalized)
+      .slice(0, CONVERSATION_TITLE_MAX_CHARACTERS)
+      .join("")
+      .trim();
+    return /[\p{L}\p{N}]/u.test(title) ? title : "";
+  }
+
+  function titleFromFirstMessage(messages) {
+    const firstUser = messages.find((item) =>
+      item.role === "user" && (item.content.trim() || item.attachments?.length)
+    );
+    return normalizeConversationTitle(firstUser?.content) ||
+      (firstUser?.attachments?.length ? "图片对话" : "新对话");
+  }
+
+  function normalizeMessageAttachments(items) {
+    if (!Array.isArray(items)) return [];
+    const seen = new Set();
+    const attachments = [];
+    for (const item of items) {
+      const id = typeof item?.id === "string" ? item.id.trim() : "";
+      if (
+        !id ||
+        seen.has(id) ||
+        id.length > 160 ||
+        !/^[A-Za-z0-9._:-]+$/.test(id)
+      ) continue;
+      const type = SUPPORTED_IMAGE_TYPES.has(item?.type) ? item.type : "";
+      const size = Number.isSafeInteger(item?.size) && item.size > 0
+        ? item.size
+        : 0;
+      if (!type || !size) continue;
+      seen.add(id);
+      attachments.push({
+        id,
+        name: String(item?.name || "图片").replace(/[\r\n\t]+/g, " ").trim().slice(0, 120) || "图片",
+        type,
+        size,
+      });
+      if (attachments.length >= MAX_IMAGES_PER_MESSAGE) break;
+    }
+    return attachments;
+  }
+
+  function normalizeStoredMessages(items) {
+    if (!Array.isArray(items)) return [];
+    return items.filter((item) =>
+      (item?.role === "user" || item?.role === "assistant") &&
+      typeof item.content === "string"
+    ).map((item) => {
+      const attachments = item.role === "user"
+        ? normalizeMessageAttachments(item.attachments)
+        : [];
+      return {
+        role: item.role,
+        content: item.content,
+        ...(attachments.length ? { attachments } : {}),
+      };
+    });
+  }
+
+  function validStoredDate(value, fallback) {
+    return typeof value === "string" && Number.isFinite(Date.parse(value))
+      ? value
+      : fallback;
+  }
+
+  function createConversation({ messages = [], sessionId = "", createdAt = new Date().toISOString() } = {}) {
+    const safeMessages = normalizeStoredMessages(messages);
+    const title = titleFromFirstMessage(safeMessages);
+    return {
+      id: createConversationId(),
+      title,
+      titleSource: title === "新对话" ? "default" : "fallback",
+      messages: safeMessages,
+      sessionId: sessionId && sessionId.length <= 256 ? sessionId : createSessionId(),
+      createdAt,
+      updatedAt: createdAt,
+    };
+  }
+
+  function isRecoverableConversationStore(value) {
+    return Boolean(
+      value &&
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      value.version === 1 &&
+      Array.isArray(value.conversations) &&
+      value.conversations.some((item) =>
+        item &&
+        typeof item === "object" &&
+        !Array.isArray(item) &&
+        Array.isArray(item.messages)
+      )
+    );
+  }
+
+  function preserveCorruptConversationStore(rawValue) {
+    if (!rawValue) return true;
+    conversationStoreRecoveryRaw = rawValue;
+    try {
+      if (localStorage.getItem(CORRUPT_CONVERSATIONS_BACKUP_KEY) !== rawValue) {
+        localStorage.setItem(CORRUPT_CONVERSATIONS_BACKUP_KEY, rawValue);
+      }
+      return localStorage.getItem(CORRUPT_CONVERSATIONS_BACKUP_KEY) === rawValue;
+    } catch {
+      return false;
+    }
+  }
+
+  function normalizeConversationStore(value) {
+    const source = value && typeof value === "object" ? value : {};
+    const seenIds = new Set();
+    const seenSessions = new Set();
+    const now = new Date().toISOString();
+    const titleSources = new Set(["default", "fallback", "deepseek", "manual"]);
+    const conversations = [];
+
+    for (const item of Array.isArray(source.conversations) ? source.conversations : []) {
+      if (!item || typeof item !== "object" || !Array.isArray(item.messages)) continue;
+      const messages = normalizeStoredMessages(item?.messages);
+      let id = typeof item?.id === "string" &&
+        item.id.trim().length <= 160 &&
+        /^[A-Za-z0-9._:-]+$/.test(item.id.trim())
+        ? item.id.trim()
+        : "";
+      if (!id || seenIds.has(id)) id = createConversationId();
+      seenIds.add(id);
+
+      let sessionId = typeof item?.sessionId === "string" && item.sessionId.trim().length <= 256
+        ? item.sessionId.trim()
+        : "";
+      if (!sessionId || seenSessions.has(sessionId)) sessionId = createSessionId();
+      seenSessions.add(sessionId);
+
+      const createdAt = validStoredDate(item?.createdAt, now);
+      const updatedAt = validStoredDate(item?.updatedAt, createdAt);
+      const fallbackTitle = titleFromFirstMessage(messages);
+      const title = normalizeConversationTitle(item?.title) || fallbackTitle;
+      const titleSource = titleSources.has(item?.titleSource)
+        ? item.titleSource
+        : title === "新对话" ? "default" : "fallback";
+
+      conversations.push({
+        id,
+        title,
+        titleSource,
+        messages,
+        sessionId,
+        createdAt,
+        updatedAt,
+      });
+    }
+
+    if (!conversations.length) conversations.push(createConversation());
+    const activeId = conversations.some((item) => item.id === source.activeId)
+      ? source.activeId
+      : conversations[0].id;
+    return { version: 1, activeId, conversations };
+  }
+
+  function loadLegacyMessages() {
+    try {
+      return normalizeStoredMessages(JSON.parse(localStorage.getItem(LEGACY_CHAT_KEY) || "[]"));
+    } catch {
+      return [];
+    }
+  }
+
+  function loadLegacySessionId() {
+    const saved = localStorage.getItem(LEGACY_SESSION_KEY);
+    return saved && saved.length <= 256 ? saved : createSessionId();
+  }
+
+  function loadConversationStore() {
+    const stored = localStorage.getItem(CONVERSATIONS_KEY);
+    let mayReplaceStoredValue = !stored;
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        if (isRecoverableConversationStore(parsed)) {
+          const normalized = normalizeConversationStore(parsed);
+          const isCanonical = JSON.stringify(parsed) === JSON.stringify(normalized);
+          const mayReplaceNormalizedValue = isCanonical ||
+            preserveCorruptConversationStore(stored);
+          if (!isCanonical) {
+            conversationStoreLoadWarning = mayReplaceNormalizedValue
+              ? "检测到部分损坏的会话索引；可恢复会话已保留，原数据已留作本机备份。"
+              : "检测到部分损坏的会话索引；为避免覆盖原数据，本次更改暂不能保存。";
+          }
+          if (mayReplaceNormalizedValue) {
+            try {
+              localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(normalized));
+            } catch {
+              conversationStoreLoadWarning = "本地存储已满；刷新前请先下载或删除旧会话。";
+            }
+          }
+          return normalized;
+        }
+      } catch {
+        // 继续走下方的旧版历史恢复。
+      }
+      mayReplaceStoredValue = preserveCorruptConversationStore(stored);
+      conversationStoreLoadWarning = mayReplaceStoredValue
+        ? "检测到损坏的会话索引；旧历史已恢复，原数据已留作本机备份。"
+        : "检测到损坏的会话索引；为避免覆盖原数据，本次更改暂不能保存。";
+    }
+
+    const migrated = normalizeConversationStore({
+      version: 1,
+      conversations: [createConversation({
+        messages: loadLegacyMessages(),
+        sessionId: loadLegacySessionId(),
+      })],
+    });
+    migrated.activeId = migrated.conversations[0].id;
+    if (mayReplaceStoredValue) {
+      try {
+        localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(migrated));
+      } catch {
+        conversationStoreLoadWarning = "暂时无法保存会话索引；旧版历史仍保留在本机。";
+      }
+    }
+    return migrated;
+  }
+
+  function cloneConversationStore() {
+    return JSON.parse(JSON.stringify(conversationStore));
+  }
+
+  function getActiveConversation(store = conversationStore) {
+    return store.conversations.find((item) => item.id === store.activeId) || store.conversations[0];
+  }
+
+  function conversationById(conversationId, store = conversationStore) {
+    return store.conversations.find((item) => item.id === conversationId) || null;
+  }
+
+  function persistConversationStore(nextStore, { keepInMemoryOnFailure = false } = {}) {
+    const normalized = normalizeConversationStore(nextStore);
+    if (
+      conversationStoreRecoveryRaw &&
+      !preserveCorruptConversationStore(conversationStoreRecoveryRaw)
+    ) {
+      showAppStatus("本地存储空间不足，无法备份损坏数据；为避免覆盖，暂未保存这次更改。");
+      return false;
+    }
+    try {
+      localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(normalized));
+      conversationStore = normalized;
+      conversationStoreRecoveryRaw = "";
+      showAppStatus("");
+      return true;
+    } catch {
+      if (keepInMemoryOnFailure) conversationStore = normalized;
+      showAppStatus("本地存储已满，请先下载或删除旧会话。");
+      return false;
+    }
   }
 
   function normalizeFavorites(items) {
@@ -1763,6 +3003,9 @@
       pricing: item?.pricing && typeof item.pricing === "object" ? item.pricing : null,
       reasoning: item?.reasoning && typeof item.reasoning === "object" ? item.reasoning : null,
       supportedParameters: Array.isArray(item?.supportedParameters) ? item.supportedParameters : [],
+      inputModalities: Array.isArray(item?.inputModalities)
+        ? item.inputModalities.filter((modality) => typeof modality === "string")
+        : [],
     };
   }
 
@@ -1802,6 +3045,11 @@
 
   function modelById(modelId) {
     return fetchedModels.find((item) => item.id === modelId) || null;
+  }
+
+  function modelImageCapability(model) {
+    if (!model || !model.inputModalities.length) return "unknown";
+    return model.inputModalities.includes("image") ? "supported" : "unsupported";
   }
 
   function modelLabel(modelId) {
@@ -1874,6 +3122,9 @@
       userDisplayName: userDisplayNameInput.value,
       assistantDisplayName: assistantDisplayNameInput.value,
       exportFileName: exportFileNameInput.value,
+      webSearchMaxUses: draftWebSearchMaxUses,
+      webSearchMaxResults: draftWebSearchMaxResults,
+      imageQuality: draftImageQuality,
     });
   }
 
@@ -1898,13 +3149,54 @@
     const message = maxTokensValidationMessage();
     maxTokensError.textContent = message;
     maxCompletionTokensInput.setAttribute("aria-invalid", String(Boolean(message)));
-    settingsSave.disabled = Boolean(message);
     return !message;
+  }
+
+  function boundedIntegerValidationMessage(raw, min, max) {
+    const value = raw.trim();
+    if (!value) return "";
+    if (!/^\d+$/.test(value) || !Number.isSafeInteger(Number(value))) {
+      return `请输入 ${min} 到 ${max} 的整数，或留空使用自动。`;
+    }
+    const number = Number(value);
+    return number >= min && number <= max
+      ? ""
+      : `请输入 ${min} 到 ${max} 的整数，或留空使用自动。`;
+  }
+
+  function updateSearchSettingsUi() {
+    const usesMessage = boundedIntegerValidationMessage(draftWebSearchMaxUses, 1, 30);
+    const resultsMessage = boundedIntegerValidationMessage(draftWebSearchMaxResults, 1, 25);
+    webSearchMaxUsesError.textContent = usesMessage;
+    webSearchMaxResultsError.textContent = resultsMessage;
+    webSearchMaxUsesInput.setAttribute("aria-invalid", String(Boolean(usesMessage)));
+    webSearchMaxResultsInput.setAttribute("aria-invalid", String(Boolean(resultsMessage)));
+    return !usesMessage && !resultsMessage;
+  }
+
+  function updateToolSummaries() {
+    const searchDetails = [];
+    if (draftWebSearchMaxUses) searchDetails.push(`最多 ${draftWebSearchMaxUses} 次`);
+    if (draftWebSearchMaxResults) searchDetails.push(`每次 ${draftWebSearchMaxResults} 条`);
+    settingsWebSummary.textContent = webSearchEnabled
+      ? `开启 · ${searchDetails.join(" · ") || "自动"}`
+      : "关闭";
+    settingsImageSummary.textContent = `最多 8 张 · ${
+      draftImageQuality === "original" ? "保留原图" : "自动压缩"
+    }`;
+    imageQualityOptions.querySelectorAll(".quality-option").forEach((button) => {
+      button.setAttribute("aria-pressed", String(button.dataset.quality === draftImageQuality));
+    });
+    imageQualityNote.textContent = draftImageQuality === "original"
+      ? "保留原始像素和文件；小字更清楚，但更容易超过 6MB 合计上限。"
+      : "自动压缩会在发送前缩小大图，更快也更省上传量。";
   }
 
   function updateSettingsDirty() {
     settingsSave.textContent = "保存并返回";
-    updateMaxTokensUi();
+    const valid = updateMaxTokensUi() && updateSearchSettingsUi();
+    settingsSave.disabled = !valid;
+    updateToolSummaries();
   }
 
   function updatePromptCount() {
@@ -1936,6 +3228,23 @@
     const next = direction > 0 ? current + 1024 : current - 1024;
     draftMaxCompletionTokens = next > 0 ? String(next) : "";
     maxCompletionTokensInput.value = draftMaxCompletionTokens;
+    updateSettingsDirty();
+  }
+
+  function stepSearchSetting(kind, direction) {
+    const isUses = kind === "uses";
+    const raw = isUses ? draftWebSearchMaxUses : draftWebSearchMaxResults;
+    const max = isUses ? 30 : 25;
+    const current = /^\d+$/.test(raw.trim()) ? Number(raw) : 0;
+    const next = direction > 0 ? Math.min(max, current + 1) : current - 1;
+    const value = next > 0 ? String(next) : "";
+    if (isUses) {
+      draftWebSearchMaxUses = value;
+      webSearchMaxUsesInput.value = value;
+    } else {
+      draftWebSearchMaxResults = value;
+      webSearchMaxResultsInput.value = value;
+    }
     updateSettingsDirty();
   }
 
@@ -2083,6 +3392,7 @@
       modelsLoadedThisPage = true;
       modelsStatus.textContent = `已拉取 ${fetchedModels.length.toLocaleString()} 个模型`;
       updateSettingsModel();
+      updateAttachmentState();
     } catch (error) {
       modelsStatus.textContent = `拉取失败：${error.message}。已保留本地模型，可点右侧重试。`;
     } finally {
@@ -2115,23 +3425,27 @@
     draftUserDisplayName = userDisplayName;
     draftAssistantDisplayName = assistantDisplayName;
     draftExportFileName = exportFileName;
+    draftWebSearchMaxUses = webSearchMaxUses === null ? "" : String(webSearchMaxUses);
+    draftWebSearchMaxResults = webSearchMaxResults === null ? "" : String(webSearchMaxResults);
+    draftImageQuality = imageQuality;
     modelSearch.value = "";
     systemPromptInput.value = systemPrompt;
     maxCompletionTokensInput.value = draftMaxCompletionTokens;
     userDisplayNameInput.value = draftUserDisplayName;
     assistantDisplayNameInput.value = draftAssistantDisplayName;
     exportFileNameInput.value = draftExportFileName;
+    webSearchMaxUsesInput.value = draftWebSearchMaxUses;
+    webSearchMaxResultsInput.value = draftWebSearchMaxResults;
     updateSettingsModel();
     renderModelList();
     updatePromptCount();
     updateIdentitySummary();
+    updateToolSummaries();
     settingsSnapshot = settingsState();
     updateSettingsDirty();
     settingsScreen.classList.add("is-open");
     settingsScreen.setAttribute("aria-hidden", "false");
-    document.querySelector(".topbar").inert = true;
-    messagesEl.inert = true;
-    composer.inert = true;
+    syncInteractionState();
     settingsBack.focus();
     requestAnimationFrame(autoGrowSystemPrompt);
   }
@@ -2200,6 +3514,38 @@
     settingsIdentityOpen.focus();
   }
 
+  function openWebSettingsScreen() {
+    settingsScreen.inert = true;
+    webSettingsScreen.classList.add("is-open");
+    webSettingsScreen.setAttribute("aria-hidden", "false");
+    webSettingsBack.focus();
+  }
+
+  function closeWebSettingsScreen({ instant = false } = {}) {
+    if (instant) skipPanelMotionOnce(webSettingsScreen);
+    webSettingsScreen.classList.remove("is-open");
+    webSettingsScreen.setAttribute("aria-hidden", "true");
+    settingsScreen.inert = false;
+    updateSettingsDirty();
+    settingsWebOpen.focus();
+  }
+
+  function openImageSettingsScreen() {
+    settingsScreen.inert = true;
+    imageSettingsScreen.classList.add("is-open");
+    imageSettingsScreen.setAttribute("aria-hidden", "false");
+    imageSettingsBack.focus();
+  }
+
+  function closeImageSettingsScreen({ instant = false } = {}) {
+    if (instant) skipPanelMotionOnce(imageSettingsScreen);
+    imageSettingsScreen.classList.remove("is-open");
+    imageSettingsScreen.setAttribute("aria-hidden", "true");
+    settingsScreen.inert = false;
+    updateSettingsDirty();
+    settingsImageOpen.focus();
+  }
+
   function updateModelScrollTop() {
     const visible = modelScroll.scrollTop > 360;
     modelsScrollTop.classList.toggle("is-visible", visible);
@@ -2220,21 +3566,30 @@
     promptScreen.setAttribute("aria-hidden", "true");
     identityScreen.classList.remove("is-open");
     identityScreen.setAttribute("aria-hidden", "true");
+    webSettingsScreen.classList.remove("is-open");
+    webSettingsScreen.setAttribute("aria-hidden", "true");
+    imageSettingsScreen.classList.remove("is-open");
+    imageSettingsScreen.setAttribute("aria-hidden", "true");
     settingsScreen.inert = false;
     if (instant) skipPanelMotionOnce(settingsScreen);
     settingsScreen.classList.remove("is-open");
     settingsScreen.setAttribute("aria-hidden", "true");
-    document.querySelector(".topbar").inert = false;
-    messagesEl.inert = false;
-    composer.inert = false;
+    syncInteractionState();
     const returnTarget = settingsTrigger;
     settingsTrigger = null;
     if (returnTarget instanceof HTMLElement) returnTarget.focus();
   }
 
   function saveSettings() {
-    if (!updateMaxTokensUi()) {
-      maxCompletionTokensInput.focus();
+    if (!updateMaxTokensUi() || !updateSearchSettingsUi()) {
+      if (maxTokensValidationMessage()) maxCompletionTokensInput.focus();
+      else if (boundedIntegerValidationMessage(draftWebSearchMaxUses, 1, 30)) {
+        openWebSettingsScreen();
+        webSearchMaxUsesInput.focus();
+      } else {
+        openWebSettingsScreen();
+        webSearchMaxResultsInput.focus();
+      }
       return;
     }
     if (settingsState() !== settingsSnapshot) {
@@ -2248,10 +3603,18 @@
       userDisplayName = normalizeDisplayName(userDisplayNameInput.value, "你");
       assistantDisplayName = normalizeDisplayName(assistantDisplayNameInput.value, "助手");
       exportFileName = normalizeExportFileName(exportFileNameInput.value);
+      webSearchMaxUses = draftWebSearchMaxUses ? Number(draftWebSearchMaxUses) : null;
+      webSearchMaxResults = draftWebSearchMaxResults ? Number(draftWebSearchMaxResults) : null;
+      imageQuality = normalizeImageQuality(draftImageQuality);
       localStorage.setItem(MODEL_KEY, currentModel);
       localStorage.setItem(FAVORITES_KEY, JSON.stringify(favoriteModels));
       localStorage.setItem(REASONING_EFFORT_KEY, reasoningEffort);
       localStorage.setItem(SYSTEM_PROMPT_KEY, systemPrompt);
+      if (webSearchMaxUses === null) localStorage.removeItem(WEB_MAX_USES_KEY);
+      else localStorage.setItem(WEB_MAX_USES_KEY, String(webSearchMaxUses));
+      if (webSearchMaxResults === null) localStorage.removeItem(WEB_MAX_RESULTS_KEY);
+      else localStorage.setItem(WEB_MAX_RESULTS_KEY, String(webSearchMaxResults));
+      localStorage.setItem(IMAGE_QUALITY_KEY, imageQuality);
       localStorage.setItem(USER_NAME_KEY, userDisplayName);
       localStorage.setItem(ASSISTANT_NAME_KEY, assistantDisplayName);
       if (exportFileName) {
@@ -2266,35 +3629,452 @@
       }
       updateTopbar();
       updateMessageLabels();
+      updateAttachmentState();
     }
     closeSettings({ force: true });
   }
 
-  function loadMessages() {
-    try {
-      const data = JSON.parse(localStorage.getItem(CHAT_KEY) || "[]");
-      if (!Array.isArray(data)) return [];
-      return data.filter((item) =>
-        (item?.role === "user" || item?.role === "assistant") &&
-        typeof item.content === "string"
-      );
-    } catch {
-      return [];
+  function announceConversation(message) {
+    conversationLive.textContent = "";
+    window.requestAnimationFrame(() => {
+      conversationLive.textContent = message;
+    });
+  }
+
+  function showAppStatus(message) {
+    appStatus.textContent = message || "";
+    appStatus.classList.toggle("is-visible", Boolean(message));
+  }
+
+  function conversationPreview(conversation) {
+    const latest = conversation.messages.at(-1);
+    if (!latest) return "";
+    const text = latest.content.replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").trim();
+    if (text) return text;
+    const count = latest.attachments?.length || 0;
+    return count ? `〔${count} 张图片〕` : "";
+  }
+
+  function formatConversationTime(value) {
+    const date = new Date(value);
+    if (!Number.isFinite(date.getTime())) return "";
+    const now = new Date();
+    if (date.toDateString() === now.toDateString()) {
+      return new Intl.DateTimeFormat("zh-CN", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      }).format(date);
+    }
+    return new Intl.DateTimeFormat("zh-CN", {
+      month: "numeric",
+      day: "numeric",
+    }).format(date);
+  }
+
+  function sortedConversations() {
+    return [...conversationStore.conversations].sort(
+      (a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)
+    );
+  }
+
+  function renderConversationList() {
+    conversationList.replaceChildren();
+    conversationNew.disabled = pending;
+    conversationPendingNote.textContent = pending ? "回复完成后可切换会话" : "";
+
+    for (const conversation of sortedConversations()) {
+      const item = document.createElement("div");
+      item.className = "conversation-item";
+      item.dataset.conversationId = conversation.id;
+      if (conversation.id === conversationStore.activeId) item.classList.add("active");
+
+      if (renamingConversationId === conversation.id) {
+        const form = document.createElement("form");
+        form.className = "conversation-rename-form";
+        form.dataset.conversationId = conversation.id;
+
+        const renameInput = document.createElement("input");
+        renameInput.className = "conversation-rename-input";
+        renameInput.type = "text";
+        renameInput.maxLength = CONVERSATION_TITLE_MAX_CHARACTERS;
+        renameInput.value = conversation.title;
+        renameInput.setAttribute("aria-label", "会话标题");
+
+        const save = document.createElement("button");
+        save.className = "conversation-rename-action";
+        save.type = "submit";
+        save.setAttribute("aria-label", "保存标题");
+        save.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"></path></svg>';
+
+        const cancel = document.createElement("button");
+        cancel.className = "conversation-rename-action";
+        cancel.type = "button";
+        cancel.dataset.action = "cancel-rename";
+        cancel.setAttribute("aria-label", "取消重命名");
+        cancel.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg>';
+
+        form.append(renameInput, save, cancel);
+        item.appendChild(form);
+        conversationList.appendChild(item);
+        continue;
+      }
+
+      const select = document.createElement("button");
+      select.className = "conversation-select";
+      select.type = "button";
+      select.dataset.action = "switch";
+      select.dataset.conversationId = conversation.id;
+      select.disabled = pending;
+      if (conversation.id === conversationStore.activeId) {
+        select.setAttribute("aria-current", "page");
+      }
+
+      const mark = document.createElement("span");
+      mark.className = "conversation-current-mark";
+      mark.setAttribute("aria-hidden", "true");
+
+      const copy = document.createElement("span");
+      copy.className = "conversation-copy";
+      const title = document.createElement("span");
+      title.className = "conversation-title";
+      title.textContent = conversation.title;
+      title.title = conversation.title;
+      const meta = document.createElement("span");
+      meta.className = "conversation-meta";
+      const preview = conversationPreview(conversation);
+      if (preview) {
+        const previewEl = document.createElement("span");
+        previewEl.className = "conversation-preview";
+        previewEl.textContent = preview;
+        meta.appendChild(previewEl);
+      }
+      const time = document.createElement("time");
+      time.className = "conversation-time";
+      time.dateTime = conversation.updatedAt;
+      time.textContent = formatConversationTime(conversation.updatedAt);
+      meta.appendChild(time);
+      copy.append(title, meta);
+      select.append(mark, copy);
+
+      const more = document.createElement("button");
+      more.className = "conversation-more";
+      more.type = "button";
+      more.dataset.action = "menu";
+      more.dataset.conversationId = conversation.id;
+      more.disabled = pending;
+      more.setAttribute("aria-label", `${conversation.title}的更多操作`);
+      more.setAttribute("aria-expanded", String(conversationMenuId === conversation.id));
+      more.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r=".8"></circle><circle cx="12" cy="12" r=".8"></circle><circle cx="19" cy="12" r=".8"></circle></svg>';
+      item.append(select, more);
+
+      if (conversationMenuId === conversation.id) {
+        const menu = document.createElement("div");
+        menu.className = "conversation-menu";
+        menu.setAttribute("role", "group");
+        menu.setAttribute("aria-label", `${conversation.title}的操作`);
+        menu.innerHTML = `
+          <button class="conversation-menu-button" type="button" data-action="rename" data-conversation-id="${conversation.id}">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 20 4.2-1 10.6-10.6-3.2-3.2L5 15.8 4 20Z"></path><path d="m13.8 7 3.2 3.2"></path></svg>
+            <span>重命名</span>
+          </button>
+          <button class="conversation-menu-button danger" type="button" data-action="delete" data-conversation-id="${conversation.id}">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"></path><path d="m9 7 .7-2h4.6l.7 2"></path><path d="m7 7 .7 13h8.6L17 7"></path></svg>
+            <span>删除</span>
+          </button>
+        `;
+        item.appendChild(menu);
+      }
+      conversationList.appendChild(item);
+    }
+
+    if (renamingConversationId) {
+      window.requestAnimationFrame(() => {
+        const renameInput = conversationList.querySelector(".conversation-rename-input");
+        renameInput?.focus();
+        renameInput?.select();
+      });
+    } else if (conversationMenuId) {
+      window.requestAnimationFrame(() => {
+        const menu = [...conversationList.querySelectorAll(".conversation-item")]
+          .find((item) => item.dataset.conversationId === conversationMenuId)
+          ?.querySelector(".conversation-menu");
+        menu?.scrollIntoView({ block: "nearest" });
+        menu?.querySelector(".conversation-menu-button")?.focus();
+      });
     }
   }
 
-  function saveMessages() {
-    localStorage.setItem(CHAT_KEY, JSON.stringify(messages));
-    const empty = messages.length === 0;
-    clearChatBtn.disabled = empty;
-    exportChatBtn.disabled = empty;
+  function focusConversationMore(conversationId) {
+    window.requestAnimationFrame(() => {
+      [...conversationList.querySelectorAll(".conversation-more")]
+        .find((button) => button.dataset.conversationId === conversationId)
+        ?.focus();
+    });
   }
 
-  function restoreMessages() {
-    if (!messages.length) return;
-    messages.forEach((item) => addBubble(item.role, item.content));
-    clearChatBtn.disabled = false;
-    exportChatBtn.disabled = false;
+  function focusConversationSelect(conversationId) {
+    window.requestAnimationFrame(() => {
+      [...conversationList.querySelectorAll(".conversation-select")]
+        .find((button) => button.dataset.conversationId === conversationId)
+        ?.focus();
+    });
+  }
+
+  function loadSidebarPreference() {
+    try {
+      return localStorage.getItem(SIDEBAR_OPEN_KEY) === "1";
+    } catch {
+      return false;
+    }
+  }
+
+  function saveSidebarPreference(isOpen) {
+    try {
+      localStorage.setItem(SIDEBAR_OPEN_KEY, isOpen ? "1" : "0");
+    } catch {
+      // 侧栏偏好是可选项，失败不应阻断打开/关闭。
+    }
+  }
+
+  function updateConversationActionState() {
+    const empty = getActiveConversation().messages.length === 0;
+    clearChatBtn.disabled = pending || empty;
+    exportChatBtn.disabled = pending || empty;
+    sendBtn.disabled = pending ||
+      imageProcessingJobs > 0 ||
+      (!input.value.trim() && !pendingImages.length);
+    updateAttachmentState();
+  }
+
+  function setPending(value) {
+    pending = value;
+    if (value) {
+      conversationMenuId = null;
+      renamingConversationId = null;
+    }
+    updateConversationActionState();
+    renderConversationList();
+  }
+
+  function renderActiveConversation() {
+    messageObjectUrls.forEach((url) => URL.revokeObjectURL(url));
+    messageObjectUrls = [];
+    messagesEl.replaceChildren();
+    const conversation = getActiveConversation();
+    if (!conversation.messages.length) {
+      messagesEl.appendChild(hintEl);
+    } else {
+      conversation.messages.forEach((item) =>
+        addBubble(item.role, item.content, item.attachments || [], conversation.id)
+      );
+    }
+    updateConversationActionState();
+  }
+
+  function anySettingsScreenOpen() {
+    return settingsScreen.classList.contains("is-open") ||
+      modelScreen.classList.contains("is-open") ||
+      promptScreen.classList.contains("is-open") ||
+      identityScreen.classList.contains("is-open") ||
+      webSettingsScreen.classList.contains("is-open") ||
+      imageSettingsScreen.classList.contains("is-open");
+  }
+
+  function gateIsOpen() {
+    return gate.style.display !== "none";
+  }
+
+  function syncInteractionState() {
+    const settingsOpenNow = anySettingsScreenOpen();
+    const mobileSidebarOpen = sidebarOpen && !desktopSidebarMedia.matches;
+    const gateOpenNow = gateIsOpen();
+    chatShell.inert = mobileSidebarOpen || gateOpenNow;
+    topbarEl.inert = settingsOpenNow;
+    messagesEl.inert = settingsOpenNow;
+    composer.inert = settingsOpenNow;
+    conversationSidebar.inert = !sidebarOpen || settingsOpenNow || gateOpenNow;
+  }
+
+  function syncSidebarLayout() {
+    appShell.classList.toggle("sidebar-is-open", sidebarOpen);
+    conversationsOpen.setAttribute("aria-expanded", String(sidebarOpen));
+    conversationsOpen.setAttribute("aria-label", sidebarOpen ? "关闭会话列表" : "打开会话列表");
+    conversationSidebar.setAttribute("aria-hidden", String(!sidebarOpen));
+    conversationScrim.setAttribute("aria-hidden", "true");
+    if (!desktopSidebarMedia.matches && sidebarOpen) {
+      conversationSidebar.setAttribute("role", "dialog");
+      conversationSidebar.setAttribute("aria-modal", "true");
+      conversationSidebar.setAttribute("aria-labelledby", "conversation-sidebar-title");
+    } else {
+      conversationSidebar.setAttribute("role", "region");
+      conversationSidebar.removeAttribute("aria-modal");
+      conversationSidebar.removeAttribute("aria-labelledby");
+    }
+    syncInteractionState();
+  }
+
+  function openConversationSidebar(trigger = conversationsOpen) {
+    closeQuickPanel();
+    conversationSidebarTrigger = trigger;
+    conversationMenuId = null;
+    renamingConversationId = null;
+    sidebarOpen = true;
+    if (desktopSidebarMedia.matches) saveSidebarPreference(true);
+    renderConversationList();
+    syncSidebarLayout();
+    window.requestAnimationFrame(() => {
+      const active = conversationList.querySelector('[aria-current="page"]');
+      (active || conversationClose).focus();
+    });
+  }
+
+  function closeConversationSidebar({ returnFocus = true } = {}) {
+    conversationMenuId = null;
+    renamingConversationId = null;
+    sidebarOpen = false;
+    if (desktopSidebarMedia.matches) saveSidebarPreference(false);
+    renderConversationList();
+    syncSidebarLayout();
+    const returnTarget = conversationSidebarTrigger || conversationsOpen;
+    conversationSidebarTrigger = null;
+    if (returnFocus && returnTarget instanceof HTMLElement) returnTarget.focus();
+  }
+
+  function toggleConversationSidebar() {
+    if (sidebarOpen) closeConversationSidebar();
+    else openConversationSidebar(conversationsOpen);
+  }
+
+  function trapConversationSidebarFocus(event) {
+    if (
+      event.key !== "Tab" ||
+      !sidebarOpen ||
+      desktopSidebarMedia.matches
+    ) return;
+    const focusable = [...conversationSidebar.querySelectorAll(
+      'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    )].filter((element) => element.getClientRects().length > 0);
+    if (!focusable.length) {
+      event.preventDefault();
+      conversationClose.focus();
+      return;
+    }
+    const first = focusable[0];
+    const last = focusable.at(-1);
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    } else if (!conversationSidebar.contains(document.activeElement)) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
+  function switchConversation(conversationId) {
+    if (pending) {
+      announceConversation("回复完成后可切换会话。");
+      return;
+    }
+    if (conversationId === conversationStore.activeId) {
+      if (!desktopSidebarMedia.matches) closeConversationSidebar();
+      return;
+    }
+    if (!conversationById(conversationId)) return;
+    const draft = cloneConversationStore();
+    draft.activeId = conversationId;
+    if (!persistConversationStore(draft)) return;
+    conversationMenuId = null;
+    renamingConversationId = null;
+    renderConversationList();
+    renderActiveConversation();
+    if (!desktopSidebarMedia.matches) closeConversationSidebar();
+  }
+
+  function createNewConversation() {
+    if (pending) {
+      announceConversation("回复完成后可新建会话。");
+      return;
+    }
+    const active = getActiveConversation();
+    if (!active.messages.length && active.titleSource === "default") {
+      if (!desktopSidebarMedia.matches) closeConversationSidebar({ returnFocus: false });
+      input.focus();
+      return;
+    }
+    const draft = cloneConversationStore();
+    const created = createConversation();
+    draft.conversations.push(created);
+    draft.activeId = created.id;
+    if (!persistConversationStore(draft)) return;
+    renderConversationList();
+    renderActiveConversation();
+    announceConversation("已新建会话。");
+    if (!desktopSidebarMedia.matches) closeConversationSidebar({ returnFocus: false });
+    input.focus();
+  }
+
+  function saveConversationTitle(conversationId, rawTitle) {
+    if (pending) {
+      announceConversation("回复完成后可重命名。");
+      return;
+    }
+    const title = normalizeConversationTitle(rawTitle);
+    if (!title) {
+      announceConversation("标题不能为空。");
+      return;
+    }
+    const draft = cloneConversationStore();
+    const target = conversationById(conversationId, draft);
+    if (!target) return;
+    target.title = title;
+    target.titleSource = "manual";
+    if (!persistConversationStore(draft)) return;
+    renamingConversationId = null;
+    conversationMenuId = null;
+    renderConversationList();
+    focusConversationMore(conversationId);
+    announceConversation("标题已保存。");
+  }
+
+  function deleteConversation(conversationId) {
+    if (pending) {
+      announceConversation("回复完成后可删除会话。");
+      return;
+    }
+    const target = conversationById(conversationId);
+    if (!target || !window.confirm(`删除“${target.title}”？此操作不能撤销。`)) return;
+    const deletedAttachments = target.messages.flatMap((item) => item.attachments || []);
+    const deletingActiveConversation = conversationStore.activeId === conversationId;
+    const orderedBeforeDelete = sortedConversations();
+    const deletedIndex = orderedBeforeDelete.findIndex((item) => item.id === conversationId);
+    const draft = cloneConversationStore();
+    draft.conversations = draft.conversations.filter((item) => item.id !== conversationId);
+    if (!draft.conversations.length) draft.conversations.push(createConversation());
+    if (draft.activeId === conversationId) {
+      draft.activeId = [...draft.conversations].sort(
+        (a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)
+      )[0].id;
+    }
+    const adjacentConversationId = (
+      orderedBeforeDelete[deletedIndex + 1] ||
+      orderedBeforeDelete[deletedIndex - 1]
+    )?.id;
+    if (!persistConversationStore(draft)) return;
+    void deleteImageRecords(deletedAttachments).catch(() => {
+      showAppStatus("会话已删除，但有些本机图片暂时没有清理。");
+    });
+    conversationMenuId = null;
+    renamingConversationId = null;
+    renderConversationList();
+    if (deletingActiveConversation) renderActiveConversation();
+    focusConversationSelect(
+      conversationById(adjacentConversationId)?.id || conversationStore.activeId
+    );
+    announceConversation("会话已删除。");
   }
 
   function scrollToBottom() {
@@ -2329,7 +4109,37 @@
     return role === "user" ? userDisplayName : assistantDisplayName;
   }
 
-  function makeMessageTools(role, bubble, visible) {
+  function showComposerStatus(message, { error = false, source = "" } = {}) {
+    composerStatus.textContent = message || "";
+    composerStatus.classList.toggle("is-error", Boolean(message && error));
+    composerStatus.dataset.source = message ? source : "";
+  }
+
+  function updateAttachmentState() {
+    const capability = modelImageCapability(modelById(currentModel));
+    imageAttach.disabled = pending ||
+      imageProcessingJobs > 0 ||
+      capability === "unsupported";
+    composerAttachments.setAttribute("aria-busy", String(imageProcessingJobs > 0));
+    imageAttach.setAttribute(
+      "aria-label",
+      capability === "unsupported" ? "当前模型不支持图片" : "添加图片",
+    );
+    if (capability === "unsupported") {
+      if (pendingImages.length) {
+        showComposerStatus("当前模型不能看图；图片草稿已保留，请换一个支持图片的模型。", {
+          error: true,
+          source: "capability",
+        });
+      } else if (!composerStatus.textContent || composerStatus.dataset.source === "capability") {
+        showComposerStatus("当前模型不能看图。", { source: "capability" });
+      }
+    } else if (composerStatus.dataset.source === "capability") {
+      showComposerStatus("");
+    }
+  }
+
+  function makeMessageTools(role, bubble, visible, copyText = "") {
     const tools = document.createElement("div");
     tools.className = "message-tools";
     tools.hidden = !visible;
@@ -2341,12 +4151,13 @@
     const copy = document.createElement("button");
     copy.type = "button";
     copy.className = "message-copy";
+    copy.hidden = !copyText;
     copy.setAttribute("aria-label", `复制${messageRoleName(role)}的消息`);
     copy.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="2"></rect><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path></svg><span class="message-copy-label" aria-live="polite">复制</span>';
     copy.addEventListener("click", async () => {
       const label = copy.querySelector(".message-copy-label");
       try {
-        await writeClipboard(bubble.textContent);
+        await writeClipboard(copyText);
         label.textContent = "已复制";
         copy.classList.add("is-copied");
       } catch {
@@ -2377,29 +4188,88 @@
     });
   }
 
-  function addBubble(role, text) {
+  function appendMessageImage(grid, record, attachment) {
+    if (!record?.blob) {
+      const missing = document.createElement("span");
+      missing.className = "message-image-missing";
+      missing.textContent = "这张图片已不在本机";
+      grid.appendChild(missing);
+      return;
+    }
+    const image = document.createElement("img");
+    image.className = "message-image";
+    image.alt = attachment?.name || "对话图片";
+    image.loading = "lazy";
+    const url = URL.createObjectURL(record.blob);
+    messageObjectUrls.push(url);
+    image.src = url;
+    grid.appendChild(image);
+  }
+
+  async function hydrateMessageImages(grid, attachments, conversationId) {
+    let records;
+    try {
+      records = await getImageRecords(attachments);
+    } catch {
+      records = attachments.map(() => null);
+    }
+    if (
+      !grid.isConnected ||
+      getActiveConversation().id !== conversationId
+    ) return;
+    grid.replaceChildren();
+    records.forEach((record, index) =>
+      appendMessageImage(grid, record, attachments[index])
+    );
+    scrollToBottom();
+  }
+
+  function addBubble(role, text, attachments = [], conversationId = "") {
     if (hintEl) hintEl.remove();
     const root = document.createElement("div");
     root.className = `message-item ${role}`;
     root.dataset.role = role;
     const el = document.createElement("div");
     el.className = "msg " + role;
-    el.textContent = text;
-    root.append(el, makeMessageTools(role, el, Boolean(text)));
+    if (attachments.length) {
+      el.classList.add("has-images");
+      const textElement = document.createElement("span");
+      textElement.className = "message-text";
+      textElement.textContent = text;
+      const grid = document.createElement("span");
+      grid.className = `message-images${attachments.length === 1 ? " single" : ""}`;
+      attachments.forEach(() => {
+        const loading = document.createElement("span");
+        loading.className = "message-image-missing";
+        loading.textContent = "正在载入图片…";
+        grid.appendChild(loading);
+      });
+      el.append(textElement, grid);
+      void hydrateMessageImages(grid, attachments, conversationId || getActiveConversation().id);
+    } else {
+      el.textContent = text;
+    }
+    root.append(el, makeMessageTools(role, el, Boolean(text || attachments.length), text));
     messagesEl.appendChild(root);
     scrollToBottom();
     return el;
   }
 
   function buildConversationMarkdown() {
-    return messages
-      .map((item) => `## ${messageRoleName(item.role)}\n\n${item.content.trim()}`)
+    return getActiveConversation().messages
+      .map((item) => {
+        const body = [
+          item.content.trim(),
+          item.attachments?.length ? `〔附带 ${item.attachments.length} 张图片〕` : "",
+        ].filter(Boolean).join("\n\n");
+        return `## ${messageRoleName(item.role)}\n\n${body}`;
+      })
       .join("\n\n")
       .trimEnd() + "\n";
   }
 
   function downloadConversation() {
-    if (!messages.length) return;
+    if (!getActiveConversation().messages.length || pending) return;
     const customBase = safeExportFileBase(exportFileName);
     const filename = `${customBase || defaultExportFileBase()}.md`;
     const blob = new Blob([buildConversationMarkdown()], { type: "text/markdown;charset=utf-8" });
@@ -2411,6 +4281,241 @@
     link.click();
     link.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function loadImageElement(blob) {
+    return new Promise((resolve, reject) => {
+      const image = new Image();
+      const url = URL.createObjectURL(blob);
+      image.onload = () => {
+        URL.revokeObjectURL(url);
+        resolve(image);
+      };
+      image.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error("这张图片无法读取"));
+      };
+      image.src = url;
+    });
+  }
+
+  function canvasToBlob(canvas, type, quality) {
+    return new Promise((resolve, reject) => {
+      canvas.toBlob(
+        (blob) => blob ? resolve(blob) : reject(new Error("压缩图片失败")),
+        type,
+        quality,
+      );
+    });
+  }
+
+  async function prepareImageBlob(file) {
+    if (imageQuality === "original" || file.type === "image/gif") return file;
+    const image = await loadImageElement(file);
+    const scale = Math.min(
+      1,
+      AUTO_IMAGE_MAX_DIMENSION / Math.max(image.naturalWidth, image.naturalHeight),
+    );
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("这个浏览器无法压缩图片");
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const compressed = await canvasToBlob(canvas, "image/webp", AUTO_IMAGE_QUALITY);
+    return compressed.size < file.size ? compressed : file;
+  }
+
+  async function currentImageCapability() {
+    let capability = modelImageCapability(modelById(currentModel));
+    if (
+      capability !== "unknown" ||
+      modelsLoadedThisPage ||
+      imageCapabilityLookupAttempted ||
+      !accessPw
+    ) {
+      return capability;
+    }
+    imageCapabilityLookupAttempted = true;
+    await fetchModels({ force: true });
+    capability = modelImageCapability(modelById(currentModel));
+    return capability;
+  }
+
+  function renderPendingImages() {
+    composerAttachments.replaceChildren();
+    pendingImages.forEach((item) => {
+      const root = document.createElement("span");
+      root.className = "composer-image";
+      const image = document.createElement("img");
+      image.src = item.previewUrl;
+      image.alt = item.name;
+      const remove = document.createElement("button");
+      remove.className = "composer-image-remove";
+      remove.type = "button";
+      remove.setAttribute("aria-label", `移除 ${item.name}`);
+      remove.dataset.imageId = item.id;
+      remove.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"></path></svg>';
+      root.append(image, remove);
+      composerAttachments.appendChild(root);
+    });
+    composerAttachments.classList.toggle("has-images", Boolean(pendingImages.length));
+    updateConversationActionState();
+  }
+
+  function clearPendingImages() {
+    pendingImages.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+    pendingImages = [];
+    imageFileInput.value = "";
+    renderPendingImages();
+  }
+
+  function removePendingImage(imageId) {
+    const target = pendingImages.find((item) => item.id === imageId);
+    if (target) URL.revokeObjectURL(target.previewUrl);
+    pendingImages = pendingImages.filter((item) => item.id !== imageId);
+    imageFileInput.value = "";
+    renderPendingImages();
+    if (composerStatus.dataset.source === "images") showComposerStatus("");
+  }
+
+  async function addImageFiles(fileList) {
+    const files = [...fileList];
+    if (!files.length) return;
+    const capability = await currentImageCapability();
+    if (!accessPw) return;
+    if (capability === "unsupported") {
+      showComposerStatus("当前模型不能看图，请先换一个支持图片的模型。", {
+        error: true,
+        source: "capability",
+      });
+      return;
+    }
+    const available = MAX_IMAGES_PER_MESSAGE - pendingImages.length;
+    if (available <= 0) {
+      showComposerStatus("每条消息最多发送 8 张图片。", { error: true, source: "images" });
+      return;
+    }
+    const acceptedFiles = files.slice(0, available);
+    if (files.length > available) {
+      showComposerStatus(`已保留前 ${available} 张；每条消息最多发送 8 张。`, {
+        error: true,
+        source: "images",
+      });
+    } else if (composerStatus.dataset.source !== "processing") {
+      showComposerStatus("");
+    }
+
+    let totalBytes = pendingImages.reduce((sum, item) => sum + item.size, 0);
+    for (const file of acceptedFiles) {
+      if (!SUPPORTED_IMAGE_TYPES.has(file.type)) {
+        showComposerStatus("只支持 PNG、JPEG、WebP 或 GIF 图片。", {
+          error: true,
+          source: "images",
+        });
+        continue;
+      }
+      let blob;
+      try {
+        blob = await prepareImageBlob(file);
+      } catch (error) {
+        showComposerStatus(error.message || "处理图片失败。", {
+          error: true,
+          source: "images",
+        });
+        continue;
+      }
+      if (totalBytes + blob.size > MAX_IMAGE_BYTES_PER_MESSAGE) {
+        showComposerStatus("这些图片合计超过 6MB；移除一些或改用自动压缩。", {
+          error: true,
+          source: "images",
+        });
+        continue;
+      }
+      const name = file.name || `图片 ${pendingImages.length + 1}`;
+      pendingImages.push({
+        id: createImageId(),
+        name,
+        type: blob.type || file.type,
+        size: blob.size,
+        blob,
+        previewUrl: URL.createObjectURL(blob),
+      });
+      totalBytes += blob.size;
+      renderPendingImages();
+    }
+    imageFileInput.value = "";
+    input.focus();
+  }
+
+  function queueImageFiles(fileList) {
+    const files = [...fileList];
+    if (!files.length) return;
+    imageProcessingJobs += 1;
+    if (imageProcessingJobs === 1) {
+      showComposerStatus("正在处理图片…", { source: "processing" });
+    }
+    updateConversationActionState();
+    imageProcessingQueue = imageProcessingQueue
+      .then(() => addImageFiles(files))
+      .catch((error) => {
+        showComposerStatus(error?.message || "处理图片失败。", {
+          error: true,
+          source: "images",
+        });
+      })
+      .finally(() => {
+        imageProcessingJobs = Math.max(0, imageProcessingJobs - 1);
+        if (imageProcessingJobs === 0 && composerStatus.dataset.source === "processing") {
+          showComposerStatus("");
+        }
+        updateConversationActionState();
+      });
+  }
+
+  function attachmentMetadata(images) {
+    return images.map(({ id, name, type, size }) => ({ id, name, type, size }));
+  }
+
+  async function persistPendingImages(images) {
+    await putImageRecords(images.map(({ id, name, type, size, blob }) => ({
+      id,
+      name,
+      type,
+      size,
+      blob,
+      createdAt: new Date().toISOString(),
+    })));
+  }
+
+  async function messageForOpenRouter(item) {
+    const attachments = item.attachments || [];
+    if (!attachments.length) return { role: item.role, content: item.content };
+    const records = await getImageRecords(attachments);
+    const imageBlocks = [];
+    for (const record of records) {
+      if (!record?.blob) continue;
+      imageBlocks.push({
+        type: "image_url",
+        image_url: { url: await blobToDataUrl(record.blob) },
+      });
+    }
+    const text = item.content.trim() || (
+      imageBlocks.length
+        ? "请查看这些图片并回答。"
+        : "〔此前发送的图片已不在本机〕"
+    );
+    return {
+      role: item.role,
+      content: [
+        { type: "text", text },
+        ...imageBlocks,
+      ],
+    };
+  }
+
+  async function messagesForOpenRouter(messages) {
+    return Promise.all(messages.map(messageForOpenRouter));
   }
 
   function addReasoningBlock({ webSearch }) {
@@ -2484,9 +4589,15 @@
   }
 
   function addCitations(annotations) {
+    const seenUrls = new Set();
     const links = (annotations || [])
       .map((item) => item?.url_citation || item)
       .filter((item) => item?.url)
+      .filter((item) => {
+        if (seenUrls.has(item.url)) return false;
+        seenUrls.add(item.url);
+        return true;
+      })
       .slice(0, 10);
     if (!links.length) return;
 
@@ -2559,12 +4670,29 @@
     messagesEl.appendChild(el);
   }
 
-  function textFromReasoningDetails(details) {
-    if (!Array.isArray(details)) return "";
-    return details
-      .map((item) => item?.text || item?.summary || item?.content || "")
-      .filter(Boolean)
-      .join("\n");
+  function textFromResponseValue(value) {
+    if (typeof value === "string") return value;
+    if (Array.isArray(value)) {
+      return value.map(textFromResponseValue).filter(Boolean).join("");
+    }
+    if (!value || typeof value !== "object" || value.type === "reasoning.encrypted") {
+      return "";
+    }
+    return textFromResponseValue(value.text) ||
+      textFromResponseValue(value.summary) ||
+      textFromResponseValue(value.content);
+  }
+
+  function textFromReasoningDelta(delta) {
+    return textFromResponseValue(delta?.reasoning) ||
+      textFromResponseValue(delta?.reasoning_content) ||
+      textFromResponseValue(delta?.reasoning_details);
+  }
+
+  function appendAnnotations(target, ...groups) {
+    groups.forEach((group) => {
+      if (Array.isArray(group)) target.push(...group);
+    });
   }
 
   // 解析 SSE 流，每收到一段文字就回调 callbacks，返回完整正文和来源
@@ -2590,13 +4718,21 @@
         try {
           const obj = JSON.parse(data);
           if (obj.usage) usage = obj.usage;
-          const delta = obj.choices?.[0]?.delta || {};
-          const reasoning = delta.reasoning || delta.reasoning_content || textFromReasoningDetails(delta.reasoning_details);
+          const choice = obj.choices?.[0] || {};
+          const delta = choice.delta || choice.message || {};
+          const reasoning = textFromReasoningDelta(delta);
           if (reasoning) callbacks.onReasoning(reasoning);
-          if (Array.isArray(delta.annotations)) annotations.push(...delta.annotations);
-          if (delta.content) {
-            full += delta.content;
-            callbacks.onContent(delta.content);
+          appendAnnotations(
+            annotations,
+            delta.annotations,
+            choice.annotations,
+            choice.message && choice.message !== delta ? choice.message.annotations : null,
+            obj.annotations,
+          );
+          const content = textFromResponseValue(delta.content);
+          if (content) {
+            full += content;
+            callbacks.onContent(content);
           }
         } catch { /* 半截 JSON，忽略 */ }
       }
@@ -2604,29 +4740,114 @@
     return { full, annotations, usage };
   }
 
+  async function requestConversationTitle(conversationId, firstMessage) {
+    try {
+      const response = await fetch(WORKER_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "title",
+          password: accessPw,
+          text: firstMessage,
+        }),
+      });
+      if (!response.ok) return;
+      const data = await response.json().catch(() => null);
+      const title = normalizeConversationTitle(data?.title);
+      if ((title.match(/[\p{L}\p{N}]/gu) || []).length < 2) return;
+
+      const draft = cloneConversationStore();
+      const target = conversationById(conversationId, draft);
+      const firstUserMessage = target?.messages.find((item) => item.role === "user");
+      if (!target || target.titleSource !== "fallback" || firstUserMessage?.content !== firstMessage) return;
+      target.title = title;
+      target.titleSource = "deepseek";
+      if (!persistConversationStore(draft)) return;
+      if (!renamingConversationId) renderConversationList();
+    } catch {
+      // 自动标题失败时保留本地标题，不打断聊天。
+    }
+  }
+
   // ===== 发送 =====
   async function send() {
     const text = input.value.trim();
-    if (!text || pending) return;
+    if ((!text && !pendingImages.length) || pending || imageProcessingJobs > 0) return;
+    if (
+      pendingImages.length &&
+      modelImageCapability(modelById(currentModel)) === "unsupported"
+    ) {
+      showComposerStatus("当前模型不能看图，请先换一个支持图片的模型。", {
+        error: true,
+        source: "capability",
+      });
+      return;
+    }
+    const activeConversation = getActiveConversation();
+    const requestConversationId = activeConversation.id;
+    const requestSessionId = activeConversation.sessionId;
+    const previousTitle = activeConversation.title;
+    const previousTitleSource = activeConversation.titleSource;
+    const previousUpdatedAt = activeConversation.updatedAt;
+    const requestUserIndex = activeConversation.messages.length;
+    const shouldGenerateTitle = activeConversation.messages.length === 0;
     const requestModel = currentModel;
     const requestEffort = normalizeEffortForModel(reasoningEffort, modelById(requestModel));
-    const requestMessages = systemPrompt.trim()
-      ? [{ role: "system", content: systemPrompt.trim() }, ...messages, { role: "user", content: text }]
-      : [...messages, { role: "user", content: text }];
+    const requestImages = pendingImages.map((item) => ({ ...item }));
+    const requestAttachments = attachmentMetadata(requestImages);
+
+    try {
+      await persistPendingImages(requestImages);
+    } catch {
+      showComposerStatus("图片没有保存成功，暂时没有发送；请重试。", {
+        error: true,
+        source: "images",
+      });
+      return;
+    }
+
+    const draft = cloneConversationStore();
+    const draftConversation = conversationById(requestConversationId, draft);
+    if (!draftConversation) return;
+    draftConversation.messages.push({
+      role: "user",
+      content: text,
+      ...(requestAttachments.length ? { attachments: requestAttachments } : {}),
+    });
+    draftConversation.updatedAt = new Date().toISOString();
+    if (shouldGenerateTitle && draftConversation.titleSource !== "manual") {
+      draftConversation.title = normalizeConversationTitle(text) ||
+        (requestAttachments.length ? "图片对话" : "新对话");
+      draftConversation.titleSource = draftConversation.title === "新对话" ? "default" : "fallback";
+    }
+    if (!persistConversationStore(draft)) {
+      void deleteImageRecords(requestAttachments).catch(() => {});
+      input.focus();
+      return;
+    }
 
     input.value = "";
     input.style.height = "auto";
-    addBubble("user", text);
-    messages.push({ role: "user", content: text });
-    saveMessages();
+    clearPendingImages();
+    addBubble("user", text, requestAttachments, requestConversationId);
+    renderConversationList();
+    showComposerStatus("");
 
-    pending = true;
-    sendBtn.disabled = true;
+    setPending(true);
+    if (shouldGenerateTitle && text) {
+      void requestConversationTitle(requestConversationId, text);
+    }
     const reasoningBox = requestEffort !== "off" ? addReasoningBlock({ webSearch: webSearchEnabled }) : null;
     const bubble = addBubble("assistant", "");
     bubble.classList.add("typing");
 
     try {
+      const storedConversation = conversationById(requestConversationId);
+      if (!storedConversation) throw new Error("当前会话已不存在");
+      const history = await messagesForOpenRouter(storedConversation.messages);
+      const requestMessages = systemPrompt.trim()
+        ? [{ role: "system", content: systemPrompt.trim() }, ...history]
+        : history;
       const res = await fetch(WORKER_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -2635,8 +4856,10 @@
           model: requestModel,
           password: accessPw,
           reasoningEffort: requestEffort,
-          session_id: sessionId,
+          session_id: requestSessionId,
           webSearch: webSearchEnabled,
+          ...(webSearchMaxUses === null ? {} : { webSearchMaxUses }),
+          ...(webSearchMaxResults === null ? {} : { webSearchMaxResults }),
           ...(maxCompletionTokens === null ? {} : { maxCompletionTokens }),
         }),
       });
@@ -2662,23 +4885,31 @@
         onReasoning(delta) {
           if (!reasoningBox) return;
           reasoningBox.append(delta);
-          scrollToBottom();
+          if (conversationStore.activeId === requestConversationId) scrollToBottom();
         },
         onContent(delta) {
           bubble.classList.remove("typing");
           bubble.textContent += delta;
-          scrollToBottom();
+          if (conversationStore.activeId === requestConversationId) scrollToBottom();
         },
       });
 
       bubble.classList.remove("typing");
       reasoningBox?.finish();
       if (full) {
-        messages.push({ role: "assistant", content: full });
-        saveMessages();
-        revealMessageTools(bubble);
-        addCitations(annotations);
-        addCacheBadge(usage, requestModel);
+        const completedDraft = cloneConversationStore();
+        const completedConversation = conversationById(requestConversationId, completedDraft);
+        if (completedConversation) {
+          completedConversation.messages.push({ role: "assistant", content: full });
+          completedConversation.updatedAt = new Date().toISOString();
+          persistConversationStore(completedDraft, { keepInMemoryOnFailure: true });
+          renderConversationList();
+        }
+        if (conversationStore.activeId === requestConversationId) {
+          revealMessageTools(bubble);
+          addCitations(annotations);
+          addCacheBadge(usage, requestModel);
+        }
       } else {
         bubble.classList.add("error");
         bubble.textContent = "⚠️ 没有收到回复内容";
@@ -2691,14 +4922,35 @@
       if (err.code === 401) {
         localStorage.removeItem(PW_KEY);
         accessPw = "";
-        messages.pop();                 // 回滚这条没发成功的消息
-        saveMessages();
+        const rollbackDraft = cloneConversationStore();
+        const rollbackConversation = conversationById(requestConversationId, rollbackDraft);
+        if (rollbackConversation) {
+          const indexedMessage = rollbackConversation.messages[requestUserIndex];
+          if (indexedMessage?.role === "user") {
+            rollbackConversation.messages.splice(requestUserIndex, 1);
+          } else {
+            const firstImageId = requestAttachments[0]?.id;
+            const fallbackIndex = rollbackConversation.messages.findLastIndex(
+              (item) =>
+                item.role === "user" &&
+                item.content === text &&
+                (!firstImageId || item.attachments?.some((attachment) => attachment.id === firstImageId))
+            );
+            if (fallbackIndex >= 0) rollbackConversation.messages.splice(fallbackIndex, 1);
+          }
+          rollbackConversation.title = previousTitle;
+          rollbackConversation.titleSource = previousTitleSource;
+          rollbackConversation.updatedAt = previousUpdatedAt;
+          persistConversationStore(rollbackDraft, { keepInMemoryOnFailure: true });
+        }
+        void deleteImageRecords(requestAttachments).catch(() => {});
+        renderConversationList();
+        renderActiveConversation();
         showGate("密码错误，请重新输入");
       }
     } finally {
-      pending = false;
-      sendBtn.disabled = false;
-      scrollToBottom();
+      setPending(false);
+      if (conversationStore.activeId === requestConversationId) scrollToBottom();
     }
   }
 
@@ -2712,6 +4964,23 @@
   input.addEventListener("input", () => {
     input.style.height = "auto";
     input.style.height = Math.min(input.scrollHeight, 120) + "px";
+    updateConversationActionState();
+  });
+  input.addEventListener("paste", (event) => {
+    const files = [...(event.clipboardData?.items || [])]
+      .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
+      .map((item) => item.getAsFile())
+      .filter(Boolean);
+    if (!files.length) return;
+    event.preventDefault();
+    queueImageFiles(files);
+  });
+  imageAttach.addEventListener("click", () => imageFileInput.click());
+  imageFileInput.addEventListener("change", () => queueImageFiles(imageFileInput.files || []));
+  composerAttachments.addEventListener("click", (event) => {
+    const remove = event.target.closest(".composer-image-remove");
+    if (!remove) return;
+    removePendingImage(remove.dataset.imageId);
   });
 
   // 桌面端：回车发送、Shift+回车换行；触屏设备保持回车换行，靠按钮发送
@@ -2727,23 +4996,94 @@
   function showGate(msg) {
     gate.style.display = "flex";
     gateErr.textContent = msg || "";
+    syncInteractionState();
     gateInput.focus();
+  }
+  function focusActiveLayerAfterGate() {
+    let target = input;
+    if (modelScreen.classList.contains("is-open")) {
+      target = modelBack;
+    } else if (promptScreen.classList.contains("is-open")) {
+      target = promptBack;
+    } else if (identityScreen.classList.contains("is-open")) {
+      target = identityBack;
+    } else if (webSettingsScreen.classList.contains("is-open")) {
+      target = webSettingsBack;
+    } else if (imageSettingsScreen.classList.contains("is-open")) {
+      target = imageSettingsBack;
+    } else if (settingsScreen.classList.contains("is-open")) {
+      target = settingsBack;
+    } else if (sidebarOpen && !desktopSidebarMedia.matches) {
+      target = conversationList.querySelector('[aria-current="page"]') || conversationClose;
+    }
+    window.requestAnimationFrame(() => target.focus());
   }
   function hideGate() {
     gate.style.display = "none";
-    input.focus();
+    syncInteractionState();
+    focusActiveLayerAfterGate();
   }
   function submitGate() {
     const v = gateInput.value.trim();
     if (!v) return;
     accessPw = v;
+    imageCapabilityLookupAttempted = false;
     localStorage.setItem(PW_KEY, v);
     gateInput.value = "";
     hideGate();
   }
-  gateBtn.addEventListener("click", submitGate);
-  gateInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") { e.preventDefault(); submitGate(); }
+  gateForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    submitGate();
+  });
+
+  conversationsOpen.addEventListener("click", toggleConversationSidebar);
+  conversationClose.addEventListener("click", () => closeConversationSidebar());
+  conversationScrim.addEventListener("click", () => closeConversationSidebar());
+  conversationSidebar.addEventListener("keydown", trapConversationSidebarFocus);
+  conversationNew.addEventListener("click", createNewConversation);
+  conversationList.addEventListener("click", (event) => {
+    const actionTarget = event.target.closest("[data-action]");
+    if (!(actionTarget instanceof HTMLElement) || !conversationList.contains(actionTarget)) return;
+    const action = actionTarget.dataset.action;
+    const conversationId = actionTarget.dataset.conversationId ||
+      actionTarget.closest("[data-conversation-id]")?.dataset.conversationId;
+    if (action === "switch" && conversationId) {
+      switchConversation(conversationId);
+    } else if (action === "menu" && conversationId) {
+      const closingMenu = conversationMenuId === conversationId;
+      conversationMenuId = conversationMenuId === conversationId ? null : conversationId;
+      renamingConversationId = null;
+      renderConversationList();
+      if (closingMenu) focusConversationMore(conversationId);
+    } else if (action === "rename" && conversationId) {
+      conversationMenuId = null;
+      renamingConversationId = conversationId;
+      renderConversationList();
+    } else if (action === "delete" && conversationId) {
+      deleteConversation(conversationId);
+    } else if (action === "cancel-rename") {
+      const cancelledConversationId = renamingConversationId;
+      renamingConversationId = null;
+      renderConversationList();
+      if (cancelledConversationId) focusConversationMore(cancelledConversationId);
+    }
+  });
+  conversationList.addEventListener("submit", (event) => {
+    const form = event.target.closest(".conversation-rename-form");
+    if (!(form instanceof HTMLFormElement)) return;
+    event.preventDefault();
+    const renameInput = form.querySelector(".conversation-rename-input");
+    saveConversationTitle(form.dataset.conversationId, renameInput?.value || "");
+  });
+  desktopSidebarMedia.addEventListener("change", (event) => {
+    sidebarOpen = event.matches
+      ? loadSidebarPreference()
+      : false;
+    conversationMenuId = null;
+    renamingConversationId = null;
+    renderConversationList();
+    syncSidebarLayout();
   });
 
   modelQuick.addEventListener("click", openQuickPanel);
@@ -2754,9 +5094,13 @@
   settingsModelOpen.addEventListener("click", openModelScreen);
   settingsPromptOpen.addEventListener("click", openPromptScreen);
   settingsIdentityOpen.addEventListener("click", openIdentityScreen);
+  settingsWebOpen.addEventListener("click", openWebSettingsScreen);
+  settingsImageOpen.addEventListener("click", openImageSettingsScreen);
   modelBack.addEventListener("click", closeModelScreen);
   promptBack.addEventListener("click", closePromptScreen);
   identityBack.addEventListener("click", closeIdentityScreen);
+  webSettingsBack.addEventListener("click", closeWebSettingsScreen);
+  imageSettingsBack.addEventListener("click", closeImageSettingsScreen);
   modelSearch.addEventListener("input", renderModelList);
   modelsRetry.addEventListener("click", () => void fetchModels({ force: true }));
   modelScroll.addEventListener("scroll", updateModelScrollTop, { passive: true });
@@ -2779,6 +5123,34 @@
   });
   maxTokensDown.addEventListener("click", () => stepMaxCompletionTokens(-1));
   maxTokensUp.addEventListener("click", () => stepMaxCompletionTokens(1));
+  webSearchMaxUsesInput.addEventListener("input", () => {
+    draftWebSearchMaxUses = webSearchMaxUsesInput.value.trim();
+    updateSettingsDirty();
+  });
+  webSearchMaxUsesInput.addEventListener("keydown", (event) => {
+    if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+    event.preventDefault();
+    stepSearchSetting("uses", event.key === "ArrowUp" ? 1 : -1);
+  });
+  webSearchMaxResultsInput.addEventListener("input", () => {
+    draftWebSearchMaxResults = webSearchMaxResultsInput.value.trim();
+    updateSettingsDirty();
+  });
+  webSearchMaxResultsInput.addEventListener("keydown", (event) => {
+    if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+    event.preventDefault();
+    stepSearchSetting("results", event.key === "ArrowUp" ? 1 : -1);
+  });
+  webSearchMaxUsesDown.addEventListener("click", () => stepSearchSetting("uses", -1));
+  webSearchMaxUsesUp.addEventListener("click", () => stepSearchSetting("uses", 1));
+  webSearchMaxResultsDown.addEventListener("click", () => stepSearchSetting("results", -1));
+  webSearchMaxResultsUp.addEventListener("click", () => stepSearchSetting("results", 1));
+  imageQualityOptions.addEventListener("click", (event) => {
+    const button = event.target.closest(".quality-option");
+    if (!button) return;
+    draftImageQuality = normalizeImageQuality(button.dataset.quality);
+    updateSettingsDirty();
+  });
   webToggle.addEventListener("click", () => {
     webSearchEnabled = !webSearchEnabled;
     localStorage.setItem(WEB_KEY, webSearchEnabled ? "1" : "0");
@@ -2787,6 +5159,10 @@
   document.addEventListener("click", (event) => {
     if (!event.composedPath().includes(document.querySelector(".model-control"))) {
       closeQuickPanel();
+    }
+    if (conversationMenuId && !event.target.closest(".conversation-item")) {
+      conversationMenuId = null;
+      renderConversationList();
     }
   });
   document.addEventListener("keydown", (event) => {
@@ -2797,8 +5173,24 @@
       closePromptScreen({ instant: true });
     } else if (identityScreen.classList.contains("is-open")) {
       closeIdentityScreen({ instant: true });
+    } else if (webSettingsScreen.classList.contains("is-open")) {
+      closeWebSettingsScreen({ instant: true });
+    } else if (imageSettingsScreen.classList.contains("is-open")) {
+      closeImageSettingsScreen({ instant: true });
     } else if (settingsScreen.classList.contains("is-open")) {
       closeSettings({ instant: true });
+    } else if (renamingConversationId) {
+      const cancelledConversationId = renamingConversationId;
+      renamingConversationId = null;
+      renderConversationList();
+      focusConversationMore(cancelledConversationId);
+    } else if (conversationMenuId) {
+      const closedConversationId = conversationMenuId;
+      conversationMenuId = null;
+      renderConversationList();
+      focusConversationMore(closedConversationId);
+    } else if (sidebarOpen) {
+      closeConversationSidebar();
     } else if (quickPanel.classList.contains("is-open")) {
       closeQuickPanel();
       modelQuick.focus();
@@ -2806,22 +5198,34 @@
   });
   exportChatBtn.addEventListener("click", downloadConversation);
   clearChatBtn.addEventListener("click", () => {
-    if (!window.confirm("清空这台设备上的全部对话？此操作不能撤销。")) return;
-    messages.length = 0;
-    localStorage.removeItem(CHAT_KEY);
-    sessionId = createSessionId();
-    localStorage.setItem(SESSION_KEY, sessionId);
-    messagesEl.textContent = "";
-    messagesEl.appendChild(hintEl);
-    clearChatBtn.disabled = true;
-    exportChatBtn.disabled = true;
+    if (pending || !window.confirm("清空当前会话？其他会话不会受影响，此操作不能撤销。")) return;
+    const draft = cloneConversationStore();
+    const active = getActiveConversation(draft);
+    const clearedAttachments = active.messages.flatMap((item) => item.attachments || []);
+    active.messages = [];
+    active.title = "新对话";
+    active.titleSource = "default";
+    active.sessionId = createSessionId();
+    active.updatedAt = new Date().toISOString();
+    if (!persistConversationStore(draft)) return;
+    void deleteImageRecords(clearedAttachments).catch(() => {
+      showAppStatus("会话已清空，但有些本机图片暂时没有清理。");
+    });
+    renderConversationList();
+    renderActiveConversation();
+    announceConversation("当前会话已清空。");
     input.focus();
   });
   updateTopbar();
-  restoreMessages();
+  renderConversationList();
+  renderActiveConversation();
+  void cleanupOrphanedImageRecords().catch(() => {});
+  syncSidebarLayout();
+  if (conversationStoreLoadWarning) showAppStatus(conversationStoreLoadWarning);
 
   // 没存过密码就先弹密码界面（密码不写在代码里，由你打开时手输一次）
   if (!accessPw) showGate();
+  else syncInteractionState();
 </script>
 </body>
 </html>

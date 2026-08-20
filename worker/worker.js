@@ -13,8 +13,18 @@ const ALLOWED_ORIGIN = "https://cloudxuan1.github.io";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models";
+const DEEPSEEK_URL = "https://api.deepseek.com/chat/completions";
 const DEFAULT_MODEL = "anthropic/claude-opus-4.6";
+const DEEPSEEK_TITLE_MODEL = "deepseek-v4-flash";
+const TITLE_INPUT_MAX_CHARS = 500;
+const TITLE_MAX_CHARS = 48;
+const TITLE_REQUEST_TIMEOUT_MS = 8000;
 const REASONING_EFFORTS = new Set(["off", "low", "medium", "high"]);
+const WEB_SEARCH_MAX_USES = 30;
+const WEB_SEARCH_MAX_RESULTS = 25;
+const MAX_IMAGES_PER_MESSAGE = 8;
+const MAX_IMAGE_BYTES_PER_MESSAGE = 6 * 1024 * 1024;
+const IMAGE_DATA_URL_PATTERN = /^data:image\/(?:png|jpeg|webp|gif);base64,/i;
 
 export default {
   async fetch(request, env) {
@@ -45,6 +55,9 @@ export default {
     if (payload.action === "models") {
       return fetchModels(env);
     }
+    if (payload.action === "title") {
+      return generateTitle(payload, env);
+    }
 
     if (!Array.isArray(payload.messages) || payload.messages.length === 0) {
       return json({ error: "messages 必须是非空数组" }, 400);
@@ -74,6 +87,16 @@ export default {
     ) {
       return json({ error: "maxCompletionTokens 必须是大于 0 的整数" }, 400);
     }
+    if (!optionalIntegerInRange(payload.webSearchMaxUses, 1, WEB_SEARCH_MAX_USES)) {
+      return json({ error: `webSearchMaxUses 必须是 1 到 ${WEB_SEARCH_MAX_USES} 的整数` }, 400);
+    }
+    if (!optionalIntegerInRange(payload.webSearchMaxResults, 1, WEB_SEARCH_MAX_RESULTS)) {
+      return json({ error: `webSearchMaxResults 必须是 1 到 ${WEB_SEARCH_MAX_RESULTS} 的整数` }, 400);
+    }
+    const imageValidationError = validateImageMessages(payload.messages);
+    if (imageValidationError) {
+      return json({ error: imageValidationError }, 400);
+    }
 
     let upstream;
     try {
@@ -101,6 +124,72 @@ export default {
   },
 };
 
+async function generateTitle(payload, env) {
+  if (!env.DEEPSEEK_API_KEY) {
+    return json({ error: "标题服务尚未配置" }, 503);
+  }
+  if (typeof payload.text !== "string" || payload.text.trim().length === 0) {
+    return json({ error: "text 必须是非空字符串" }, 400);
+  }
+
+  const text = Array.from(payload.text.trim())
+    .slice(0, TITLE_INPUT_MAX_CHARS)
+    .join("");
+
+  let upstream;
+  try {
+    const requestOptions = {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${env.DEEPSEEK_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: DEEPSEEK_TITLE_MODEL,
+        messages: [
+          {
+            role: "system",
+            content: [
+              "你是会话标题生成器。",
+              "根据用户第一条消息生成准确、自然的会话标题。",
+              "中文通常 8 到 18 个汉字，英文可以更长；不要为了凑短删掉关键信息。",
+              "允许必要的空格、逗号、句号和连字符。",
+              "只输出一行标题，不要用引号包裹，不要 Emoji。",
+            ].join(""),
+          },
+          { role: "user", content: text },
+        ],
+        thinking: { type: "disabled" },
+        stream: false,
+        max_tokens: 32,
+      }),
+    };
+    if (typeof globalThis.AbortSignal?.timeout === "function") {
+      requestOptions.signal = globalThis.AbortSignal.timeout(TITLE_REQUEST_TIMEOUT_MS);
+    }
+    upstream = await fetch(DEEPSEEK_URL, requestOptions);
+  } catch {
+    return json({ error: "连接 DeepSeek 标题服务失败" }, 502);
+  }
+
+  if (!upstream.ok) {
+    return json({ error: "DeepSeek 标题服务请求失败" }, 502);
+  }
+
+  let result;
+  try {
+    result = await upstream.json();
+  } catch {
+    return json({ error: "DeepSeek 标题服务返回格式异常" }, 502);
+  }
+
+  const title = normalizeTitle(result?.choices?.[0]?.message?.content);
+  if ((title.match(/[\p{L}\p{N}]/gu) || []).length < 2) {
+    return json({ error: "DeepSeek 标题服务未返回有效标题" }, 502);
+  }
+  return json({ title });
+}
+
 async function fetchModels(env) {
   let upstream;
   try {
@@ -125,6 +214,23 @@ async function fetchModels(env) {
   }
 }
 
+export function normalizeTitle(value) {
+  if (typeof value !== "string") return "";
+  const visibleCharacters = value
+    .normalize("NFC")
+    .replace(/[\r\n\t]+/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/[\p{Extended_Pictographic}\p{Emoji_Modifier}\uFE0E\uFE0F\u200D]/gu, "")
+    .replace(/^[\s"'“”‘’「」『』《》【】]+|[\s"'“”‘’「」『』《》【】]+$/gu, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const title = Array.from(visibleCharacters)
+    .slice(0, TITLE_MAX_CHARS)
+    .join("")
+    .trim();
+  return /[\p{L}\p{N}]/u.test(title) ? title : "";
+}
+
 export function normalizeModel(model) {
   if (!model || typeof model.id !== "string" || !model.id) {
     return null;
@@ -145,6 +251,9 @@ export function normalizeModel(model) {
     supportedParameters: Array.isArray(model.supported_parameters)
       ? model.supported_parameters.filter((parameter) => typeof parameter === "string")
       : [],
+    inputModalities: Array.isArray(model.architecture?.input_modalities)
+      ? model.architecture.input_modalities.filter((modality) => typeof modality === "string")
+      : [],
   };
 }
 
@@ -157,11 +266,26 @@ export function buildUpstreamBody(payload) {
   };
 
   const reasoningEffort = normalizeReasoningEffort(payload);
-  if (reasoningEffort) {
-    body.reasoning = { effort: reasoningEffort };
+  if (reasoningEffort === "none") {
+    body.reasoning = { effort: "none" };
+  } else if (reasoningEffort) {
+    body.reasoning = {
+      enabled: true,
+      effort: reasoningEffort,
+      exclude: false,
+    };
   }
   if (payload.webSearch) {
-    body.plugins = [{ id: "web", max_results: 5 }];
+    const parameters = {};
+    if (payload.webSearchMaxUses !== undefined) {
+      parameters.max_uses = payload.webSearchMaxUses;
+    }
+    if (payload.webSearchMaxResults !== undefined) {
+      parameters.max_results = payload.webSearchMaxResults;
+    }
+    const tool = { type: "openrouter:web_search" };
+    if (Object.keys(parameters).length) tool.parameters = parameters;
+    body.tools = [tool];
   }
   if (payload.session_id !== undefined) {
     body.session_id = payload.session_id;
@@ -181,6 +305,44 @@ function normalizeReasoningEffort(payload) {
     return payload.reasoning ? "medium" : "none";
   }
   return undefined;
+}
+
+function optionalIntegerInRange(value, min, max) {
+  return value === undefined || (
+    Number.isSafeInteger(value)
+    && value >= min
+    && value <= max
+  );
+}
+
+function base64DataUrlBytes(url) {
+  const payload = url.slice(url.indexOf(",") + 1);
+  const padding = payload.endsWith("==") ? 2 : payload.endsWith("=") ? 1 : 0;
+  return Math.floor(payload.length * 3 / 4) - padding;
+}
+
+function validateImageMessages(messages) {
+  for (const message of messages) {
+    if (!Array.isArray(message?.content)) continue;
+    let imageCount = 0;
+    let imageBytes = 0;
+    for (const block of message.content) {
+      if (block?.type !== "image_url") continue;
+      const url = block.image_url?.url;
+      if (typeof url !== "string" || !IMAGE_DATA_URL_PATTERN.test(url)) {
+        return "图片格式只支持 PNG、JPEG、WebP 或 GIF";
+      }
+      imageCount += 1;
+      imageBytes += base64DataUrlBytes(url);
+      if (imageCount > MAX_IMAGES_PER_MESSAGE) {
+        return `每条消息最多发送 ${MAX_IMAGES_PER_MESSAGE} 张图片`;
+      }
+      if (imageBytes > MAX_IMAGE_BYTES_PER_MESSAGE) {
+        return "每条消息的图片合计不能超过 6MB";
+      }
+    }
+  }
+  return "";
 }
 
 // 给消息数组打提示词缓存断点，返回新数组，不改入参 messages。
@@ -228,7 +390,12 @@ function addCacheControl(content) {
 
   let targetIndex = -1;
   for (let i = content.length - 1; i >= 0; i -= 1) {
-    if (content[i] && typeof content[i] === "object" && !Array.isArray(content[i])) {
+    if (
+      content[i]
+      && typeof content[i] === "object"
+      && !Array.isArray(content[i])
+      && content[i].type === "text"
+    ) {
       targetIndex = i;
       break;
     }
