@@ -724,6 +724,7 @@
   }
   .message-copy,
   .message-edit,
+  .message-reroll,
   .message-edit-action {
     position: relative;
     display: flex;
@@ -741,13 +742,15 @@
   }
   .message-copy::after,
   .message-edit::after,
+  .message-reroll::after,
   .message-edit-action::after {
     content: "";
     position: absolute;
     inset: -4px 0;
   }
   .message-copy svg,
-  .message-edit svg {
+  .message-edit svg,
+  .message-reroll svg {
     width: 14px;
     height: 14px;
     fill: none;
@@ -1136,6 +1139,7 @@
   .models-scroll-top,
   .message-copy,
   .message-edit,
+  .message-reroll,
   .message-edit-action {
     -webkit-tap-highlight-color: transparent;
   }
@@ -1739,6 +1743,7 @@
   .token-step:active,
   .message-copy:active,
   .message-edit:active,
+  .message-reroll:active,
   .message-edit-action:active { transform: scale(.97); }
   .models-scroll-top.is-visible:active { transform: translate(-50%, 0) scale(.97); }
 
@@ -1821,12 +1826,14 @@
     }
     .message-copy,
     .message-edit,
+    .message-reroll,
     .message-edit-action {
       min-height: 40px;
       padding-inline: 6px;
     }
     .message-copy::after,
     .message-edit::after,
+    .message-reroll::after,
     .message-edit-action::after { inset: -2px 0; }
     .identity-field { padding: 17px; }
     .identity-input {
@@ -1917,6 +1924,7 @@
     .token-step:hover,
     .message-copy:hover,
     .message-edit:hover,
+    .message-reroll:hover,
     .message-edit-action:hover { background: rgba(31,30,29,.055); }
     #send:hover:not(:disabled) { opacity: .85; transform: translateY(-1px); }
     .model-choice:hover { background: rgba(31,30,29,.035); }
@@ -1987,6 +1995,7 @@
     .token-step:active,
     .message-copy:active,
     .message-edit:active,
+    .message-reroll:active,
     .message-edit-action:active,
     .icon-button:active,
     .settings-save:active { transform: none; }
@@ -4297,6 +4306,45 @@
     root.append(actions);
   }
 
+  // 重新生成一条助手回复：删掉这条回复（连同它后面的所有消息），按剩下的上下文重新请求
+  function rerollMessage(root) {
+    if (pending || !root || root.classList.contains("is-editing")) return;
+    const index = Number(root.dataset.msgIndex);
+    if (!Number.isInteger(index)) return;
+    const conversation = getActiveConversation();
+    const convId = conversation.id;
+    const message = conversation.messages[index];
+    if (!message || message.role !== "assistant") return;
+
+    const followingCount = conversation.messages.length - index - 1;
+    if (
+      followingCount > 0 &&
+      !window.confirm(`重新生成会删除这条回复和它后面的 ${followingCount} 条消息，确定吗？`)
+    ) return;
+
+    const draft = cloneConversationStore();
+    const draftConversation = conversationById(convId, draft);
+    if (!draftConversation) return;
+    const removedAttachments = draftConversation.messages
+      .slice(index)
+      .flatMap((item) => item.attachments || []);
+    draftConversation.messages = draftConversation.messages.slice(0, index);
+    draftConversation.updatedAt = new Date().toISOString();
+    if (!persistConversationStore(draft)) return;
+    void deleteImageRecords(removedAttachments).catch(() => {});
+    renderActiveConversation();
+    renderConversationList();
+
+    setPending(true);
+    void streamAssistantReply({
+      conversationId: convId,
+      sessionId: conversation.sessionId,
+      model: currentModel,
+      effort: normalizeEffortForModel(reasoningEffort, modelById(currentModel)),
+      assistantIndex: index,
+    });
+  }
+
   function makeMessageTools(role, bubble, visible, copyText = "") {
     const tools = document.createElement("div");
     tools.className = "message-tools";
@@ -4339,6 +4387,20 @@
     });
 
     tools.append(author, copy, edit);
+
+    // 只有助手消息有「重新生成」：删掉这条回复（和它后面的消息）后按同样上下文重新请求
+    if (role === "assistant") {
+      const reroll = document.createElement("button");
+      reroll.type = "button";
+      reroll.className = "message-reroll";
+      reroll.setAttribute("aria-label", `重新生成${messageRoleName(role)}的回复`);
+      reroll.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"></path><path d="M21 3v6h-6"></path></svg><span class="message-reroll-label">重新生成</span>';
+      reroll.addEventListener("click", () => {
+        const root = reroll.closest(".message-item");
+        if (root) rerollMessage(root);
+      });
+      tools.appendChild(reroll);
+    }
     return tools;
   }
 
@@ -4356,6 +4418,8 @@
       if (copy) copy.setAttribute("aria-label", `复制${messageRoleName(role)}的消息`);
       const edit = item.querySelector(".message-edit");
       if (edit) edit.setAttribute("aria-label", `编辑${messageRoleName(role)}的消息`);
+      const reroll = item.querySelector(".message-reroll");
+      if (reroll) reroll.setAttribute("aria-label", `重新生成${messageRoleName(role)}的回复`);
     });
   }
 
@@ -5119,12 +5183,49 @@
     if (shouldGenerateTitle && text) {
       void requestConversationTitle(requestConversationId, text);
     }
-    const reasoningBox = requestEffort !== "off" ? addReasoningBlock({ webSearch: webSearchEnabled }) : null;
-    const bubble = addBubble("assistant", "", [], requestConversationId, requestUserIndex + 1);
+    await streamAssistantReply({
+      conversationId: requestConversationId,
+      sessionId: requestSessionId,
+      model: requestModel,
+      effort: requestEffort,
+      assistantIndex: requestUserIndex + 1,
+      // 密码错误时回滚这次乐观写入的用户消息和标题
+      onUnauthorized() {
+        const rollbackDraft = cloneConversationStore();
+        const rollbackConversation = conversationById(requestConversationId, rollbackDraft);
+        if (rollbackConversation) {
+          const indexedMessage = rollbackConversation.messages[requestUserIndex];
+          if (indexedMessage?.role === "user") {
+            rollbackConversation.messages.splice(requestUserIndex, 1);
+          } else {
+            const firstImageId = requestAttachments[0]?.id;
+            const fallbackIndex = rollbackConversation.messages.findLastIndex(
+              (item) =>
+                item.role === "user" &&
+                item.content === text &&
+                (!firstImageId || item.attachments?.some((attachment) => attachment.id === firstImageId))
+            );
+            if (fallbackIndex >= 0) rollbackConversation.messages.splice(fallbackIndex, 1);
+          }
+          rollbackConversation.title = previousTitle;
+          rollbackConversation.titleSource = previousTitleSource;
+          rollbackConversation.updatedAt = previousUpdatedAt;
+          persistConversationStore(rollbackDraft, { keepInMemoryOnFailure: true });
+        }
+        void deleteImageRecords(requestAttachments).catch(() => {});
+      },
+    });
+  }
+
+  // send() 和 rerollMessage() 共用的请求流程：建气泡、请求 Worker、流式渲染、落盘助手回复。
+  // 调用前由调用方 setPending(true)，这里负责收尾 setPending(false)。
+  async function streamAssistantReply({ conversationId, sessionId, model, effort, assistantIndex, onUnauthorized }) {
+    const reasoningBox = effort !== "off" ? addReasoningBlock({ webSearch: webSearchEnabled }) : null;
+    const bubble = addBubble("assistant", "", [], conversationId, assistantIndex);
     bubble.classList.add("typing");
 
     try {
-      const storedConversation = conversationById(requestConversationId);
+      const storedConversation = conversationById(conversationId);
       if (!storedConversation) throw new Error("当前会话已不存在");
       const history = await messagesForOpenRouter(storedConversation.messages);
       const requestMessages = systemPrompt.trim()
@@ -5135,10 +5236,10 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: requestMessages,
-          model: requestModel,
+          model,
           password: accessPw,
-          reasoningEffort: requestEffort,
-          session_id: requestSessionId,
+          reasoningEffort: effort,
+          session_id: sessionId,
           webSearch: webSearchEnabled,
           ...(webSearchMaxUses === null ? {} : { webSearchMaxUses }),
           ...(webSearchMaxResults === null ? {} : { webSearchMaxResults }),
@@ -5167,12 +5268,12 @@
         onReasoning(delta) {
           if (!reasoningBox) return;
           reasoningBox.append(delta);
-          if (conversationStore.activeId === requestConversationId) scrollToBottom();
+          if (conversationStore.activeId === conversationId) scrollToBottom();
         },
         onContent(delta) {
           bubble.classList.remove("typing");
           bubble.textContent += delta;
-          if (conversationStore.activeId === requestConversationId) scrollToBottom();
+          if (conversationStore.activeId === conversationId) scrollToBottom();
         },
       });
 
@@ -5180,17 +5281,23 @@
       reasoningBox?.finish();
       if (full) {
         const completedDraft = cloneConversationStore();
-        const completedConversation = conversationById(requestConversationId, completedDraft);
+        const completedConversation = conversationById(conversationId, completedDraft);
         if (completedConversation) {
           completedConversation.messages.push({ role: "assistant", content: full });
           completedConversation.updatedAt = new Date().toISOString();
           persistConversationStore(completedDraft, { keepInMemoryOnFailure: true });
           renderConversationList();
         }
-        if (conversationStore.activeId === requestConversationId) {
+        if (conversationStore.activeId === conversationId) {
           revealMessageTools(bubble);
+          // 刚流式生成的气泡建时没有正文，这里补上复制按钮的内容
+          const copy = bubble.closest(".message-item")?.querySelector(".message-copy");
+          if (copy) {
+            copy.dataset.copyText = full;
+            copy.hidden = false;
+          }
           addCitations(annotations);
-          addCacheBadge(usage, requestModel);
+          addCacheBadge(usage, model);
         }
       } else {
         bubble.classList.add("error");
@@ -5204,35 +5311,14 @@
       if (err.code === 401) {
         localStorage.removeItem(PW_KEY);
         accessPw = "";
-        const rollbackDraft = cloneConversationStore();
-        const rollbackConversation = conversationById(requestConversationId, rollbackDraft);
-        if (rollbackConversation) {
-          const indexedMessage = rollbackConversation.messages[requestUserIndex];
-          if (indexedMessage?.role === "user") {
-            rollbackConversation.messages.splice(requestUserIndex, 1);
-          } else {
-            const firstImageId = requestAttachments[0]?.id;
-            const fallbackIndex = rollbackConversation.messages.findLastIndex(
-              (item) =>
-                item.role === "user" &&
-                item.content === text &&
-                (!firstImageId || item.attachments?.some((attachment) => attachment.id === firstImageId))
-            );
-            if (fallbackIndex >= 0) rollbackConversation.messages.splice(fallbackIndex, 1);
-          }
-          rollbackConversation.title = previousTitle;
-          rollbackConversation.titleSource = previousTitleSource;
-          rollbackConversation.updatedAt = previousUpdatedAt;
-          persistConversationStore(rollbackDraft, { keepInMemoryOnFailure: true });
-        }
-        void deleteImageRecords(requestAttachments).catch(() => {});
+        onUnauthorized?.();
         renderConversationList();
         renderActiveConversation();
         showGate("密码错误，请重新输入");
       }
     } finally {
       setPending(false);
-      if (conversationStore.activeId === requestConversationId) scrollToBottom();
+      if (conversationStore.activeId === conversationId) scrollToBottom();
     }
   }
 
