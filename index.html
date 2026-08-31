@@ -761,6 +761,45 @@
   }
   .message-copy.is-copied { color: var(--accent); }
   .message-edit-action.is-save { color: var(--accent); }
+  .message-variants {
+    display: flex;
+    align-items: center;
+  }
+  .message-variants[hidden] { display: none; }
+  .message-variant-btn {
+    position: relative;
+    display: grid;
+    place-items: center;
+    min-width: 26px;
+    min-height: 36px;
+    padding: 0;
+    color: inherit;
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .message-variant-btn::after {
+    content: "";
+    position: absolute;
+    inset: -4px 0;
+  }
+  .message-variant-btn:disabled { opacity: .3; cursor: default; }
+  .message-variant-btn svg {
+    width: 13px;
+    height: 13px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .message-variant-label {
+    min-width: 24px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
   .message-item.is-editing { width: 100%; }
   .message-edit-area {
     display: block;
@@ -2837,10 +2876,23 @@
       const attachments = item.role === "user"
         ? normalizeMessageAttachments(item.attachments)
         : [];
+      // 助手消息的 reroll 版本：variants 存每个版本的正文，activeVariant 指向当前展示的版本，
+      // content 始终等于当前版本（老代码和导出、发请求都只读 content，天然兼容）
+      const variants = item.role === "assistant" && Array.isArray(item.variants)
+        ? item.variants.filter((entry) => typeof entry === "string")
+        : [];
+      const hasVariants = variants.length > 1;
+      const activeVariant = hasVariants
+        ? Math.min(
+            Math.max(Number.isInteger(item.activeVariant) ? item.activeVariant : variants.length - 1, 0),
+            variants.length - 1,
+          )
+        : 0;
       return {
         role: item.role,
-        content: item.content,
+        content: hasVariants ? variants[activeVariant] : item.content,
         ...(attachments.length ? { attachments } : {}),
+        ...(hasVariants ? { variants, activeVariant } : {}),
       };
     });
   }
@@ -4281,8 +4333,13 @@
       if (!value && !hasImages) { cancelEdit(); return; }
       const draft = cloneConversationStore();
       const draftConversation = conversationById(convId, draft);
-      if (draftConversation && draftConversation.messages[index]) {
-        draftConversation.messages[index].content = value;
+      const draftMessage = draftConversation?.messages[index];
+      if (draftMessage) {
+        draftMessage.content = value;
+        // 有 reroll 版本时同步改当前版本，否则归一化会用旧版本盖掉这次编辑
+        if (draftMessage.variants?.length) {
+          draftMessage.variants[draftMessage.activeVariant ?? draftMessage.variants.length - 1] = value;
+        }
       }
       persistConversationStore(draft, { keepInMemoryOnFailure: true });
       // 就地更新，保留当前会话里已经显示的思考/来源/缓存徽章，不整段重渲染
@@ -4306,7 +4363,8 @@
     root.append(actions);
   }
 
-  // 重新生成一条助手回复：删掉这条回复（连同它后面的所有消息），按剩下的上下文重新请求
+  // 重新生成一条助手回复：旧回复留在 variants 里可切回，新回复流式写进同一个气泡；
+  // 这条回复后面的消息（如果有）是基于旧版本聊出来的，会先弹确认再删除
   function rerollMessage(root) {
     if (pending || !root || root.classList.contains("is-editing")) return;
     const index = Number(root.dataset.msgIndex);
@@ -4319,22 +4377,26 @@
     const followingCount = conversation.messages.length - index - 1;
     if (
       followingCount > 0 &&
-      !window.confirm(`重新生成会删除这条回复和它后面的 ${followingCount} 条消息，确定吗？`)
+      !window.confirm(`重新生成会删除它后面的 ${followingCount} 条消息（这条回复的旧版本会保留，可用箭头切回），确定吗？`)
     ) return;
 
-    const draft = cloneConversationStore();
-    const draftConversation = conversationById(convId, draft);
-    if (!draftConversation) return;
-    const removedAttachments = draftConversation.messages
-      .slice(index)
-      .flatMap((item) => item.attachments || []);
-    draftConversation.messages = draftConversation.messages.slice(0, index);
-    draftConversation.updatedAt = new Date().toISOString();
-    if (!persistConversationStore(draft)) return;
-    void deleteImageRecords(removedAttachments).catch(() => {});
-    renderActiveConversation();
-    renderConversationList();
+    if (followingCount > 0) {
+      const draft = cloneConversationStore();
+      const draftConversation = conversationById(convId, draft);
+      if (!draftConversation) return;
+      const removedAttachments = draftConversation.messages
+        .slice(index + 1)
+        .flatMap((item) => item.attachments || []);
+      draftConversation.messages = draftConversation.messages.slice(0, index + 1);
+      draftConversation.updatedAt = new Date().toISOString();
+      if (!persistConversationStore(draft)) return;
+      void deleteImageRecords(removedAttachments).catch(() => {});
+      renderActiveConversation();
+      renderConversationList();
+    }
 
+    const bubble = messagesEl.querySelector(`.message-item[data-msg-index="${index}"] .msg`);
+    if (!bubble) return;
     setPending(true);
     void streamAssistantReply({
       conversationId: convId,
@@ -4342,7 +4404,55 @@
       model: currentModel,
       effort: normalizeEffortForModel(reasoningEffort, modelById(currentModel)),
       assistantIndex: index,
+      existingBubble: bubble,
     });
+  }
+
+  // 在一条助手回复的多个 reroll 版本之间切换：就地换正文、复制内容和计数，并落盘
+  function switchVariant(root, direction) {
+    if (pending || !root || root.classList.contains("is-editing")) return;
+    const index = Number(root.dataset.msgIndex);
+    if (!Number.isInteger(index)) return;
+    const conversation = getActiveConversation();
+    const message = conversation.messages[index];
+    const count = message?.variants?.length || 0;
+    if (message?.role !== "assistant" || count < 2) return;
+    const current = message.activeVariant ?? count - 1;
+    const target = Math.min(Math.max(current + direction, 0), count - 1);
+    if (target === current) return;
+
+    const draft = cloneConversationStore();
+    const draftMessage = conversationById(conversation.id, draft)?.messages[index];
+    if (!draftMessage?.variants) return;
+    draftMessage.activeVariant = target;
+    draftMessage.content = draftMessage.variants[target];
+    persistConversationStore(draft, { keepInMemoryOnFailure: true });
+
+    const updated = getActiveConversation().messages[index];
+    const bubble = root.querySelector(".msg");
+    if (bubble) bubble.textContent = updated.content;
+    const copy = root.querySelector(".message-copy");
+    if (copy) {
+      copy.dataset.copyText = updated.content;
+      copy.hidden = !updated.content;
+    }
+    updateVariantSwitcher(root, updated);
+  }
+
+  // 根据消息的 variants 状态显示/隐藏「‹ 2/3 ›」切换器并更新禁用态
+  function updateVariantSwitcher(root, message) {
+    const box = root.querySelector(".message-variants");
+    if (!box) return;
+    const count = message?.variants?.length || 0;
+    if (count < 2) {
+      box.hidden = true;
+      return;
+    }
+    const active = message.activeVariant ?? count - 1;
+    box.hidden = false;
+    box.querySelector(".message-variant-label").textContent = `${active + 1}/${count}`;
+    box.querySelector('.message-variant-btn[data-dir="-1"]').disabled = active <= 0;
+    box.querySelector('.message-variant-btn[data-dir="1"]').disabled = active >= count - 1;
   }
 
   function makeMessageTools(role, bubble, visible, copyText = "") {
@@ -4400,6 +4510,32 @@
         if (root) rerollMessage(root);
       });
       tools.appendChild(reroll);
+
+      // reroll 版本切换器「‹ 1/2 ›」，只有存在多个版本时显示（updateVariantSwitcher 控制）
+      const variants = document.createElement("span");
+      variants.className = "message-variants";
+      variants.hidden = true;
+      const makeArrow = (dir, label, path) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "message-variant-btn";
+        button.dataset.dir = String(dir);
+        button.setAttribute("aria-label", label);
+        button.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${path}"></path></svg>`;
+        button.addEventListener("click", () => {
+          const root = button.closest(".message-item");
+          if (root) switchVariant(root, dir);
+        });
+        return button;
+      };
+      const label = document.createElement("span");
+      label.className = "message-variant-label";
+      variants.append(
+        makeArrow(-1, "上一个版本", "M15 18l-6-6 6-6"),
+        label,
+        makeArrow(1, "下一个版本", "M9 18l6-6-6-6"),
+      );
+      tools.appendChild(variants);
     }
     return tools;
   }
@@ -4486,6 +4622,11 @@
       el.textContent = text;
     }
     root.append(el, makeMessageTools(role, el, Boolean(text || attachments.length), text));
+    if (messageIndex !== null) {
+      const stored = conversationById(conversationId || getActiveConversation().id)
+        ?.messages[messageIndex];
+      if (stored) updateVariantSwitcher(root, stored);
+    }
     messagesEl.appendChild(root);
     scrollToBottom();
     return el;
@@ -5219,15 +5360,27 @@
 
   // send() 和 rerollMessage() 共用的请求流程：建气泡、请求 Worker、流式渲染、落盘助手回复。
   // 调用前由调用方 setPending(true)，这里负责收尾 setPending(false)。
-  async function streamAssistantReply({ conversationId, sessionId, model, effort, assistantIndex, onUnauthorized }) {
+  // 传 existingBubble 时是 reroll：流进已有气泡，完成后旧正文进 variants、新正文成为当前版本。
+  async function streamAssistantReply({ conversationId, sessionId, model, effort, assistantIndex, existingBubble, onUnauthorized }) {
     const reasoningBox = effort !== "off" ? addReasoningBlock({ webSearch: webSearchEnabled }) : null;
-    const bubble = addBubble("assistant", "", [], conversationId, assistantIndex);
+    const bubble = existingBubble || addBubble("assistant", "", [], conversationId, assistantIndex);
+    if (existingBubble) {
+      // 思考块从底部挪到被重掷气泡的上方
+      if (reasoningBox) bubble.closest(".message-item")?.before(reasoningBox.root);
+      bubble.classList.remove("error");
+      bubble.textContent = "";
+    }
     bubble.classList.add("typing");
 
     try {
       const storedConversation = conversationById(conversationId);
       if (!storedConversation) throw new Error("当前会话已不存在");
-      const history = await messagesForOpenRouter(storedConversation.messages);
+      // reroll 的上下文只到被重掷的回复之前，不包含旧回复本身
+      const history = await messagesForOpenRouter(
+        existingBubble
+          ? storedConversation.messages.slice(0, assistantIndex)
+          : storedConversation.messages,
+      );
       const requestMessages = systemPrompt.trim()
         ? [{ role: "system", content: systemPrompt.trim() }, ...history]
         : history;
@@ -5283,19 +5436,33 @@
         const completedDraft = cloneConversationStore();
         const completedConversation = conversationById(conversationId, completedDraft);
         if (completedConversation) {
-          completedConversation.messages.push({ role: "assistant", content: full });
+          if (existingBubble) {
+            const target = completedConversation.messages[assistantIndex];
+            if (target?.role === "assistant") {
+              const variants = target.variants?.length ? [...target.variants] : [target.content];
+              variants.push(full);
+              target.variants = variants;
+              target.activeVariant = variants.length - 1;
+              target.content = full;
+            }
+          } else {
+            completedConversation.messages.push({ role: "assistant", content: full });
+          }
           completedConversation.updatedAt = new Date().toISOString();
           persistConversationStore(completedDraft, { keepInMemoryOnFailure: true });
           renderConversationList();
         }
         if (conversationStore.activeId === conversationId) {
           revealMessageTools(bubble);
+          const item = bubble.closest(".message-item");
           // 刚流式生成的气泡建时没有正文，这里补上复制按钮的内容
-          const copy = bubble.closest(".message-item")?.querySelector(".message-copy");
+          const copy = item?.querySelector(".message-copy");
           if (copy) {
             copy.dataset.copyText = full;
             copy.hidden = false;
           }
+          const storedMessage = getActiveConversation().messages[assistantIndex];
+          if (item && storedMessage) updateVariantSwitcher(item, storedMessage);
           addCitations(annotations);
           addCacheBadge(usage, model);
         }
