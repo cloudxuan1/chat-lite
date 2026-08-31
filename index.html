@@ -3281,8 +3281,11 @@
   }
 
   function autoGrowSystemPrompt() {
+    // 先记住滚动位置：height 置 auto 的瞬间输入框塌掉，promptScroll 会被浏览器强行拉回，造成打字时上下跳
+    const scrollTop = promptScroll.scrollTop;
     systemPromptInput.style.height = "auto";
     systemPromptInput.style.height = `${Math.max(systemPromptInput.scrollHeight, 220)}px`;
+    promptScroll.scrollTop = scrollTop;
   }
 
   function stepMaxCompletionTokens(direction) {
@@ -4228,8 +4231,11 @@
     root.classList.add("is-editing");
 
     const autoGrow = () => {
+      // 同 autoGrowSystemPrompt：改高度前后保住消息区滚动位置，避免每敲一个字上下跳
+      const scrollTop = messagesEl.scrollTop;
       area.style.height = "auto";
       area.style.height = area.scrollHeight + "px";
+      messagesEl.scrollTop = scrollTop;
     };
     area.addEventListener("input", autoGrow);
     autoGrow();
