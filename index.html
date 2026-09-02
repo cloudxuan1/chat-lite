@@ -1741,6 +1741,8 @@
     border-top: .5px solid rgba(31,30,29,.1);
     background: var(--bg-primary);
   }
+  /* 对话与导出页两张卡之间留出和设置首页分组一样的间距，别贴在一起 */
+  .identity-page-content > .settings-card + .settings-card { margin-top: 22px; }
   .backup-card { display: flex; flex-direction: column; gap: 10px; }
   .backup-row { display: flex; gap: 10px; }
   .backup-btn {
