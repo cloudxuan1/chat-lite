@@ -142,7 +142,7 @@
   }
   .conversation-sidebar-header {
     display: grid;
-    grid-template-columns: 1fr auto auto;
+    grid-template-columns: 1fr auto auto auto;
     align-items: center;
     gap: 2px;
     min-height: 48px;
@@ -321,6 +321,84 @@
   }
   .conversation-menu-button.danger {
     color: #9a3412;
+  }
+  /* 会话文件夹 */
+  .conversation-section-label {
+    margin: 12px 10px 3px;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .3px;
+  }
+  .conversation-folder { margin: 2px 0; }
+  .conversation-folder-row {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 44px;
+    align-items: center;
+    min-height: 48px;
+    border-radius: 14px;
+  }
+  .conversation-folder.has-active.is-collapsed .conversation-folder-row { background: rgba(217,119,87,.09); }
+  .conversation-folder-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    min-height: 48px;
+    padding: 6px 6px 6px 10px;
+    color: inherit;
+    background: transparent;
+    border: none;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .conversation-folder-toggle svg {
+    flex: none;
+    width: 17px;
+    height: 17px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.65;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .conversation-folder-toggle .conversation-folder-chevron {
+    width: 14px;
+    height: 14px;
+    color: var(--text-muted);
+    transition: transform var(--motion-fast) var(--ease-out);
+  }
+  .conversation-folder.is-collapsed .conversation-folder-chevron { transform: rotate(-90deg); }
+  .conversation-folder-name {
+    min-width: 0;
+    overflow: hidden;
+    font-size: 14px;
+    font-weight: 650;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .conversation-folder-count {
+    color: var(--text-muted);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+  }
+  .conversation-folder-items { padding-left: 14px; }
+  .conversation-folder-empty {
+    margin: 0;
+    padding: 4px 12px 10px 12px;
+    color: var(--text-muted);
+    font-size: 12px;
+  }
+  .conversation-folder-menu { width: 150px; }
+  .conversation-move-menu { width: 190px; }
+  .conversation-menu-button.is-current { color: var(--accent); }
+  .conversation-menu-divider {
+    height: .5px;
+    margin: 4px 6px;
+    background: rgba(31,30,29,.12);
   }
   .conversation-rename-form {
     grid-column: 1 / -1;
@@ -2170,6 +2248,9 @@
       <div class="conversation-sidebar-inner">
         <header class="conversation-sidebar-header">
           <h2 id="conversation-sidebar-title">会话</h2>
+          <button class="conversation-sidebar-action" id="conversation-new-folder" type="button" aria-label="新建文件夹">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"></path><path d="M12 10v6M9 13h6"></path></svg>
+          </button>
           <button class="conversation-sidebar-action" id="conversation-new" type="button" aria-label="新建会话">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
           </button>
@@ -2178,7 +2259,7 @@
           </button>
         </header>
         <p class="conversation-pending-note" id="conversation-pending-note"></p>
-        <nav class="conversation-list" id="conversation-list" aria-label="最近会话"></nav>
+        <nav class="conversation-list" id="conversation-list" aria-label="会话列表"></nav>
         <div class="conversation-live" id="conversation-live" aria-live="polite"></div>
       </div>
     </aside>
@@ -2617,6 +2698,8 @@
   let settingsSnapshot = "";
   let settingsTrigger = null;
   let conversationMenuId = null;
+  let folderMenuId = null;     // 打开了「…」菜单的文件夹
+  let movePickerId = null;     // 打开了「移到文件夹」选择列表的会话
   let renamingConversationId = null;
   let conversationSidebarTrigger = null;
   let pendingImages = [];
@@ -2635,6 +2718,7 @@
   const conversationsOpen = document.getElementById("conversations-open");
   const conversationClose = document.getElementById("conversation-close");
   const conversationNew = document.getElementById("conversation-new");
+  const conversationNewFolder = document.getElementById("conversation-new-folder");
   const conversationList = document.getElementById("conversation-list");
   const conversationPendingNote = document.getElementById("conversation-pending-note");
   const conversationLive = document.getElementById("conversation-live");
@@ -3076,7 +3160,7 @@
       : fallback;
   }
 
-  function createConversation({ messages = [], sessionId = "", createdAt = new Date().toISOString() } = {}) {
+  function createConversation({ messages = [], sessionId = "", createdAt = new Date().toISOString(), folderId = "" } = {}) {
     const safeMessages = normalizeStoredMessages(messages);
     const title = titleFromFirstMessage(safeMessages);
     return {
@@ -3087,7 +3171,39 @@
       sessionId: sessionId && sessionId.length <= 256 ? sessionId : createSessionId(),
       createdAt,
       updatedAt: createdAt,
+      ...(folderId ? { folderId } : {}),
     };
+  }
+
+  // ===== 会话文件夹：存在会话 store 的 folders 里，会话用 folderId 指向所属文件夹（单层，不嵌套）=====
+  function createFolderId() {
+    return `f_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  function normalizeFolderName(value, fallback = "未命名文件夹") {
+    return String(value ?? "").replace(/[\r\n\t]+/g, " ").trim().slice(0, 40) || fallback;
+  }
+
+  function normalizeFolders(items, now) {
+    const seen = new Set();
+    return (Array.isArray(items) ? items : [])
+      .filter((item) => item && typeof item === "object")
+      .map((item) => {
+        let id = typeof item.id === "string" && /^[A-Za-z0-9._:-]{1,64}$/.test(item.id) ? item.id : "";
+        if (!id || seen.has(id)) id = createFolderId();
+        seen.add(id);
+        return {
+          id,
+          name: normalizeFolderName(item.name),
+          pinned: Boolean(item.pinned),
+          collapsed: Boolean(item.collapsed),
+          createdAt: validStoredDate(item.createdAt, now),
+        };
+      });
+  }
+
+  function folderById(folderId, store = conversationStore) {
+    return (store.folders || []).find((item) => item.id === folderId) || null;
   }
 
   function isRecoverableConversationStore(value) {
@@ -3126,6 +3242,8 @@
     const now = new Date().toISOString();
     const titleSources = new Set(["default", "fallback", "deepseek", "manual"]);
     const conversations = [];
+    const folders = normalizeFolders(source.folders, now);
+    const folderIds = new Set(folders.map((item) => item.id));
 
     for (const item of Array.isArray(source.conversations) ? source.conversations : []) {
       if (!item || typeof item !== "object" || !Array.isArray(item.messages)) continue;
@@ -3152,6 +3270,9 @@
         ? item.titleSource
         : title === "新对话" ? "default" : "fallback";
 
+      // 所属文件夹不存在就当未分类；没有文件夹时不写这个键，保持老数据原样（加载时有"是否原样"校验）
+      const folderId = typeof item?.folderId === "string" && folderIds.has(item.folderId) ? item.folderId : "";
+
       conversations.push({
         id,
         title,
@@ -3160,6 +3281,7 @@
         sessionId,
         createdAt,
         updatedAt,
+        ...(folderId ? { folderId } : {}),
       });
     }
 
@@ -3167,7 +3289,7 @@
     const activeId = conversations.some((item) => item.id === source.activeId)
       ? source.activeId
       : conversations[0].id;
-    return { version: 1, activeId, conversations };
+    return { version: 1, activeId, ...(folders.length ? { folders } : {}), conversations };
   }
 
   function loadLegacyMessages() {
@@ -4049,9 +4171,171 @@
   function renderConversationList() {
     conversationList.replaceChildren();
     conversationNew.disabled = pending;
+    conversationNewFolder.disabled = pending;
     conversationPendingNote.textContent = pending ? "回复完成后可切换会话" : "";
 
+    // 分组：置顶文件夹（默认展开）→ 其他文件夹（默认折叠）→ 最近（未分类会话）
+    const folders = conversationStore.folders || [];
+    const byFolder = new Map(folders.map((folder) => [folder.id, []]));
+    const loose = [];
     for (const conversation of sortedConversations()) {
+      if (conversation.folderId && byFolder.has(conversation.folderId)) byFolder.get(conversation.folderId).push(conversation);
+      else loose.push(conversation);
+    }
+    const pinned = folders.filter((folder) => folder.pinned);
+    const others = folders.filter((folder) => !folder.pinned);
+    if (pinned.length) {
+      conversationList.appendChild(buildSectionLabel("已置顶"));
+      pinned.forEach((folder) => conversationList.appendChild(buildFolder(folder, byFolder.get(folder.id))));
+    }
+    if (others.length) {
+      conversationList.appendChild(buildSectionLabel("文件夹"));
+      others.forEach((folder) => conversationList.appendChild(buildFolder(folder, byFolder.get(folder.id))));
+    }
+    if (folders.length && loose.length) conversationList.appendChild(buildSectionLabel("最近"));
+    loose.forEach((conversation) => conversationList.appendChild(buildConversationItem(conversation)));
+
+    if (renamingConversationId) {
+      window.requestAnimationFrame(() => {
+        const renameInput = conversationList.querySelector(".conversation-rename-input");
+        renameInput?.focus();
+        renameInput?.select();
+      });
+    } else if (conversationMenuId || movePickerId || folderMenuId) {
+      window.requestAnimationFrame(() => {
+        const menu = conversationList.querySelector(".conversation-menu");
+        menu?.scrollIntoView({ block: "nearest" });
+        menu?.querySelector(".conversation-menu-button")?.focus();
+      });
+    }
+  }
+
+  function buildSectionLabel(text) {
+    const label = document.createElement("div");
+    label.className = "conversation-section-label";
+    label.textContent = text;
+    return label;
+  }
+
+  function buildFolder(folder, conversations) {
+    const root = document.createElement("div");
+    root.className = "conversation-folder";
+    root.dataset.folderId = folder.id;
+    if (folder.collapsed) root.classList.add("is-collapsed");
+    if (conversations.some((item) => item.id === conversationStore.activeId)) root.classList.add("has-active");
+
+    const row = document.createElement("div");
+    row.className = "conversation-folder-row";
+
+    const toggle = document.createElement("button");
+    toggle.className = "conversation-folder-toggle";
+    toggle.type = "button";
+    toggle.dataset.action = "folder-toggle";
+    toggle.dataset.folderId = folder.id;
+    toggle.setAttribute("aria-expanded", String(!folder.collapsed));
+    toggle.innerHTML = `
+      <svg class="conversation-folder-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"></path></svg>
+      <span class="conversation-folder-name"></span>
+      <span class="conversation-folder-count"></span>`;
+    toggle.querySelector(".conversation-folder-name").textContent = folder.name;
+    toggle.querySelector(".conversation-folder-count").textContent = String(conversations.length);
+
+    const more = document.createElement("button");
+    more.className = "conversation-more";
+    more.type = "button";
+    more.dataset.action = "folder-menu";
+    more.dataset.folderId = folder.id;
+    more.disabled = pending;
+    more.setAttribute("aria-label", `文件夹${folder.name}的更多操作`);
+    more.setAttribute("aria-expanded", String(folderMenuId === folder.id));
+    more.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r=".8"></circle><circle cx="12" cy="12" r=".8"></circle><circle cx="19" cy="12" r=".8"></circle></svg>';
+    row.append(toggle, more);
+
+    if (folderMenuId === folder.id) {
+      const menu = document.createElement("div");
+      menu.className = "conversation-menu conversation-folder-menu";
+      menu.setAttribute("role", "group");
+      menu.setAttribute("aria-label", `文件夹${folder.name}的操作`);
+      menu.innerHTML = `
+        <button class="conversation-menu-button" type="button" data-action="folder-rename" data-folder-id="${folder.id}">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 20 4.2-1 10.6-10.6-3.2-3.2L5 15.8 4 20Z"></path><path d="m13.8 7 3.2 3.2"></path></svg>
+          <span>重命名</span>
+        </button>
+        <button class="conversation-menu-button" type="button" data-action="folder-pin" data-folder-id="${folder.id}">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6l-1 6 3 3v2H7v-2l3-3-1-6Z"></path><path d="M12 15v6"></path></svg>
+          <span>${folder.pinned ? "取消置顶" : "置顶"}</span>
+        </button>
+        <button class="conversation-menu-button danger" type="button" data-action="folder-delete" data-folder-id="${folder.id}">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"></path><path d="m9 7 .7-2h4.6l.7 2"></path><path d="m7 7 .7 13h8.6L17 7"></path></svg>
+          <span>删除文件夹</span>
+        </button>`;
+      row.appendChild(menu);
+    }
+    root.appendChild(row);
+
+    if (!folder.collapsed) {
+      const items = document.createElement("div");
+      items.className = "conversation-folder-items";
+      if (conversations.length) {
+        conversations.forEach((conversation) => items.appendChild(buildConversationItem(conversation)));
+      } else {
+        const empty = document.createElement("p");
+        empty.className = "conversation-folder-empty";
+        empty.textContent = "还没有会话。在会话的「…」里选「移到文件夹」。";
+        items.appendChild(empty);
+      }
+      root.appendChild(items);
+    }
+    return root;
+  }
+
+  // 「移到文件夹」选择列表：现有文件夹（当前所在打 ✓）+ 新建文件夹 + 移出文件夹
+  function buildMovePicker(conversation) {
+    const menu = document.createElement("div");
+    menu.className = "conversation-menu conversation-move-menu";
+    menu.setAttribute("role", "group");
+    menu.setAttribute("aria-label", `把${conversation.title}移到文件夹`);
+    const folders = conversationStore.folders || [];
+    const check = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5 9-10"></path></svg>';
+    const folderIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"></path></svg>';
+    for (const folder of folders) {
+      const button = document.createElement("button");
+      const current = conversation.folderId === folder.id;
+      button.className = `conversation-menu-button${current ? " is-current" : ""}`;
+      button.type = "button";
+      button.dataset.action = "move-to";
+      button.dataset.conversationId = conversation.id;
+      button.dataset.folderId = folder.id;
+      button.innerHTML = `${current ? check : folderIcon}<span></span>`;
+      button.querySelector("span").textContent = folder.name;
+      menu.appendChild(button);
+    }
+    if (folders.length) {
+      const divider = document.createElement("div");
+      divider.className = "conversation-menu-divider";
+      menu.appendChild(divider);
+    }
+    const create = document.createElement("button");
+    create.className = "conversation-menu-button";
+    create.type = "button";
+    create.dataset.action = "move-new-folder";
+    create.dataset.conversationId = conversation.id;
+    create.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg><span>新建文件夹…</span>';
+    menu.appendChild(create);
+    if (conversation.folderId) {
+      const out = document.createElement("button");
+      out.className = "conversation-menu-button";
+      out.type = "button";
+      out.dataset.action = "move-out";
+      out.dataset.conversationId = conversation.id;
+      out.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-8"></path><path d="m14 3 4 4-4 4"></path></svg><span>移出文件夹</span>';
+      menu.appendChild(out);
+    }
+    return menu;
+  }
+
+  function buildConversationItem(conversation) {
       const item = document.createElement("div");
       item.className = "conversation-item";
       item.dataset.conversationId = conversation.id;
@@ -4084,8 +4368,7 @@
 
         form.append(renameInput, save, cancel);
         item.appendChild(form);
-        conversationList.appendChild(item);
-        continue;
+        return item;
       }
 
       const select = document.createElement("button");
@@ -4136,7 +4419,9 @@
       more.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r=".8"></circle><circle cx="12" cy="12" r=".8"></circle><circle cx="19" cy="12" r=".8"></circle></svg>';
       item.append(select, more);
 
-      if (conversationMenuId === conversation.id) {
+      if (movePickerId === conversation.id) {
+        item.appendChild(buildMovePicker(conversation));
+      } else if (conversationMenuId === conversation.id) {
         const menu = document.createElement("div");
         menu.className = "conversation-menu";
         menu.setAttribute("role", "group");
@@ -4146,6 +4431,10 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 20 4.2-1 10.6-10.6-3.2-3.2L5 15.8 4 20Z"></path><path d="m13.8 7 3.2 3.2"></path></svg>
             <span>重命名</span>
           </button>
+          <button class="conversation-menu-button" type="button" data-action="move-open" data-conversation-id="${conversation.id}">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"></path></svg>
+            <span>移到文件夹</span>
+          </button>
           <button class="conversation-menu-button danger" type="button" data-action="delete" data-conversation-id="${conversation.id}">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"></path><path d="m9 7 .7-2h4.6l.7 2"></path><path d="m7 7 .7 13h8.6L17 7"></path></svg>
             <span>删除</span>
@@ -4153,24 +4442,7 @@
         `;
         item.appendChild(menu);
       }
-      conversationList.appendChild(item);
-    }
-
-    if (renamingConversationId) {
-      window.requestAnimationFrame(() => {
-        const renameInput = conversationList.querySelector(".conversation-rename-input");
-        renameInput?.focus();
-        renameInput?.select();
-      });
-    } else if (conversationMenuId) {
-      window.requestAnimationFrame(() => {
-        const menu = [...conversationList.querySelectorAll(".conversation-item")]
-          .find((item) => item.dataset.conversationId === conversationMenuId)
-          ?.querySelector(".conversation-menu");
-        menu?.scrollIntoView({ block: "nearest" });
-        menu?.querySelector(".conversation-menu-button")?.focus();
-      });
-    }
+      return item;
   }
 
   function focusConversationMore(conversationId) {
@@ -4219,6 +4491,8 @@
     pending = value;
     if (value) {
       conversationMenuId = null;
+      folderMenuId = null;
+      movePickerId = null;
       renamingConversationId = null;
     }
     updateConversationActionState();
@@ -4286,6 +4560,8 @@
     closeQuickPanel();
     conversationSidebarTrigger = trigger;
     conversationMenuId = null;
+    folderMenuId = null;
+    movePickerId = null;
     renamingConversationId = null;
     sidebarOpen = true;
     if (desktopSidebarMedia.matches) saveSidebarPreference(true);
@@ -4299,6 +4575,8 @@
 
   function closeConversationSidebar({ returnFocus = true } = {}) {
     conversationMenuId = null;
+    folderMenuId = null;
+    movePickerId = null;
     renamingConversationId = null;
     sidebarOpen = false;
     if (desktopSidebarMedia.matches) saveSidebarPreference(false);
@@ -4356,10 +4634,93 @@
     draft.activeId = conversationId;
     if (!persistConversationStore(draft)) return;
     conversationMenuId = null;
+    folderMenuId = null;
+    movePickerId = null;
     renamingConversationId = null;
     renderConversationList();
     renderActiveConversation();
     if (!desktopSidebarMedia.matches) closeConversationSidebar();
+  }
+
+  function persistFolderDraft(draft, message) {
+    if (!persistConversationStore(draft)) return false;
+    renderConversationList();
+    if (message) announceConversation(message);
+    return true;
+  }
+
+  function createFolderInteractive() {
+    if (pending) {
+      announceConversation("回复完成后可新建文件夹。");
+      return null;
+    }
+    const raw = window.prompt("文件夹名称", "");
+    if (raw === null || !raw.trim()) return null;
+    const folder = { id: createFolderId(), name: normalizeFolderName(raw), pinned: false, collapsed: false, createdAt: new Date().toISOString() };
+    const draft = cloneConversationStore();
+    draft.folders = [...(draft.folders || []), folder];
+    return persistFolderDraft(draft, `已新建文件夹“${folder.name}”。`) ? folder : null;
+  }
+
+  function renameFolder(folderId) {
+    const folder = folderById(folderId);
+    if (!folder || pending) return;
+    const raw = window.prompt("文件夹名称", folder.name);
+    if (raw === null || !raw.trim()) return;
+    const draft = cloneConversationStore();
+    folderById(folderId, draft).name = normalizeFolderName(raw);
+    persistFolderDraft(draft);
+  }
+
+  function toggleFolderPinned(folderId) {
+    if (pending) return;
+    const draft = cloneConversationStore();
+    const folder = folderById(folderId, draft);
+    if (!folder) return;
+    folder.pinned = !folder.pinned;
+    folder.collapsed = !folder.pinned; // 置顶的展开着，取消置顶的折叠起来
+    persistFolderDraft(draft, folder.pinned ? `已置顶“${folder.name}”。` : `已取消置顶“${folder.name}”。`);
+  }
+
+  function toggleFolderCollapsed(folderId) {
+    const draft = cloneConversationStore();
+    const folder = folderById(folderId, draft);
+    if (!folder) return;
+    folder.collapsed = !folder.collapsed;
+    persistConversationStore(draft, { keepInMemoryOnFailure: true });
+    renderConversationList();
+  }
+
+  // 删文件夹只是把里面的会话放回未分类，不删对话
+  function deleteFolder(folderId) {
+    const folder = folderById(folderId);
+    if (!folder || pending) return;
+    const count = conversationStore.conversations.filter((item) => item.folderId === folderId).length;
+    if (!window.confirm(`删除文件夹“${folder.name}”？里面的 ${count} 个会话会回到未分类，不会被删除。`)) return;
+    const draft = cloneConversationStore();
+    draft.folders = (draft.folders || []).filter((item) => item.id !== folderId);
+    for (const conversation of draft.conversations) {
+      if (conversation.folderId === folderId) delete conversation.folderId;
+    }
+    persistFolderDraft(draft, `已删除文件夹“${folder.name}”。`);
+  }
+
+  function moveConversationToFolder(conversationId, folderId) {
+    if (pending) {
+      announceConversation("回复完成后可移动会话。");
+      return;
+    }
+    const draft = cloneConversationStore();
+    const conversation = conversationById(conversationId, draft);
+    if (!conversation) return;
+    const folder = folderId ? folderById(folderId, draft) : null;
+    if (folder) {
+      conversation.folderId = folder.id;
+      folder.collapsed = false; // 移进去就展开，让人看到它到哪了
+    } else {
+      delete conversation.folderId;
+    }
+    persistFolderDraft(draft, folder ? `已移到“${folder.name}”。` : "已移出文件夹。");
   }
 
   function createNewConversation() {
@@ -4374,7 +4735,7 @@
       return;
     }
     const draft = cloneConversationStore();
-    const created = createConversation();
+    const created = createConversation({ folderId: active.folderId || "" });
     draft.conversations.push(created);
     draft.activeId = created.id;
     if (!persistConversationStore(draft)) return;
@@ -4403,6 +4764,8 @@
     if (!persistConversationStore(draft)) return;
     renamingConversationId = null;
     conversationMenuId = null;
+    folderMenuId = null;
+    movePickerId = null;
     renderConversationList();
     focusConversationMore(conversationId);
     announceConversation("标题已保存。");
@@ -4436,6 +4799,8 @@
       showAppStatus("会话已删除，但有些本机图片暂时没有清理。");
     });
     conversationMenuId = null;
+    folderMenuId = null;
+    movePickerId = null;
     renamingConversationId = null;
     renderConversationList();
     if (deletingActiveConversation) renderActiveConversation();
@@ -5004,6 +5369,11 @@
       // 合并会话：按 id 去重，只加备份里的新对话，不覆盖或删除现有对话
       const importedStore = normalizeConversationStore(backup.store);
       const draft = cloneConversationStore();
+      // 文件夹也按 id 合并，只加新的；导入的会话保留 folderId
+      const existingFolderIds = new Set((draft.folders || []).map((f) => f.id));
+      for (const folder of importedStore.folders || []) {
+        if (!existingFolderIds.has(folder.id)) { draft.folders = [...(draft.folders || []), folder]; existingFolderIds.add(folder.id); }
+      }
       const existingIds = new Set(draft.conversations.map((c) => c.id));
       let added = 0;
       for (const conv of importedStore.conversations) {
@@ -5855,6 +6225,7 @@
   conversationScrim.addEventListener("click", () => closeConversationSidebar());
   conversationSidebar.addEventListener("keydown", trapConversationSidebarFocus);
   conversationNew.addEventListener("click", createNewConversation);
+  conversationNewFolder.addEventListener("click", () => void createFolderInteractive());
   conversationList.addEventListener("click", (event) => {
     const actionTarget = event.target.closest("[data-action]");
     if (!(actionTarget instanceof HTMLElement) || !conversationList.contains(actionTarget)) return;
@@ -5871,6 +6242,8 @@
       if (closingMenu) focusConversationMore(conversationId);
     } else if (action === "rename" && conversationId) {
       conversationMenuId = null;
+      folderMenuId = null;
+      movePickerId = null;
       renamingConversationId = conversationId;
       renderConversationList();
     } else if (action === "delete" && conversationId) {
@@ -5880,6 +6253,40 @@
       renamingConversationId = null;
       renderConversationList();
       if (cancelledConversationId) focusConversationMore(cancelledConversationId);
+    } else if (action === "move-open" && conversationId) {
+      movePickerId = conversationId;
+      conversationMenuId = null;
+      folderMenuId = null;
+      renderConversationList();
+    } else if (action === "move-to" && conversationId) {
+      moveConversationToFolder(conversationId, actionTarget.dataset.folderId || "");
+    } else if (action === "move-out" && conversationId) {
+      moveConversationToFolder(conversationId, "");
+    } else if (action === "move-new-folder" && conversationId) {
+      const folder = createFolderInteractive();
+      if (folder) moveConversationToFolder(conversationId, folder.id);
+      else renderConversationList();
+    } else {
+      const folderId = actionTarget.dataset.folderId;
+      if (!folderId) return;
+      if (action === "folder-toggle") {
+        toggleFolderCollapsed(folderId);
+      } else if (action === "folder-menu") {
+        const closing = folderMenuId === folderId;
+        folderMenuId = closing ? null : folderId;
+        conversationMenuId = null;
+        movePickerId = null;
+        renamingConversationId = null;
+        renderConversationList();
+      } else if (action === "folder-rename") {
+        folderMenuId = null;
+        renameFolder(folderId);
+        renderConversationList();
+      } else if (action === "folder-pin") {
+        toggleFolderPinned(folderId);
+      } else if (action === "folder-delete") {
+        deleteFolder(folderId);
+      }
     }
   });
   conversationList.addEventListener("submit", (event) => {
@@ -5894,6 +6301,8 @@
       ? loadSidebarPreference()
       : false;
     conversationMenuId = null;
+    folderMenuId = null;
+    movePickerId = null;
     renamingConversationId = null;
     renderConversationList();
     syncSidebarLayout();
@@ -5991,8 +6400,11 @@
     if (!event.composedPath().includes(document.querySelector(".model-control"))) {
       closeQuickPanel();
     }
-    if (conversationMenuId && !event.target.closest(".conversation-item")) {
+    if ((conversationMenuId || movePickerId || folderMenuId) &&
+      !event.target.closest(".conversation-item, .conversation-folder-row")) {
       conversationMenuId = null;
+      folderMenuId = null;
+      movePickerId = null;
       renderConversationList();
     }
   });
@@ -6015,9 +6427,15 @@
       renamingConversationId = null;
       renderConversationList();
       focusConversationMore(cancelledConversationId);
+    } else if (movePickerId || folderMenuId) {
+      movePickerId = null;
+      folderMenuId = null;
+      renderConversationList();
     } else if (conversationMenuId) {
       const closedConversationId = conversationMenuId;
       conversationMenuId = null;
+      folderMenuId = null;
+      movePickerId = null;
       renderConversationList();
       focusConversationMore(closedConversationId);
     } else if (sidebarOpen) {
