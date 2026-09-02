@@ -142,7 +142,7 @@
   }
   .conversation-sidebar-header {
     display: grid;
-    grid-template-columns: 1fr auto auto;
+    grid-template-columns: 1fr auto auto auto;
     align-items: center;
     gap: 2px;
     min-height: 48px;
@@ -2381,6 +2381,9 @@
       <div class="conversation-sidebar-inner">
         <header class="conversation-sidebar-header">
           <h2 id="conversation-sidebar-title">会话</h2>
+          <button class="conversation-sidebar-action" id="conversation-new-folder" type="button" aria-label="新建文件夹">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"></path><path d="M12 10v6M9 13h6"></path></svg>
+          </button>
           <button class="conversation-sidebar-action" id="conversation-new" type="button" aria-label="新建会话">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
           </button>
@@ -2867,6 +2870,7 @@
   const conversationsOpen = document.getElementById("conversations-open");
   const conversationClose = document.getElementById("conversation-close");
   const conversationNew = document.getElementById("conversation-new");
+  const conversationNewFolder = document.getElementById("conversation-new-folder");
   const conversationList = document.getElementById("conversation-list");
   const conversationPendingNote = document.getElementById("conversation-pending-note");
   const conversationLive = document.getElementById("conversation-live");
@@ -4324,6 +4328,7 @@
   function renderConversationList() {
     conversationList.replaceChildren();
     conversationNew.disabled = pending;
+    conversationNewFolder.disabled = pending;
     conversationPendingNote.textContent = pending ? "回复完成后可切换会话" : "";
 
     // 分组：置顶文件夹（默认展开）→ 其他文件夹（默认折叠）→ 最近（未分类会话）
@@ -6544,6 +6549,13 @@
   conversationScrim.addEventListener("click", () => closeConversationSidebar());
   conversationSidebar.addEventListener("keydown", trapConversationSidebarFocus);
   conversationNew.addEventListener("click", createNewConversation);
+  // 侧栏头部新建文件夹：建完打开文件夹页并展开它（未置顶的文件夹不在侧栏里显示，不然看不到建在哪）
+  conversationNewFolder.addEventListener("click", () => {
+    const folder = createFolderInteractive();
+    if (!folder) return;
+    folderPageExpandedId = folder.id;
+    openFolderScreen();
+  });
   conversationList.addEventListener("click", (event) => {
     const actionTarget = event.target.closest("[data-action]");
     if (!(actionTarget instanceof HTMLElement) || !conversationList.contains(actionTarget)) return;
