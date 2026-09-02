@@ -142,7 +142,7 @@
   }
   .conversation-sidebar-header {
     display: grid;
-    grid-template-columns: 1fr auto auto auto;
+    grid-template-columns: 1fr auto auto;
     align-items: center;
     gap: 2px;
     min-height: 48px;
@@ -330,6 +330,139 @@
     font-weight: 600;
     letter-spacing: .3px;
   }
+  .conversation-folders-entry {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 48px;
+    margin: 2px 0 4px;
+    padding: 6px 10px 6px 12px;
+    color: inherit;
+    background: transparent;
+    border: none;
+    border-radius: 14px;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 650;
+    text-align: left;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .conversation-folders-entry:disabled { opacity: .5; cursor: default; }
+  .conversation-folders-entry svg {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.65;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .conversation-folders-entry .conversation-folder-count { margin-left: auto; }
+  .conversation-folders-entry .conversation-folders-chevron {
+    width: 14px;
+    height: 14px;
+    color: var(--text-muted);
+  }
+  /* 文件夹页 */
+  .folder-page-content { max-width: 600px; padding-top: 18px; }
+  .folder-page-card { padding: 0; overflow: hidden; }
+  .folder-page-row {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 44px;
+    align-items: center;
+    min-height: 58px;
+  }
+  .folder-page-row:not(:first-child) { border-top: .5px solid rgba(31,30,29,.1); }
+  .folder-page-toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    min-height: 58px;
+    padding: 8px 8px 8px 14px;
+    color: inherit;
+    background: transparent;
+    border: none;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .folder-page-toggle svg {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.65;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .folder-page-toggle .conversation-folder-chevron {
+    width: 14px;
+    height: 14px;
+    color: var(--text-muted);
+    transform: rotate(-90deg);
+    transition: transform var(--motion-fast) var(--ease-out);
+  }
+  .folder-page-row.is-expanded .conversation-folder-chevron { transform: none; }
+  .folder-page-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  .folder-page-name {
+    overflow: hidden;
+    font-size: 15px;
+    font-weight: 650;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .folder-page-meta { color: var(--text-muted); font-size: 12px; }
+  .folder-page-toggle .folder-page-pin { width: 14px; height: 14px; color: var(--accent); }
+  .folder-page-row .conversation-menu { top: 50px; right: 8px; }
+  .folder-page-items {
+    padding: 2px 8px 8px 44px;
+    background: rgba(31,30,29,.025);
+  }
+  .folder-page-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: 100%;
+    min-height: 44px;
+    padding: 7px 10px;
+    color: inherit;
+    background: transparent;
+    border: none;
+    border-radius: 10px;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .folder-page-item.active { background: rgba(217,119,87,.09); }
+  .folder-page-item-title {
+    overflow: hidden;
+    font-size: 14px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .folder-page-item-time { color: var(--text-muted); font-size: 11px; }
+  .folder-page-empty {
+    margin: 0;
+    padding: 6px 14px 12px 44px;
+    color: var(--text-muted);
+    font-size: 12px;
+  }
+  .folder-page-empty-all { padding: 16px; }
+  .folder-page-note { margin: 12px 3px 0; }
   .conversation-folder { margin: 2px 0; }
   .conversation-folder-row {
     position: relative;
@@ -2248,9 +2381,6 @@
       <div class="conversation-sidebar-inner">
         <header class="conversation-sidebar-header">
           <h2 id="conversation-sidebar-title">会话</h2>
-          <button class="conversation-sidebar-action" id="conversation-new-folder" type="button" aria-label="新建文件夹">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"></path><path d="M12 10v6M9 13h6"></path></svg>
-          </button>
           <button class="conversation-sidebar-action" id="conversation-new" type="button" aria-label="新建会话">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
           </button>
@@ -2480,6 +2610,24 @@
     </div>
   </section>
 
+  <section class="settings-screen settings-child-screen" id="folder-screen" role="dialog" aria-modal="true" aria-hidden="true" aria-label="文件夹">
+    <header class="settings-header">
+      <button class="settings-back" id="folder-back" type="button" aria-label="返回">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+      </button>
+      <h2>文件夹</h2>
+      <button class="settings-back" id="folder-new" type="button" aria-label="新建文件夹">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+    </header>
+    <div class="settings-scroll" id="folder-scroll">
+      <div class="settings-content folder-page-content">
+        <div id="folder-page-list"></div>
+        <p class="settings-note folder-page-note">置顶的文件夹会直接显示在会话列表里；删除文件夹不会删除里面的对话。</p>
+      </div>
+    </div>
+  </section>
+
   <section class="settings-screen settings-child-screen" id="identity-screen" role="dialog" aria-modal="true" aria-hidden="true" aria-label="设置对话与导出">
     <header class="settings-header">
       <button class="settings-back" id="identity-back" type="button" aria-label="返回设置">
@@ -2700,6 +2848,7 @@
   let conversationMenuId = null;
   let folderMenuId = null;     // 打开了「…」菜单的文件夹
   let movePickerId = null;     // 打开了「移到文件夹」选择列表的会话
+  let folderPageExpandedId = null; // 文件夹页里展开的那一个
   let renamingConversationId = null;
   let conversationSidebarTrigger = null;
   let pendingImages = [];
@@ -2718,7 +2867,6 @@
   const conversationsOpen = document.getElementById("conversations-open");
   const conversationClose = document.getElementById("conversation-close");
   const conversationNew = document.getElementById("conversation-new");
-  const conversationNewFolder = document.getElementById("conversation-new-folder");
   const conversationList = document.getElementById("conversation-list");
   const conversationPendingNote = document.getElementById("conversation-pending-note");
   const conversationLive = document.getElementById("conversation-live");
@@ -2776,6 +2924,11 @@
   const promptAdd = document.getElementById("prompt-add");
   const promptNameInput = document.getElementById("prompt-name");
   const promptDelete = document.getElementById("prompt-delete");
+  const folderScreen = document.getElementById("folder-screen");
+  const folderBack = document.getElementById("folder-back");
+  const folderNew = document.getElementById("folder-new");
+  const folderScroll = document.getElementById("folder-scroll");
+  const folderPageList = document.getElementById("folder-page-list");
   const identityScreen = document.getElementById("identity-screen");
   const identityBack = document.getElementById("identity-back");
   const userDisplayNameInput = document.getElementById("user-display-name");
@@ -4171,7 +4324,6 @@
   function renderConversationList() {
     conversationList.replaceChildren();
     conversationNew.disabled = pending;
-    conversationNewFolder.disabled = pending;
     conversationPendingNote.textContent = pending ? "回复完成后可切换会话" : "";
 
     // 分组：置顶文件夹（默认展开）→ 其他文件夹（默认折叠）→ 最近（未分类会话）
@@ -4182,17 +4334,14 @@
       if (conversation.folderId && byFolder.has(conversation.folderId)) byFolder.get(conversation.folderId).push(conversation);
       else loose.push(conversation);
     }
+    // 侧栏只放「文件夹」入口 + 置顶的文件夹 + 最近；没置顶的文件夹统一在文件夹页里管理
     const pinned = folders.filter((folder) => folder.pinned);
-    const others = folders.filter((folder) => !folder.pinned);
+    conversationList.appendChild(buildFoldersEntry(folders.length));
     if (pinned.length) {
       conversationList.appendChild(buildSectionLabel("已置顶"));
       pinned.forEach((folder) => conversationList.appendChild(buildFolder(folder, byFolder.get(folder.id))));
     }
-    if (others.length) {
-      conversationList.appendChild(buildSectionLabel("文件夹"));
-      others.forEach((folder) => conversationList.appendChild(buildFolder(folder, byFolder.get(folder.id))));
-    }
-    if (folders.length && loose.length) conversationList.appendChild(buildSectionLabel("最近"));
+    if (loose.length) conversationList.appendChild(buildSectionLabel("最近"));
     loose.forEach((conversation) => conversationList.appendChild(buildConversationItem(conversation)));
 
     if (renamingConversationId) {
@@ -4208,6 +4357,21 @@
         menu?.querySelector(".conversation-menu-button")?.focus();
       });
     }
+  }
+
+  function buildFoldersEntry(count) {
+    const entry = document.createElement("button");
+    entry.className = "conversation-folders-entry";
+    entry.type = "button";
+    entry.dataset.action = "open-folders";
+    entry.disabled = pending;
+    entry.innerHTML = `
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"></path></svg>
+      <span>文件夹</span>
+      <span class="conversation-folder-count"></span>
+      <svg class="conversation-folders-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>`;
+    entry.querySelector(".conversation-folder-count").textContent = count ? String(count) : "";
+    return entry;
   }
 
   function buildSectionLabel(text) {
@@ -4516,6 +4680,7 @@
 
   function anySettingsScreenOpen() {
     return settingsScreen.classList.contains("is-open") ||
+      folderScreen.classList.contains("is-open") ||
       modelScreen.classList.contains("is-open") ||
       promptScreen.classList.contains("is-open") ||
       identityScreen.classList.contains("is-open") ||
@@ -4642,11 +4807,163 @@
     if (!desktopSidebarMedia.matches) closeConversationSidebar();
   }
 
+  function folderScreenIsOpen() {
+    return folderScreen.classList.contains("is-open");
+  }
+
   function persistFolderDraft(draft, message) {
     if (!persistConversationStore(draft)) return false;
     renderConversationList();
+    if (folderScreenIsOpen()) renderFolderScreen();
     if (message) announceConversation(message);
     return true;
+  }
+
+  function openFolderScreen() {
+    if (!desktopSidebarMedia.matches) closeConversationSidebar({ returnFocus: false });
+    conversationMenuId = null;
+    folderMenuId = null;
+    movePickerId = null;
+    renderFolderScreen();
+    folderScreen.classList.add("is-open");
+    folderScreen.setAttribute("aria-hidden", "false");
+    syncInteractionState();
+    folderScroll.scrollTop = 0;
+    folderBack.focus();
+  }
+
+  function closeFolderScreen({ instant = false } = {}) {
+    if (instant) skipPanelMotionOnce(folderScreen);
+    folderScreen.classList.remove("is-open");
+    folderScreen.setAttribute("aria-hidden", "true");
+    folderMenuId = null;
+    syncInteractionState();
+    renderConversationList();
+    conversationsOpen.focus();
+  }
+
+  // 文件夹页：全部文件夹（置顶在前），点一行展开看里面的会话，「…」里置顶/重命名/删除
+  function renderFolderScreen() {
+    folderPageList.replaceChildren();
+    const folders = conversationStore.folders || [];
+    const ordered = [...folders.filter((f) => f.pinned), ...folders.filter((f) => !f.pinned)];
+    if (!ordered.length) {
+      const empty = document.createElement("div");
+      empty.className = "settings-card folder-page-card";
+      empty.innerHTML = '<p class="folder-page-empty folder-page-empty-all">还没有文件夹。点右上角「+」新建一个，或在某条会话的「…」里选「移到文件夹」。</p>';
+      folderPageList.appendChild(empty);
+      return;
+    }
+    const card = document.createElement("div");
+    card.className = "settings-card folder-page-card";
+    const all = sortedConversations();
+    for (const folder of ordered) {
+      const conversations = all.filter((item) => item.folderId === folder.id);
+      const expanded = folderPageExpandedId === folder.id;
+      const row = document.createElement("div");
+      row.className = `folder-page-row${expanded ? " is-expanded" : ""}`;
+      row.dataset.folderId = folder.id;
+
+      const toggle = document.createElement("button");
+      toggle.className = "folder-page-toggle";
+      toggle.type = "button";
+      toggle.dataset.action = "fp-toggle";
+      toggle.dataset.folderId = folder.id;
+      toggle.setAttribute("aria-expanded", String(expanded));
+      toggle.innerHTML = `
+        <svg class="conversation-folder-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"></path></svg>
+        <span class="folder-page-copy"><span class="folder-page-name"></span><span class="folder-page-meta"></span></span>
+        ${folder.pinned ? '<svg class="folder-page-pin" viewBox="0 0 24 24" aria-label="已置顶"><path d="M9 4h6l-1 6 3 3v2H7v-2l3-3-1-6Z"></path><path d="M12 15v6"></path></svg>' : ""}`;
+      toggle.querySelector(".folder-page-name").textContent = folder.name;
+      toggle.querySelector(".folder-page-meta").textContent = conversations.length ? `${conversations.length} 个会话` : "空";
+
+      const more = document.createElement("button");
+      more.className = "conversation-more";
+      more.type = "button";
+      more.dataset.action = "fp-menu";
+      more.dataset.folderId = folder.id;
+      more.disabled = pending;
+      more.setAttribute("aria-label", `文件夹${folder.name}的更多操作`);
+      more.setAttribute("aria-expanded", String(folderMenuId === folder.id));
+      more.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r=".8"></circle><circle cx="12" cy="12" r=".8"></circle><circle cx="19" cy="12" r=".8"></circle></svg>';
+      row.append(toggle, more);
+
+      if (folderMenuId === folder.id) {
+        const menu = document.createElement("div");
+        menu.className = "conversation-menu conversation-folder-menu";
+        menu.setAttribute("role", "group");
+        menu.setAttribute("aria-label", `文件夹${folder.name}的操作`);
+        menu.innerHTML = `
+          <button class="conversation-menu-button" type="button" data-action="folder-pin" data-folder-id="${folder.id}">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6l-1 6 3 3v2H7v-2l3-3-1-6Z"></path><path d="M12 15v6"></path></svg>
+            <span>${folder.pinned ? "取消置顶" : "置顶"}</span>
+          </button>
+          <button class="conversation-menu-button" type="button" data-action="folder-rename" data-folder-id="${folder.id}">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 20 4.2-1 10.6-10.6-3.2-3.2L5 15.8 4 20Z"></path><path d="m13.8 7 3.2 3.2"></path></svg>
+            <span>重命名</span>
+          </button>
+          <button class="conversation-menu-button danger" type="button" data-action="folder-delete" data-folder-id="${folder.id}">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"></path><path d="m9 7 .7-2h4.6l.7 2"></path><path d="m7 7 .7 13h8.6L17 7"></path></svg>
+            <span>删除文件夹</span>
+          </button>`;
+        row.appendChild(menu);
+      }
+      card.appendChild(row);
+
+      if (expanded) {
+        const items = document.createElement("div");
+        items.className = "folder-page-items";
+        if (conversations.length) {
+          for (const conversation of conversations) {
+            const button = document.createElement("button");
+            button.className = `folder-page-item${conversation.id === conversationStore.activeId ? " active" : ""}`;
+            button.type = "button";
+            button.dataset.action = "fp-switch";
+            button.dataset.conversationId = conversation.id;
+            button.disabled = pending;
+            const title = document.createElement("span");
+            title.className = "folder-page-item-title";
+            title.textContent = conversation.title;
+            const time = document.createElement("span");
+            time.className = "folder-page-item-time";
+            time.textContent = formatConversationTime(conversation.updatedAt);
+            button.append(title, time);
+            items.appendChild(button);
+          }
+        } else {
+          const empty = document.createElement("p");
+          empty.className = "folder-page-empty";
+          empty.textContent = "还没有会话。在会话的「…」里选「移到文件夹」。";
+          items.appendChild(empty);
+        }
+        card.appendChild(items);
+      }
+    }
+    folderPageList.appendChild(card);
+    if (folderMenuId) {
+      window.requestAnimationFrame(() => {
+        folderPageList.querySelector(".conversation-menu .conversation-menu-button")?.focus();
+      });
+    }
+  }
+
+  // 侧栏和文件夹页共用的文件夹菜单动作
+  function handleFolderAction(action, folderId) {
+    if (action === "folder-rename") {
+      folderMenuId = null;
+      renameFolder(folderId);
+      renderConversationList();
+      if (folderScreenIsOpen()) renderFolderScreen();
+    } else if (action === "folder-pin") {
+      folderMenuId = null;
+      toggleFolderPinned(folderId);
+    } else if (action === "folder-delete") {
+      folderMenuId = null;
+      deleteFolder(folderId);
+      renderConversationList();
+      if (folderScreenIsOpen()) renderFolderScreen();
+    }
   }
 
   function createFolderInteractive() {
@@ -6184,7 +6501,9 @@
   }
   function focusActiveLayerAfterGate() {
     let target = input;
-    if (modelScreen.classList.contains("is-open")) {
+    if (folderScreen.classList.contains("is-open")) {
+      target = folderBack;
+    } else if (modelScreen.classList.contains("is-open")) {
       target = modelBack;
     } else if (promptScreen.classList.contains("is-open")) {
       target = promptBack;
@@ -6225,7 +6544,6 @@
   conversationScrim.addEventListener("click", () => closeConversationSidebar());
   conversationSidebar.addEventListener("keydown", trapConversationSidebarFocus);
   conversationNew.addEventListener("click", createNewConversation);
-  conversationNewFolder.addEventListener("click", () => void createFolderInteractive());
   conversationList.addEventListener("click", (event) => {
     const actionTarget = event.target.closest("[data-action]");
     if (!(actionTarget instanceof HTMLElement) || !conversationList.contains(actionTarget)) return;
@@ -6253,6 +6571,8 @@
       renamingConversationId = null;
       renderConversationList();
       if (cancelledConversationId) focusConversationMore(cancelledConversationId);
+    } else if (action === "open-folders") {
+      openFolderScreen();
     } else if (action === "move-open" && conversationId) {
       movePickerId = conversationId;
       conversationMenuId = null;
@@ -6278,17 +6598,39 @@
         movePickerId = null;
         renamingConversationId = null;
         renderConversationList();
-      } else if (action === "folder-rename") {
-        folderMenuId = null;
-        renameFolder(folderId);
-        renderConversationList();
-      } else if (action === "folder-pin") {
-        toggleFolderPinned(folderId);
-      } else if (action === "folder-delete") {
-        deleteFolder(folderId);
+      } else {
+        handleFolderAction(action, folderId);
       }
     }
   });
+  folderPageList.addEventListener("click", (event) => {
+    const actionTarget = event.target.closest("[data-action]");
+    if (!(actionTarget instanceof HTMLElement)) return;
+    const action = actionTarget.dataset.action;
+    const folderId = actionTarget.dataset.folderId;
+    const conversationId = actionTarget.dataset.conversationId;
+    if (action === "fp-toggle" && folderId) {
+      folderPageExpandedId = folderPageExpandedId === folderId ? null : folderId;
+      folderMenuId = null;
+      renderFolderScreen();
+    } else if (action === "fp-menu" && folderId) {
+      folderMenuId = folderMenuId === folderId ? null : folderId;
+      renderFolderScreen();
+    } else if (action === "fp-switch" && conversationId) {
+      closeFolderScreen();
+      switchConversation(conversationId);
+    } else if (folderId) {
+      handleFolderAction(action, folderId);
+    }
+  });
+  folderNew.addEventListener("click", () => {
+    const folder = createFolderInteractive();
+    if (folder) {
+      folderPageExpandedId = folder.id;
+      renderFolderScreen();
+    }
+  });
+  folderBack.addEventListener("click", () => closeFolderScreen());
   conversationList.addEventListener("submit", (event) => {
     const form = event.target.closest(".conversation-rename-form");
     if (!(form instanceof HTMLFormElement)) return;
@@ -6401,16 +6743,25 @@
       closeQuickPanel();
     }
     if ((conversationMenuId || movePickerId || folderMenuId) &&
-      !event.target.closest(".conversation-item, .conversation-folder-row")) {
+      !event.target.closest(".conversation-item, .conversation-folder-row, .folder-page-row")) {
+      const wasFolderPage = folderScreenIsOpen() && folderMenuId;
       conversationMenuId = null;
       folderMenuId = null;
       movePickerId = null;
       renderConversationList();
+      if (wasFolderPage) renderFolderScreen();
     }
   });
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
-    if (modelScreen.classList.contains("is-open")) {
+    if (folderScreen.classList.contains("is-open")) {
+      if (folderMenuId) {
+        folderMenuId = null;
+        renderFolderScreen();
+      } else {
+        closeFolderScreen({ instant: true });
+      }
+    } else if (modelScreen.classList.contains("is-open")) {
       closeModelScreen({ instant: true });
     } else if (promptScreen.classList.contains("is-open")) {
       closePromptScreen({ instant: true });
