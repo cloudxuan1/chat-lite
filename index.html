@@ -2433,7 +2433,7 @@
             <button class="backup-btn" id="backup-import" type="button">从备份恢复</button>
           </div>
           <input id="backup-file" type="file" accept="application/json,.json" hidden />
-          <p class="settings-note">「备份」把全部对话和图片存成一个文件。换手机、清缓存、或重装主屏幕图标前先备份，之后「恢复」导回来即可。恢复只把备份里的对话加进来，不会覆盖或删除现有对话。</p>
+          <p class="settings-note">「备份」把全部对话、图片和系统提示词库存成一个文件。换手机、清缓存、或重装主屏幕图标前先备份，之后「恢复」导回来即可。恢复只把备份里的对话加进来，不会覆盖或删除现有对话。</p>
           <p class="settings-note" id="backup-status" role="status" aria-live="polite"></p>
         </div>
         <p class="settings-note">这些设置和对话一样，只保存在这台设备。</p>
@@ -4958,7 +4958,11 @@
           }
         }
       }
-      const backup = { app: "chat-lite", type: "backup", version: 1, exportedAt: new Date().toISOString(), store, images };
+      const backup = {
+        app: "chat-lite", type: "backup", version: 1, exportedAt: new Date().toISOString(),
+        store, images,
+        promptLibrary: normalizePromptLibrary(promptLibrary),
+      };
       const blob = new Blob([JSON.stringify(backup)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -4969,7 +4973,7 @@
       link.remove();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
       const imgCount = Object.keys(images).length;
-      setBackupStatus(`已备份 ${store.conversations.length} 个对话${imgCount ? `、${imgCount} 张图片` : ""}。文件已开始下载，请保存到「文件」或分享到别处。`);
+      setBackupStatus(`已备份 ${store.conversations.length} 个对话${imgCount ? `、${imgCount} 张图片` : ""}、${backup.promptLibrary.items.length} 份提示词。文件已开始下载，请保存到「文件」或分享到别处。`);
     } catch (e) {
       setBackupStatus("备份失败：" + (e?.message || e));
     } finally {
@@ -5011,12 +5015,37 @@
       const ok = persistConversationStore(draft, { keepInMemoryOnFailure: true });
       renderConversationList();
       renderActiveConversation();
-      setBackupStatus(`已恢复 ${added} 个对话${records.length ? `、${records.length} 张图片` : ""}。${ok ? "" : "（本地存储偏紧，已尽量保存，建议删掉些旧对话再试）"}`);
+      const addedPrompts = mergePromptLibraryFromBackup(backup.promptLibrary);
+      setBackupStatus(`已恢复 ${added} 个对话${records.length ? `、${records.length} 张图片` : ""}${addedPrompts ? `、${addedPrompts} 份提示词` : ""}。${ok ? "" : "（本地存储偏紧，已尽量保存，建议删掉些旧对话再试）"}`);
     } catch (e) {
       setBackupStatus("恢复失败：" + (e?.message || e));
     } finally {
       if (button) button.disabled = false;
     }
+  }
+
+  // 从备份合并提示词：按 id 或「名称+内容完全相同」去重，只加新的，不覆盖、不删除、不改当前选中
+  function mergePromptLibraryFromBackup(value) {
+    if (!value || typeof value !== "object" || !Array.isArray(value.items)) return 0;
+    const imported = normalizePromptLibrary(value);
+    const sameAs = (a, b) => a.id === b.id || (a.name === b.name && a.content === b.content);
+    const fresh = imported.items.filter((item) => !promptLibrary.items.some((existing) => sameAs(existing, item)));
+    if (!fresh.length) return 0;
+    promptLibrary = normalizePromptLibrary({
+      activeId: promptLibrary.activeId,
+      items: [...promptLibrary.items, ...fresh],
+    });
+    try {
+      localStorage.setItem(SYSTEM_PROMPTS_KEY, JSON.stringify(promptLibrary));
+    } catch { /* 存储偏紧时至少内存里已合并，保存设置时会再写一次 */ }
+    // 恢复按钮在设置页里：设置草稿是打开时拷的一份，不同步的话「保存并返回」会把刚恢复的盖掉
+    const wasClean = settingsState() === settingsSnapshot;
+    const draftFresh = fresh.filter((item) => !draftPromptLibrary.items.some((existing) => sameAs(existing, item)));
+    draftPromptLibrary.items.push(...draftFresh.map((item) => ({ ...item })));
+    renderPromptList();
+    updatePromptCount();
+    if (wasClean) settingsSnapshot = settingsState();
+    return fresh.length;
   }
 
   function loadImageElement(blob) {
