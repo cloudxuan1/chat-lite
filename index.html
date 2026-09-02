@@ -801,6 +801,8 @@
     font-variant-numeric: tabular-nums;
   }
   .message-item.is-editing { width: 100%; }
+  /* 编辑框统一撑满气泡最大宽度（85%），不随消息长短变；不定宽的话会被 textarea 撑成固定 225px */
+  .message-item.is-editing .msg { width: 100%; }
   .message-edit-area {
     display: block;
     width: 100%;
@@ -4284,8 +4286,6 @@
     const textTarget = bubble.querySelector(".message-text") || bubble;
     const hasImages = Boolean(bubble.querySelector(".message-images"));
     const originalTools = root.querySelector(".message-tools");
-    // 锁住编辑前的气泡宽度：不锁的话 textarea 会把气泡撑成它的默认固有宽度（约 225px），短的变大长的变窄
-    bubble.style.width = `${Math.ceil(bubble.getBoundingClientRect().width)}px`;
 
     const area = document.createElement("textarea");
     area.className = "message-edit-area";
@@ -4323,7 +4323,6 @@
 
     const exitEdit = () => {
       root.classList.remove("is-editing");
-      bubble.style.width = "";
       actions.remove();
       if (originalTools) originalTools.hidden = false;
     };
