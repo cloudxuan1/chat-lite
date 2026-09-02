@@ -4437,6 +4437,13 @@
       copy.hidden = !updated.content;
     }
     updateVariantSwitcher(root, updated);
+    // 两个版本长短不一，切换后视野会停在半空：最后一条就滚到底，中间的保证这条消息还在视野里
+    if (index === getActiveConversation().messages.length - 1) {
+      scrollToBottom();
+    } else {
+      // 长版本会把工具栏顶出视野，让箭头所在那行留在原地附近
+      (root.querySelector(".message-tools") || root).scrollIntoView({ block: "nearest" });
+    }
   }
 
   // 根据消息的 variants 状态显示/隐藏「‹ 2/3 ›」切换器并更新禁用态
