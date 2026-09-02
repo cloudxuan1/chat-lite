@@ -1612,6 +1612,102 @@
     border-top: .5px solid rgba(31,30,29,.1);
     font-size: 11px;
   }
+  /* 提示词库：列表卡 + 编辑卡 */
+  .prompt-list-card { padding: 0; overflow: hidden; }
+  .prompt-row {
+    display: grid;
+    grid-template-columns: 30px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 52px;
+    padding: 8px 15px 8px 12px;
+    color: var(--text-primary);
+    background: transparent;
+    border: none;
+    border-bottom: .5px solid rgba(31,30,29,.1);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .prompt-row.active { background: rgba(217,119,87,.075); }
+  .prompt-row-check {
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    color: var(--accent);
+    border: 1.5px solid rgba(31,30,29,.22);
+    border-radius: 50%;
+  }
+  .prompt-row-check svg {
+    width: 13px;
+    height: 13px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    opacity: 0;
+  }
+  .prompt-row.active .prompt-row-check { border-color: var(--accent); }
+  .prompt-row.active .prompt-row-check svg { opacity: 1; }
+  .prompt-row-name {
+    overflow: hidden;
+    font-size: 14px;
+    font-weight: 650;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .prompt-row-count {
+    color: var(--text-muted);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .prompt-add {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+    min-height: 48px;
+    padding: 0 15px;
+    color: var(--accent);
+    background: transparent;
+    border: none;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .prompt-add svg {
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+  }
+  .prompt-list-note { margin: 8px 3px 14px; }
+  .prompt-name-input { margin-bottom: 12px; }
+  .prompt-delete {
+    display: block;
+    width: 100%;
+    min-height: 44px;
+    margin-top: 12px;
+    padding: 0 12px;
+    color: #9a3412;
+    background: transparent;
+    border: 1px solid rgba(154,52,18,.25);
+    border-radius: 12px;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .prompt-delete:disabled { opacity: .4; cursor: default; }
   .identity-page-content {
     max-width: 600px;
     padding-top: 18px;
@@ -2281,12 +2377,23 @@
     </header>
     <div class="settings-scroll" id="prompt-scroll">
       <div class="settings-content prompt-page-content">
+        <div class="settings-card prompt-list-card">
+          <div id="prompt-list" role="group" aria-label="已保存的提示词"></div>
+          <button class="prompt-add" id="prompt-add" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            新建提示词
+          </button>
+        </div>
+        <p class="settings-note prompt-list-note">点选一份作为当前使用的提示词；下面编辑的就是选中的这份。</p>
         <div class="prompt-editor-card">
+          <label class="identity-label" for="prompt-name">名称</label>
+          <input class="identity-input prompt-name-input" id="prompt-name" type="text" maxlength="40" placeholder="给这份提示词起个名字" autocomplete="off" />
           <textarea id="system-prompt" placeholder="例如：你是我的私人助手。回答直接、可靠，需要联网时说明来源。"></textarea>
           <div class="prompt-meta">
             <span>只保存在这台设备，不会写进公开仓库。</span>
             <span id="prompt-count">0 字</span>
           </div>
+          <button class="prompt-delete" id="prompt-delete" type="button">删除这份提示词</button>
         </div>
       </div>
     </div>
@@ -2443,7 +2550,8 @@
   const MODEL_KEY = "ember_model";
   const FAVORITES_KEY = "ember_model_favorites";
   const MODEL_CATALOG_KEY = "ember_model_catalog";
-  const SYSTEM_PROMPT_KEY = "ember_system_prompt";
+  const SYSTEM_PROMPT_KEY = "ember_system_prompt";  // 旧：单份提示词；现在只作兼容镜像（写当前使用那份）
+  const SYSTEM_PROMPTS_KEY = "ember_system_prompts"; // 新：提示词库 { activeId, items: [{ id, name, content }] }
   const REASONING_EFFORT_KEY = "ember_reasoning_effort";
   const MAX_COMPLETION_TOKENS_KEY = "ember_max_completion_tokens";
   const USER_NAME_KEY = "ember_user_name";
@@ -2482,7 +2590,8 @@
   let currentModel = localStorage.getItem(MODEL_KEY) || DEFAULT_MODEL;
   let favoriteModels = loadFavorites();
   let fetchedModels = loadModelCatalog();
-  let systemPrompt = localStorage.getItem(SYSTEM_PROMPT_KEY) || "";
+  let promptLibrary = loadPromptLibrary();
+  let systemPrompt = activePrompt(promptLibrary).content;
   let reasoningEffort = loadReasoningEffort();
   let maxCompletionTokens = loadMaxCompletionTokens();
   let userDisplayName = normalizeDisplayName(localStorage.getItem(USER_NAME_KEY), "你");
@@ -2497,6 +2606,7 @@
   let draftModel = currentModel;
   let draftFavorites = favoriteModels.map((item) => ({ ...item }));
   let draftReasoningEffort = reasoningEffort;
+  let draftPromptLibrary = clonePromptLibrary(promptLibrary);
   let draftMaxCompletionTokens = maxCompletionTokens === null ? "" : String(maxCompletionTokens);
   let draftUserDisplayName = userDisplayName;
   let draftAssistantDisplayName = assistantDisplayName;
@@ -2578,6 +2688,10 @@
   const promptScroll = document.getElementById("prompt-scroll");
   const systemPromptInput = document.getElementById("system-prompt");
   const promptCount = document.getElementById("prompt-count");
+  const promptList = document.getElementById("prompt-list");
+  const promptAdd = document.getElementById("prompt-add");
+  const promptNameInput = document.getElementById("prompt-name");
+  const promptDelete = document.getElementById("prompt-delete");
   const identityScreen = document.getElementById("identity-screen");
   const identityBack = document.getElementById("identity-back");
   const userDisplayNameInput = document.getElementById("user-display-name");
@@ -2615,6 +2729,61 @@
     } catch {
       return fallback;
     }
+  }
+
+  // ===== 提示词库：多份系统提示词，选一份作为当前使用 =====
+  function createPromptId() {
+    return `p_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  function normalizePromptName(value, fallback = "未命名") {
+    return String(value ?? "").replace(/[\r\n\t]+/g, " ").trim().slice(0, 40) || fallback;
+  }
+
+  function normalizePromptLibrary(value) {
+    const source = value && typeof value === "object" ? value : {};
+    const seen = new Set();
+    const items = (Array.isArray(source.items) ? source.items : [])
+      .filter((item) => item && typeof item === "object")
+      .map((item) => {
+        let id = typeof item.id === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(item.id) ? item.id : "";
+        if (!id || seen.has(id)) id = createPromptId();
+        seen.add(id);
+        return {
+          id,
+          name: normalizePromptName(item.name),
+          content: typeof item.content === "string" ? item.content : "",
+        };
+      });
+    if (!items.length) items.push({ id: createPromptId(), name: "默认", content: "" });
+    const activeId = items.some((item) => item.id === source.activeId) ? source.activeId : items[0].id;
+    return { activeId, items };
+  }
+
+  // 首次加载：没有提示词库时把旧的单份提示词迁成第一份「默认」
+  function loadPromptLibrary() {
+    const stored = parseStoredJson(SYSTEM_PROMPTS_KEY, null);
+    if (stored && typeof stored === "object" && Array.isArray(stored.items)) {
+      return normalizePromptLibrary(stored);
+    }
+    const legacy = localStorage.getItem(SYSTEM_PROMPT_KEY) || "";
+    return normalizePromptLibrary({ items: [{ name: "默认", content: legacy }] });
+  }
+
+  function clonePromptLibrary(library) {
+    return JSON.parse(JSON.stringify(library));
+  }
+
+  function activePrompt(library) {
+    return library.items.find((item) => item.id === library.activeId) || library.items[0];
+  }
+
+  function promptSummaryText(library) {
+    const active = activePrompt(library);
+    const length = active.content.trim().length;
+    const parts = [active.name, length ? `${length.toLocaleString()} 字` : "未设置"];
+    if (library.items.length > 1) parts.push(`共 ${library.items.length} 份`);
+    return parts.join(" · ");
   }
 
   function loadBoundedInteger(key, min, max) {
@@ -3245,7 +3414,7 @@
     return JSON.stringify({
       model: draftModel,
       reasoningEffort: draftReasoningEffort,
-      systemPrompt: systemPromptInput.value,
+      promptLibrary: draftPromptLibrary,
       maxCompletionTokens: draftMaxCompletionTokens,
       userDisplayName: userDisplayNameInput.value,
       assistantDisplayName: assistantDisplayNameInput.value,
@@ -3330,10 +3499,74 @@
   function updatePromptCount() {
     const length = systemPromptInput.value.length;
     promptCount.textContent = `${length.toLocaleString()} 字`;
-    settingsPromptSummary.textContent = systemPromptInput.value.trim()
-      ? `已设置 · ${length.toLocaleString()} 字`
-      : "未设置";
+    settingsPromptSummary.textContent = promptSummaryText(draftPromptLibrary);
     updateSettingsDirty();
+  }
+
+  // 提示词列表：点哪行就选中哪份（草稿态，保存并返回后生效），编辑区跟着切换
+  function renderPromptList() {
+    promptList.replaceChildren();
+    draftPromptLibrary.items.forEach((item) => {
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = `prompt-row${item.id === draftPromptLibrary.activeId ? " active" : ""}`;
+      row.dataset.promptId = item.id;
+      row.setAttribute("aria-pressed", String(item.id === draftPromptLibrary.activeId));
+      const check = document.createElement("span");
+      check.className = "prompt-row-check";
+      check.setAttribute("aria-hidden", "true");
+      check.innerHTML = '<svg viewBox="0 0 24 24"><path d="m5 12 5 5 9-10"/></svg>';
+      const name = document.createElement("span");
+      name.className = "prompt-row-name";
+      name.textContent = item.name;
+      const count = document.createElement("span");
+      count.className = "prompt-row-count";
+      const length = item.content.trim().length;
+      count.textContent = length ? `${length.toLocaleString()} 字` : "空";
+      row.append(check, name, count);
+      promptList.appendChild(row);
+    });
+    promptDelete.disabled = draftPromptLibrary.items.length <= 1;
+  }
+
+  function loadPromptEditor() {
+    const active = activePrompt(draftPromptLibrary);
+    promptNameInput.value = active.name;
+    systemPromptInput.value = active.content;
+    updatePromptCount();
+    requestAnimationFrame(autoGrowSystemPrompt);
+  }
+
+  function selectPrompt(promptId) {
+    if (!draftPromptLibrary.items.some((item) => item.id === promptId)) return;
+    draftPromptLibrary.activeId = promptId;
+    renderPromptList();
+    loadPromptEditor();
+  }
+
+  function addPrompt() {
+    const item = {
+      id: createPromptId(),
+      name: `提示词 ${draftPromptLibrary.items.length + 1}`,
+      content: "",
+    };
+    draftPromptLibrary.items.push(item);
+    draftPromptLibrary.activeId = item.id;
+    renderPromptList();
+    loadPromptEditor();
+    promptNameInput.focus();
+    promptNameInput.select();
+  }
+
+  function deleteActivePrompt() {
+    if (draftPromptLibrary.items.length <= 1) return;
+    const active = activePrompt(draftPromptLibrary);
+    if (!window.confirm(`删除提示词「${active.name}」？`)) return;
+    const index = draftPromptLibrary.items.findIndex((item) => item.id === active.id);
+    draftPromptLibrary.items.splice(index, 1);
+    draftPromptLibrary.activeId = draftPromptLibrary.items[Math.min(index, draftPromptLibrary.items.length - 1)].id;
+    renderPromptList();
+    loadPromptEditor();
   }
 
   function updateIdentitySummary() {
@@ -3560,7 +3793,9 @@
     draftWebSearchMaxResults = webSearchMaxResults === null ? "" : String(webSearchMaxResults);
     draftImageQuality = imageQuality;
     modelSearch.value = "";
-    systemPromptInput.value = systemPrompt;
+    draftPromptLibrary = clonePromptLibrary(promptLibrary);
+    renderPromptList();
+    loadPromptEditor();
     maxCompletionTokensInput.value = draftMaxCompletionTokens;
     userDisplayNameInput.value = draftUserDisplayName;
     assistantDisplayNameInput.value = draftAssistantDisplayName;
@@ -3727,7 +3962,8 @@
       currentModel = draftModel || DEFAULT_MODEL;
       favoriteModels = normalizeFavorites(draftFavorites);
       reasoningEffort = draftReasoningEffort;
-      systemPrompt = systemPromptInput.value.trim();
+      promptLibrary = normalizePromptLibrary(draftPromptLibrary);
+      systemPrompt = activePrompt(promptLibrary).content.trim();
       maxCompletionTokens = draftMaxCompletionTokens
         ? Number(draftMaxCompletionTokens)
         : null;
@@ -3740,6 +3976,7 @@
       localStorage.setItem(MODEL_KEY, currentModel);
       localStorage.setItem(FAVORITES_KEY, JSON.stringify(favoriteModels));
       localStorage.setItem(REASONING_EFFORT_KEY, reasoningEffort);
+      localStorage.setItem(SYSTEM_PROMPTS_KEY, JSON.stringify(promptLibrary));
       localStorage.setItem(SYSTEM_PROMPT_KEY, systemPrompt);
       if (webSearchMaxUses === null) localStorage.removeItem(WEB_MAX_USES_KEY);
       else localStorage.setItem(WEB_MAX_USES_KEY, String(webSearchMaxUses));
@@ -5653,9 +5890,27 @@
   modelScroll.addEventListener("scroll", updateModelScrollTop, { passive: true });
   modelsScrollTop.addEventListener("click", scrollModelsToTop);
   systemPromptInput.addEventListener("input", () => {
+    activePrompt(draftPromptLibrary).content = systemPromptInput.value;
     autoGrowSystemPrompt();
     updatePromptCount();
+    const count = promptList.querySelector(".prompt-row.active .prompt-row-count");
+    if (count) {
+      const length = systemPromptInput.value.trim().length;
+      count.textContent = length ? `${length.toLocaleString()} 字` : "空";
+    }
   });
+  promptNameInput.addEventListener("input", () => {
+    activePrompt(draftPromptLibrary).name = normalizePromptName(promptNameInput.value);
+    const name = promptList.querySelector(".prompt-row.active .prompt-row-name");
+    if (name) name.textContent = activePrompt(draftPromptLibrary).name;
+    updatePromptCount();
+  });
+  promptList.addEventListener("click", (event) => {
+    const row = event.target.closest(".prompt-row");
+    if (row) selectPrompt(row.dataset.promptId);
+  });
+  promptAdd.addEventListener("click", addPrompt);
+  promptDelete.addEventListener("click", deleteActivePrompt);
   userDisplayNameInput.addEventListener("input", updateIdentitySummary);
   assistantDisplayNameInput.addEventListener("input", updateIdentitySummary);
   exportFileNameInput.addEventListener("input", updateIdentitySummary);
