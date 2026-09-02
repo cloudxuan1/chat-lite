@@ -804,7 +804,7 @@
   .message-edit-area {
     display: block;
     width: 100%;
-    min-height: 66px;
+    min-height: 1.6em; /* 跟一行正文一样高，不把短消息的气泡硬撑高 */
     padding: 0;
     border: none;
     background: transparent;
@@ -4284,9 +4284,12 @@
     const textTarget = bubble.querySelector(".message-text") || bubble;
     const hasImages = Boolean(bubble.querySelector(".message-images"));
     const originalTools = root.querySelector(".message-tools");
+    // 锁住编辑前的气泡宽度：不锁的话 textarea 会把气泡撑成它的默认固有宽度（约 225px），短的变大长的变窄
+    bubble.style.width = `${Math.ceil(bubble.getBoundingClientRect().width)}px`;
 
     const area = document.createElement("textarea");
     area.className = "message-edit-area";
+    area.rows = 1; // 默认 rows=2 会让单行消息的编辑框固定占两行高
     area.value = message.content;
     area.setAttribute("aria-label", `编辑${messageRoleName(message.role)}的消息`);
     textTarget.textContent = "";
@@ -4320,6 +4323,7 @@
 
     const exitEdit = () => {
       root.classList.remove("is-editing");
+      bubble.style.width = "";
       actions.remove();
       if (originalTools) originalTools.hidden = false;
     };
