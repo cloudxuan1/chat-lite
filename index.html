@@ -4686,7 +4686,7 @@
       more.dataset.conversationId = conversation.id;
       more.disabled = pending;
       more.setAttribute("aria-label", `${conversation.title}的更多操作`);
-      more.setAttribute("aria-expanded", String(conversationMenuId === conversation.id));
+      more.setAttribute("aria-expanded", String(conversationMenuId === conversation.id || movePickerId === conversation.id));
       more.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r=".8"></circle><circle cx="12" cy="12" r=".8"></circle><circle cx="19" cy="12" r=".8"></circle></svg>';
       item.append(select, more);
 
@@ -4718,9 +4718,10 @@
 
   function focusConversationMore(conversationId) {
     window.requestAnimationFrame(() => {
-      [...conversationList.querySelectorAll(".conversation-more")]
-        .find((button) => button.dataset.conversationId === conversationId)
-        ?.focus();
+      const more = [...conversationList.querySelectorAll(".conversation-more")]
+        .find((button) => button.dataset.conversationId === conversationId);
+      // 移入未置顶文件夹后，会话不再显示在侧栏，焦点回到文件夹入口。
+      (more || conversationList.querySelector('[data-action="open-folders"]'))?.focus();
     });
   }
 
@@ -4919,8 +4920,14 @@
     return folderScreen.classList.contains("is-open");
   }
 
-  function persistFolderDraft(draft, message) {
+  function persistFolderDraft(draft, message, { closeMenus = false } = {}) {
     if (!persistConversationStore(draft)) return false;
+    // 先保存，再关闭并重绘；保存失败时保留选择菜单，便于重试。
+    if (closeMenus) {
+      conversationMenuId = null;
+      folderMenuId = null;
+      movePickerId = null;
+    }
     renderConversationList();
     if (folderScreenIsOpen()) renderFolderScreen();
     if (folderDetailIsOpen() && folderById(folderDetailId)) renderFolderDetail();
@@ -5190,13 +5197,16 @@
     const conversation = conversationById(conversationId, draft);
     if (!conversation) return;
     const folder = folderId ? folderById(folderId, draft) : null;
+    if (folderId && !folder) return;
     if (folder) {
       conversation.folderId = folder.id;
       folder.collapsed = false; // 移进去就展开，让人看到它到哪了
     } else {
       delete conversation.folderId;
     }
-    persistFolderDraft(draft, folder ? `已移到“${folder.name}”。` : "已移出文件夹。");
+    if (persistFolderDraft(draft, folder ? `已移到“${folder.name}”。` : "已移出文件夹。", { closeMenus: true })) {
+      focusConversationMore(conversationId);
+    }
   }
 
   function createNewConversation({ folderId } = {}) {
@@ -5213,7 +5223,7 @@
         const target = conversationById(active.id, draft);
         if (targetFolderId) target.folderId = targetFolderId;
         else delete target.folderId;
-        persistConversationStore(draft, { keepInMemoryOnFailure: true });
+        if (!persistConversationStore(draft)) return;
         renderConversationList();
       }
       if (!desktopSidebarMedia.matches) closeConversationSidebar({ returnFocus: false });
@@ -6731,8 +6741,10 @@
     if (action === "switch" && conversationId) {
       switchConversation(conversationId);
     } else if (action === "menu" && conversationId) {
-      const closingMenu = conversationMenuId === conversationId;
-      conversationMenuId = conversationMenuId === conversationId ? null : conversationId;
+      const closingMenu = conversationMenuId === conversationId || movePickerId === conversationId;
+      conversationMenuId = closingMenu ? null : conversationId;
+      folderMenuId = null;
+      movePickerId = null;
       renamingConversationId = null;
       renderConversationList();
       if (closingMenu) focusConversationMore(conversationId);
@@ -6969,9 +6981,11 @@
       renderConversationList();
       focusConversationMore(cancelledConversationId);
     } else if (movePickerId || folderMenuId) {
+      const closedPickerId = movePickerId;
       movePickerId = null;
       folderMenuId = null;
       renderConversationList();
+      if (closedPickerId) focusConversationMore(closedPickerId);
     } else if (conversationMenuId) {
       const closedConversationId = conversationMenuId;
       conversationMenuId = null;
