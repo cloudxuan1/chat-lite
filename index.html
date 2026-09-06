@@ -1460,6 +1460,13 @@
   }
   .msg.md th { background: rgba(31,30,29,.045); font-weight: 650; }
   .msg.md img { max-width: 100%; border-radius: 8px; }
+  .msg.md mark { padding: 0 .15em; background: rgba(217,119,87,.22); color: inherit; border-radius: 3px; }
+  .msg.md sup, .msg.md sub { font-size: .75em; line-height: 0; }
+  .msg.md kbd { padding: .1em .35em; border: .5px solid rgba(31,30,29,.25); border-bottom-width: 1.5px; border-radius: 4px; font-family: inherit; font-size: .88em; }
+  .msg.md li:has(> .md-task) { list-style: none; margin-left: -1.3em; }
+  .msg.md .md-task { display: flex; align-items: baseline; gap: .45em; }
+  .msg.md .md-task input { flex: none; width: 15px; height: 15px; margin: 0; position: relative; top: 2px; accent-color: var(--accent); }
+  .msg.md .md-task:has(input:checked) { color: var(--text-muted); }
   .cache-badge {
     align-self: flex-start;
     max-width: 85%;
@@ -6096,7 +6103,11 @@
       .replace(/__([^_\n]+?)__/g, "<strong>$1</strong>")
       .replace(/(^|[^*\w])\*([^*\n]+?)\*(?!\w)/g, "$1<em>$2</em>")
       .replace(/(^|[^_\w])_([^_\n]+?)_(?!\w)/g, "$1<em>$2</em>")
-      .replace(/~~([^~\n]+?)~~/g, "<del>$1</del>");
+      .replace(/~~([^~\n]+?)~~/g, "<del>$1</del>")
+      .replace(/==([^=\n]+?)==/g, "<mark>$1</mark>")
+      // 模型有时直接写几个简单 HTML 标签（下划线、上下标、高亮）；只放行这几个不带属性的
+      .replace(/&lt;(\/?)(u|mark|sup|sub|b|i|s|del|strong|em|kbd)&gt;/g, "<$1$2>")
+      .replace(/&lt;br\s*\/?&gt;/g, "<br>");
     return out.replace(/\u0000(\d+)\u0000/g, (_, i) => codes[Number(i)]);
   }
   function renderMarkdown(source) {
@@ -6134,7 +6145,10 @@
           body += "<br>" + lines[i].trim();
           i++;
         }
-        items.push(renderInline(body));
+        // 任务列表：- [ ] / - [x]
+        const task = body.match(/^\[( |x|X)\]\s+(.*)$/);
+        if (task) items.push(`<label class="md-task"><input type="checkbox" disabled${task[1] !== " " ? " checked" : ""}>${renderInline(task[2])}</label>`);
+        else items.push(renderInline(body));
       }
       const tag = ordered ? "ol" : "ul";
       const startAttr = ordered && first[2] !== "1." && first[2] !== "1)" ? ` start="${parseInt(first[2], 10)}"` : "";
