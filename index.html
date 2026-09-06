@@ -5804,7 +5804,7 @@
   messagesEl.addEventListener("scroll", hideQuotePill, { passive: true });
   // 点别处（包括打开设置/侧栏的按钮）先收起；重新选中会再弹
   document.addEventListener("pointerdown", (event) => { if (!event.target.closest("#quote-pill")) hideQuotePill(); }, true);
-  document.addEventListener("keydown", (event) => { if (event.key === "Escape") hideQuotePill(); }, true);
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") hideQuotePill(); }, true);
   // 按住按钮时别让浏览器先把选区清掉
   quotePill.addEventListener("pointerdown", (event) => event.preventDefault());
   quotePill.addEventListener("click", () => {
