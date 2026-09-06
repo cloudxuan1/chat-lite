@@ -5282,7 +5282,10 @@
       if (!ordered.includes(folder)) ordered.push(folder);
     }
     draft.folders = ordered;
-    persistFolderDraft(draft, "已调整文件夹顺序。");
+    if (!persistFolderDraft(draft, "已调整文件夹顺序。")) {
+      // DOM 已经换过顺序；保存失败时按未修改的 store 恢复，避免显示未保存的结果。
+      renderFolderScreen();
+    }
   }
 
   // 侧栏和文件夹页共用的文件夹菜单动作
@@ -7119,7 +7122,7 @@
     commitFolderOrderFromDom();
   }
   folderPageList.addEventListener("pointerdown", (event) => {
-    const handle = event.target.closest(".folder-page-handle");
+    let handle = event.target.closest(".folder-page-handle");
     if (!handle || pending) return;
     if (folderPageMenuId) {
       folderPageMenuId = null;
@@ -7129,15 +7132,22 @@
     if (folderDrag) {
       // 上一次还在落位过渡中就又按下：先立刻结束上一次（从当前状态直接定稿），再开始新的
       if (!folderDrag.settling) return;
+      const folderId = handle.closest(".folder-page-row")?.dataset.folderId;
       finishFolderDrag(folderDrag);
+      // 定稿会重绘列表（保存失败也会回滚重绘），必须重新取得当前行，不能继续拖旧 DOM。
+      handle = [...folderPageList.querySelectorAll(".folder-page-row")]
+        .find((item) => item.dataset.folderId === folderId)?.querySelector(".folder-page-handle");
+      if (!handle) return;
     }
     const row = handle.closest(".folder-page-row");
     if (!row) return;
-    event.preventDefault();
-    try { handle.setPointerCapture(event.pointerId); } catch { /* 个别浏览器不支持时靠冒泡也能拖 */ }
     const rows = [...folderPageList.querySelectorAll(`.folder-page-row[data-pinned="${row.dataset.pinned}"]`)];
-    const rects = rows.map((item) => item.getBoundingClientRect());
     const from = rows.indexOf(row);
+    if (from < 0) return;
+    event.preventDefault();
+    // 容器不会随行重绘而被移除，连续拖动时仍能接收后续 pointermove / pointerup。
+    try { folderPageList.setPointerCapture(event.pointerId); } catch { /* 不支持时靠冒泡继续拖 */ }
+    const rects = rows.map((item) => item.getBoundingClientRect());
     folderDrag = {
       pointerId: event.pointerId,
       row,
