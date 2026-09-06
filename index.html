@@ -327,7 +327,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin: 12px 10px 3px;
+    margin: 12px 10px 3px 12px;
     color: var(--text-muted);
     font-size: 11px;
     font-weight: 600;
@@ -337,7 +337,7 @@
     display: inline-flex;
     align-items: center;
     gap: 2px;
-    margin: -6px -6px -6px 0;
+    margin: -6px -4px -6px 0;
     padding: 6px;
     color: var(--accent);
     background: transparent;
@@ -2584,6 +2584,9 @@
     outline: 2px solid rgba(217,119,87,.65);
     outline-offset: 2px;
   }
+  /* 手指/鼠标在用时不画焦点框（iOS 对脚本 focus() 会当成键盘操作画框）；按过 Tab 之后才画 */
+  html[data-input="pointer"] button:focus-visible,
+  html[data-input="pointer"] [role="button"]:focus-visible { outline: none; }
 
   @media (prefers-reduced-motion: reduce) {
     .conversation-sidebar,
@@ -5758,6 +5761,11 @@
       button.classList.remove("is-copied");
     }, 1200);
   });
+
+  // 记录最近一次是手指/鼠标还是键盘在操作，决定要不要画焦点框
+  document.addEventListener("pointerdown", () => { document.documentElement.dataset.input = "pointer"; }, true);
+  document.addEventListener("keydown", (e) => { if (e.key === "Tab" || e.key.startsWith("Arrow")) document.documentElement.dataset.input = "keyboard"; }, true);
+  document.documentElement.dataset.input = "pointer";
 
   // ===== 选中一段追问：在 Claude 的回复里选中文字，弹出小按钮，点了把引用带进输入框 =====
   const quotePill = document.getElementById("quote-pill");
