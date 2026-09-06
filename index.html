@@ -324,12 +324,33 @@
   }
   /* 会话文件夹 */
   .conversation-section-label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     margin: 12px 10px 3px;
     color: var(--text-muted);
     font-size: 11px;
     font-weight: 600;
     letter-spacing: .3px;
   }
+  .conversation-section-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    margin: -6px -6px -6px 0;
+    padding: 6px;
+    color: var(--accent);
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    font: inherit;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .conversation-section-action:disabled { opacity: .5; cursor: default; }
+  .conversation-section-action svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
   .conversation-folders-entry {
     display: flex;
     align-items: center;
@@ -4693,7 +4714,8 @@
       conversationList.appendChild(buildSectionLabel("已置顶"));
       pinned.forEach((folder) => conversationList.appendChild(buildFolder(folder, byFolder.get(folder.id))));
     }
-    if (loose.length) conversationList.appendChild(buildSectionLabel("最近"));
+    // 有文件夹时「最近」标签一直显示，并带「新建」：当前会话在文件夹里时，头部的新建会跟进同一个文件夹，这里是建散会话的入口
+    if (loose.length || folders.length) conversationList.appendChild(buildSectionLabel("最近", folders.length ? { action: "new-loose", label: "新建" } : null));
     loose.forEach((conversation) => conversationList.appendChild(buildConversationItem(conversation)));
 
     if (renamingConversationId) {
@@ -4726,10 +4748,21 @@
     return entry;
   }
 
-  function buildSectionLabel(text) {
+  function buildSectionLabel(text, action = null) {
     const label = document.createElement("div");
     label.className = "conversation-section-label";
     label.textContent = text;
+    if (action) {
+      const button = document.createElement("button");
+      button.className = "conversation-section-action";
+      button.type = "button";
+      button.dataset.action = action.action;
+      button.disabled = pending;
+      button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg><span></span>';
+      button.querySelector("span").textContent = action.label;
+      button.setAttribute("aria-label", `${action.label}不在文件夹里的会话`);
+      label.appendChild(button);
+    }
     return label;
   }
 
@@ -7377,6 +7410,8 @@
       if (cancelledConversationId) focusConversationMore(cancelledConversationId);
     } else if (action === "open-folders") {
       openFolderScreen();
+    } else if (action === "new-loose") {
+      createNewConversation({ folderId: "" });
     } else if (action === "move-open" && conversationId) {
       movePickerId = conversationId;
       conversationMenuId = null;
