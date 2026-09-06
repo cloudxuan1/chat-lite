@@ -1314,6 +1314,39 @@
     color: #9a3412;
     box-shadow: none;
   }
+  /* ===== 选中回复文字 → 「就这段追问」小按钮 ===== */
+  .quote-pill {
+    position: fixed;
+    z-index: 30;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 13px;
+    color: #f6f4ef;
+    background: #1f1e1d;
+    border: none;
+    border-radius: 999px;
+    box-shadow: 0 8px 24px rgba(31,30,29,.22);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    opacity: 0;
+    transform: translateY(4px) scale(.96);
+    transition: opacity var(--motion-fast) ease, transform var(--motion-fast) var(--ease-out);
+  }
+  .quote-pill[hidden] { display: none; }
+  .quote-pill.is-visible { opacity: 1; transform: none; }
+  .quote-pill:active { background: #3b3b3b; }
+  .quote-pill svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  @media (prefers-reduced-motion: reduce) {
+    .quote-pill { transition: opacity var(--motion-fast) ease; transform: none; }
+  }
   /* ===== 回复 Markdown 渲染（只渲染 Claude 的回复，用户消息仍是纯文本）===== */
   .msg.md { white-space: normal; line-height: 1.55; }
   .msg.md > :first-child { margin-top: 0; }
@@ -3017,6 +3050,11 @@
   </form>
     </div>
   </div>
+  <!-- 选中回复里的一段文字后弹出的「就这段追问」 -->
+  <button class="quote-pill" id="quote-pill" type="button" hidden>
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h3v3a3 3 0 0 1-3 3H6"></path><path d="M14 7h3v3a3 3 0 0 1-3 3h-1"></path><path d="M6 17h12"></path></svg>
+    <span>就这段追问</span>
+  </button>
 
 <script>
   // ===== 可配置常量 =====
@@ -5677,6 +5715,70 @@
       button.textContent = "复制";
       button.classList.remove("is-copied");
     }, 1200);
+  });
+
+  // ===== 选中一段追问：在 Claude 的回复里选中文字，弹出小按钮，点了把引用带进输入框 =====
+  const quotePill = document.getElementById("quote-pill");
+  let quoteText = "";
+  let quoteTimer = 0;
+  function selectedReplyText() {
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed || !selection.rangeCount) return null;
+    const range = selection.getRangeAt(0);
+    const node = range.commonAncestorContainer;
+    const element = node.nodeType === 1 ? node : node.parentElement;
+    const bubble = element?.closest(".message-item.assistant .msg");
+    if (!bubble || bubble.classList.contains("error") || bubble.closest(".message-item")?.classList.contains("is-editing")) return null;
+    const text = selection.toString().replace(/\r/g, "").trim();
+    if (!text) return null;
+    return { text, rect: range.getBoundingClientRect() };
+  }
+  function hideQuotePill() {
+    if (quotePill.hidden) return;
+    quotePill.classList.remove("is-visible");
+    quotePill.hidden = true;
+  }
+  function updateQuotePill() {
+    const found = anySettingsScreenOpen() || pending ? null : selectedReplyText();
+    if (!found || !found.rect.width) { hideQuotePill(); return; }
+    quoteText = found.text;
+    quotePill.hidden = false;
+    const { rect } = found;
+    const width = quotePill.offsetWidth;
+    const height = quotePill.offsetHeight;
+    const vw = window.innerWidth;
+    const messagesRect = messagesEl.getBoundingClientRect();
+    // 默认放在选区下方（iOS 自带的复制菜单在上方，别撞上），下方放不下再放上方
+    let top = rect.bottom + 10;
+    if (top + height > messagesRect.bottom - 4) top = rect.top - height - 10;
+    top = Math.max(messagesRect.top + 4, Math.min(top, messagesRect.bottom - height - 4));
+    const left = Math.max(8, Math.min(rect.left + rect.width / 2 - width / 2, vw - width - 8));
+    quotePill.style.top = `${Math.round(top)}px`;
+    quotePill.style.left = `${Math.round(left)}px`;
+    requestAnimationFrame(() => { if (!quotePill.hidden) quotePill.classList.add("is-visible"); });
+  }
+  document.addEventListener("selectionchange", () => {
+    clearTimeout(quoteTimer);
+    quoteTimer = setTimeout(updateQuotePill, 140);
+  });
+  messagesEl.addEventListener("scroll", hideQuotePill, { passive: true });
+  // 点别处（包括打开设置/侧栏的按钮）先收起；重新选中会再弹
+  document.addEventListener("pointerdown", (event) => { if (!event.target.closest("#quote-pill")) hideQuotePill(); }, true);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") hideQuotePill(); }, true);
+  // 按住按钮时别让浏览器先把选区清掉
+  quotePill.addEventListener("pointerdown", (event) => event.preventDefault());
+  quotePill.addEventListener("click", () => {
+    const text = quoteText;
+    hideQuotePill();
+    if (!text) return;
+    const quote = text.split("\n").map((line) => `> ${line}`).join("\n") + "\n\n";
+    const existing = input.value.trimEnd();
+    input.value = (existing ? existing + "\n\n" : "") + quote;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    window.getSelection()?.removeAllRanges();
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+    input.scrollTop = input.scrollHeight;
   });
 
   async function writeClipboard(text) {
