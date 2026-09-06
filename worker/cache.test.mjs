@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   applyPromptCache,
   buildUpstreamBody,
+  isAllowedOrigin,
   normalizeModel,
   normalizeTitle,
 } from "./worker.js";
@@ -906,4 +907,56 @@ await testAsync("OpenRouter 模型目录失败时统一返回 502", async () => 
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+// ===== CORS 来源白名单：正式域名 + Cloudflare Pages 预览域名 =====
+test("isAllowedOrigin 只放行正式域名和 chat-lite.pages.dev 及其子域", () => {
+  assert.strictEqual(isAllowedOrigin("https://cloudxuan1.github.io"), true);
+  assert.strictEqual(isAllowedOrigin("https://chat-lite.pages.dev"), true);
+  assert.strictEqual(isAllowedOrigin("https://a1b2c3d4.chat-lite.pages.dev"), true);
+  assert.strictEqual(isAllowedOrigin("https://feature-x.chat-lite.pages.dev"), true);
+  assert.strictEqual(isAllowedOrigin("http://chat-lite.pages.dev"), false);
+  assert.strictEqual(isAllowedOrigin("https://chat-lite.pages.dev.evil.com"), false);
+  assert.strictEqual(isAllowedOrigin("https://evil.com"), false);
+  assert.strictEqual(isAllowedOrigin("https://other.pages.dev"), false);
+  assert.strictEqual(isAllowedOrigin(null), false);
+  assert.strictEqual(isAllowedOrigin(""), false);
+});
+
+await testAsync("预览域名的 OPTIONS 预检回显该 Origin 并带 Vary", async () => {
+  const response = await worker.fetch(
+    new Request("https://worker.example", {
+      method: "OPTIONS",
+      headers: { Origin: "https://a1b2c3d4.chat-lite.pages.dev" },
+    }),
+    {},
+  );
+  assert.strictEqual(response.status, 200);
+  assert.strictEqual(response.headers.get("Access-Control-Allow-Origin"), "https://a1b2c3d4.chat-lite.pages.dev");
+  assert.ok((response.headers.get("Vary") || "").includes("Origin"));
+});
+
+await testAsync("预览域名的 POST（密码错）也回显该 Origin，密码门禁不变", async () => {
+  const response = await worker.fetch(
+    new Request("https://worker.example", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: "https://chat-lite.pages.dev" },
+      body: JSON.stringify({ messages: [{ role: "user", content: "hi" }], password: "wrong" }),
+    }),
+    { ACCESS_PASSWORD: "correct", OPENROUTER_API_KEY: "k" },
+  );
+  assert.strictEqual(response.status, 401);
+  assert.strictEqual(response.headers.get("Access-Control-Allow-Origin"), "https://chat-lite.pages.dev");
+});
+
+await testAsync("陌生 Origin 不回显，仍返回正式域名", async () => {
+  const response = await worker.fetch(
+    new Request("https://worker.example", {
+      method: "OPTIONS",
+      headers: { Origin: "https://evil.com" },
+    }),
+    {},
+  );
+  assert.strictEqual(response.headers.get("Access-Control-Allow-Origin"), "https://cloudxuan1.github.io");
+  assert.strictEqual(response.headers.get("Vary"), null);
 });
