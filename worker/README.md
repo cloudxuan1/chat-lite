@@ -61,6 +61,7 @@ npx wrangler secret put ACCESS_PASSWORD      # 按提示粘贴访问口令
 ## 注意
 
 - `ALLOWED_ORIGIN`（worker.js 顶部）写死成了 `https://cloudxuan1.github.io`。如果你的 GitHub Pages 域名不是这个，改成你的，否则浏览器会因 CORS 拦截请求。
+- 预览：`PREVIEW_ORIGIN_PATTERN` 额外放行 Cloudflare Pages 项目 `chat-lite` 的域名（`chat-lite.pages.dev` 和每个分支/PR 的 `<hash>.chat-lite.pages.dev`），请求 Origin 匹配时回显该域名。Pages 项目名不叫 chat-lite 就改这个正则。密码门禁不受影响。
 - 默认模型 `anthropic/claude-opus-4.6` 写在 worker.js 顶部；前端未传 model 时才回退到它。
 - `session_id` 最长 256 字符；每个本地会话独立生成，清空当前会话时重建，以提高同一段对话的 provider sticky routing 和缓存命中率，同时避免跨会话串线。
 - `maxCompletionTokens` 不传表示由模型/供应商决定；传入时必须是大于 0 的整数。模型目录会同时返回主供应商的最大输出上限，供前端阻止超限设置。

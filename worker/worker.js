@@ -8,8 +8,25 @@
 // 怎么验证命中：连续发两轮消息后，看浏览器 Network 面板里最后一个 SSE chunk，
 // 字段 usage.prompt_tokens_details.cached_tokens > 0 就是命中了。
 
-// 只允许这个来源的网页调用（你的 GitHub Pages 域名）。换域名就改这一行。
+// 正式来源（你的 GitHub Pages 域名）。换域名就改这一行；它也是没带/不认识 Origin 时的默认回复值。
 const ALLOWED_ORIGIN = "https://cloudxuan1.github.io";
+// 预览来源：Cloudflare Pages 项目 chat-lite 的正式域名 chat-lite.pages.dev，
+// 以及每个分支 / PR 自动生成的预览域名 <hash>.chat-lite.pages.dev。密码门禁照旧，只是多放行这些域名。
+const PREVIEW_ORIGIN_PATTERN = /^https:\/\/(?:[a-z0-9-]+\.)?chat-lite\.pages\.dev$/;
+
+export function isAllowedOrigin(origin) {
+  return origin === ALLOWED_ORIGIN || PREVIEW_ORIGIN_PATTERN.test(String(origin || ""));
+}
+
+// 请求的 Origin 在白名单里就把 CORS 头改成它（并加 Vary: Origin）；否则原样返回，浏览器会拦。
+function applyCorsOrigin(response, request) {
+  const origin = request.headers.get("Origin");
+  if (!isAllowedOrigin(origin) || origin === ALLOWED_ORIGIN) return response;
+  const headers = new Headers(response.headers);
+  headers.set("Access-Control-Allow-Origin", origin);
+  headers.append("Vary", "Origin");
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models";
@@ -28,6 +45,12 @@ const IMAGE_DATA_URL_PATTERN = /^data:image\/(?:png|jpeg|webp|gif);base64,/i;
 
 export default {
   async fetch(request, env) {
+    return applyCorsOrigin(await handleRequest(request, env), request);
+  },
+};
+
+async function handleRequest(request, env) {
+  {
     // 浏览器发真正请求前会先发一个 OPTIONS 预检，这里直接放行。
     if (request.method === "OPTIONS") {
       return new Response(null, { headers: corsHeaders() });
@@ -121,8 +144,8 @@ export default {
     headers["Cache-Control"] = "no-cache";
 
     return new Response(upstream.body, { status: upstream.status, headers });
-  },
-};
+  }
+}
 
 async function generateTitle(payload, env) {
   if (!env.DEEPSEEK_API_KEY) {
