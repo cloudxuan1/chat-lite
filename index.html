@@ -7294,6 +7294,8 @@
 
   // 输入框随内容自动长高
   input.addEventListener("input", () => {
+    // 只剩空白（比如把引用块删光只剩换行）就清空，占位文字和高度都回来
+    if (input.value && !input.value.trim()) input.value = "";
     input.style.height = "auto";
     input.style.height = Math.min(input.scrollHeight, 120) + "px";
     updateConversationActionState();
