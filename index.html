@@ -549,6 +549,24 @@
   .folder-page-item-row:not(:first-child) { border-top: .5px solid rgba(31,30,29,.1); }
   .folder-page-item-row.active { background: rgba(217,119,87,.09); }
   .folder-page-item-row .conversation-menu { top: 46px; right: 8px; }
+  .folder-page-prompt-row { position: relative; }
+  .folder-page-prompt-row .conversation-menu { top: 50px; right: 8px; width: min(260px, calc(100% - 16px)); }
+  .folder-page-prompt-row .conversation-menu-button span { white-space: normal; text-align: left; }
+  .folder-page-prompt svg { flex: none; width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+  .folder-page-prompt .folder-page-item-title { flex: none; }
+  .folder-page-prompt-value {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text-muted);
+    font-size: 13px;
+    text-align: right;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .folder-page-prompt .folder-page-prompt-chevron { width: 15px; height: 15px; color: var(--text-muted); stroke-width: 1.8; transition: transform var(--motion-fast) var(--ease-out); }
+  .folder-page-prompt[aria-expanded="true"] .folder-page-prompt-chevron { transform: rotate(90deg); }
+  .folder-page-prompt-row + .folder-page-new { border-top: .5px solid rgba(31,30,29,.1); }
   #folder-detail-list.has-menu { overflow: visible; }
   .folder-page-item-row .folder-page-item { width: auto; min-width: 0; padding-right: 4px; }
   .folder-page-item-row .folder-page-item:not(:first-child) { border-top: none; }
@@ -3089,6 +3107,7 @@
   let folderDetailMenuOpen = false;
   let folderDetailConvMenuId = null;   // 详情页里打开了「…」的会话
   let folderDetailPickerId = null;     // 详情页里打开了「移到文件夹」的会话
+  let folderDetailPromptOpen = false;  // 详情页里打开了「提示词」选择列表
   let folderDrag = null;               // 文件夹页正在拖动排序的行
   let folderPageMenuId = null;         // 文件夹页里长按/右键打开了菜单的文件夹
   let folderPageSwallowClick = false;  // 长按弹出菜单后，松手带出的那一次 click 要吞掉
@@ -3264,6 +3283,17 @@
 
   function activePrompt(library) {
     return library.items.find((item) => item.id === library.activeId) || library.items[0];
+  }
+
+  // 文件夹绑定的提示词（提示词已被删就当没绑定）
+  function folderBoundPrompt(folder) {
+    if (!folder?.promptId) return null;
+    return promptLibrary.items.find((item) => item.id === folder.promptId) || null;
+  }
+  // 发消息时实际用的系统提示词：会话所在文件夹绑定了就用它，否则用设置里当前选中的
+  function effectiveSystemPrompt(conversation) {
+    const bound = folderBoundPrompt(folderById(conversation?.folderId));
+    return (bound ? bound.content : systemPrompt).trim();
   }
 
   function promptSummaryText(library) {
@@ -3596,12 +3626,15 @@
         let id = typeof item.id === "string" && /^[A-Za-z0-9._:-]{1,64}$/.test(item.id) ? item.id : "";
         if (!id || seen.has(id)) id = createFolderId();
         seen.add(id);
+        // 绑定的提示词 id（提示词库里的 id）；没绑定不写键，保持老数据原样
+        const promptId = typeof item.promptId === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(item.promptId) ? item.promptId : "";
         return {
           id,
           name: normalizeFolderName(item.name),
           pinned: Boolean(item.pinned),
           collapsed: Boolean(item.collapsed),
           createdAt: validStoredDate(item.createdAt, now),
+          ...(promptId ? { promptId } : {}),
         };
       });
   }
@@ -5227,6 +5260,7 @@
     folderDetailMenuOpen = false;
     folderDetailConvMenuId = null;
     folderDetailPickerId = null;
+    folderDetailPromptOpen = false;
     folderPageMenuId = null;
     renderFolderDetail();
     folderDetailScreen.classList.add("is-open");
@@ -5289,7 +5323,43 @@
 
     folderDetailList.replaceChildren();
     // 有菜单打开时放开卡片的 overflow，避免最后一行的菜单被卡片裁掉
-    folderDetailList.classList.toggle("has-menu", Boolean(folderDetailConvMenuId || folderDetailPickerId));
+    folderDetailList.classList.toggle("has-menu", Boolean(folderDetailConvMenuId || folderDetailPickerId || folderDetailPromptOpen));
+    // 提示词行：这个文件夹里的会话用哪份系统提示词（默认跟随设置）
+    const promptRow = document.createElement("div");
+    promptRow.className = "folder-page-prompt-row";
+    const promptButton = document.createElement("button");
+    promptButton.className = "folder-page-item folder-page-prompt";
+    promptButton.type = "button";
+    promptButton.dataset.action = "fd-prompt";
+    promptButton.disabled = pending;
+    promptButton.setAttribute("aria-expanded", String(folderDetailPromptOpen));
+    const bound = folderBoundPrompt(folder);
+    const promptLabel = bound ? bound.name : folder.promptId ? "跟随设置（原绑定已删除）" : "跟随设置";
+    promptButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h10M4 18h7"></path></svg><span class="folder-page-item-title">提示词</span><span class="folder-page-prompt-value"></span><svg class="folder-page-prompt-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>';
+    promptButton.querySelector(".folder-page-prompt-value").textContent = promptLabel;
+    promptRow.appendChild(promptButton);
+    if (folderDetailPromptOpen) {
+      const menu = document.createElement("div");
+      menu.className = "conversation-menu conversation-move-menu folder-prompt-menu";
+      menu.setAttribute("role", "group");
+      menu.setAttribute("aria-label", `选择“${folder.name}”使用的提示词`);
+      const check = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5 9-10"></path></svg>';
+      const dot = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="1.2"></circle></svg>';
+      const options = [{ id: "", name: `跟随设置（现在是“${activePrompt(promptLibrary).name}”）` }, ...promptLibrary.items];
+      for (const option of options) {
+        const current = option.id ? folder.promptId === option.id : !bound;
+        const button = document.createElement("button");
+        button.className = `conversation-menu-button${current ? " is-current" : ""}`;
+        button.type = "button";
+        button.dataset.action = "fd-prompt-set";
+        button.dataset.promptId = option.id;
+        button.innerHTML = `${current ? check : dot}<span></span>`;
+        button.querySelector("span").textContent = option.name;
+        menu.appendChild(button);
+      }
+      promptRow.appendChild(menu);
+    }
+    folderDetailList.appendChild(promptRow);
     const create = document.createElement("button");
     create.className = "folder-page-item folder-page-new";
     create.type = "button";
@@ -5411,6 +5481,19 @@
     const draft = cloneConversationStore();
     draft.folders = [...(draft.folders || []), folder];
     return persistFolderDraft(draft, `已新建文件夹“${folder.name}”。`) ? folder : null;
+  }
+
+  // 给文件夹绑定/解绑提示词（promptId 为空 = 跟随设置）
+  function setFolderPrompt(folderId, promptId) {
+    const folder = folderById(folderId);
+    if (!folder || pending) return false;
+    const prompt = promptId ? promptLibrary.items.find((item) => item.id === promptId) : null;
+    if (promptId && !prompt) return false;
+    const draft = cloneConversationStore();
+    const target = folderById(folderId, draft);
+    if (prompt) target.promptId = prompt.id;
+    else delete target.promptId;
+    return persistFolderDraft(draft, prompt ? `“${folder.name}”里的会话改用提示词“${prompt.name}”。` : `“${folder.name}”改为跟随设置里的提示词。`);
   }
 
   function renameFolder(folderId) {
@@ -6946,8 +7029,9 @@
           ? storedConversation.messages.slice(0, assistantIndex)
           : storedConversation.messages,
       );
-      const requestMessages = systemPrompt.trim()
-        ? [{ role: "system", content: systemPrompt.trim() }, ...history]
+      const requestSystemPrompt = effectiveSystemPrompt(storedConversation);
+      const requestMessages = requestSystemPrompt
+        ? [{ role: "system", content: requestSystemPrompt }, ...history]
         : history;
       const res = await fetch(WORKER_URL, {
         method: "POST",
@@ -7300,7 +7384,19 @@
       if (folderScreenIsOpen()) renderFolderScreen();
       if (folderDetailIsOpen() && folderById(folderDetailId)) renderFolderDetail();
     };
-    if (action === "fp-new") {
+    if (action === "fd-prompt") {
+      folderDetailPromptOpen = !folderDetailPromptOpen;
+      folderDetailConvMenuId = null;
+      folderDetailPickerId = null;
+      folderDetailMenuOpen = false;
+      renderFolderDetail();
+      if (!folderDetailPromptOpen) folderDetailList.querySelector('[data-action="fd-prompt"]')?.focus();
+    } else if (action === "fd-prompt-set") {
+      folderDetailPromptOpen = false;
+      setFolderPrompt(folderDetailId, item.dataset.promptId || "");
+      rerender();
+      folderDetailList.querySelector('[data-action="fd-prompt"]')?.focus();
+    } else if (action === "fp-new") {
       const folderId = folderDetailId;
       closeFolderScreen();
       createNewConversation({ folderId });
@@ -7308,6 +7404,7 @@
       closeFolderScreen();
       switchConversation(conversationId);
     } else if (action === "fd-menu" && conversationId) {
+      folderDetailPromptOpen = false;
       const closing = folderDetailConvMenuId === conversationId || folderDetailPickerId === conversationId;
       folderDetailConvMenuId = closing ? null : conversationId;
       folderDetailPickerId = null;
@@ -7474,6 +7571,7 @@
     folderDetailMenuOpen = !folderDetailMenuOpen;
     folderDetailConvMenuId = null;
     folderDetailPickerId = null;
+    folderDetailPromptOpen = false;
     renderFolderDetail();
     if (!folderDetailMenuOpen) folderDetailMore.focus();
   });
@@ -7609,6 +7707,10 @@
       folderPageMenuId = null;
       if (folderScreenIsOpen()) renderFolderScreen();
     }
+    if (folderDetailPromptOpen && !event.target.closest(".folder-page-prompt-row")) {
+      folderDetailPromptOpen = false;
+      if (folderDetailIsOpen()) renderFolderDetail();
+    }
     if ((folderDetailConvMenuId || folderDetailPickerId) && !event.target.closest(".folder-page-item-row")) {
       folderDetailConvMenuId = null;
       folderDetailPickerId = null;
@@ -7625,7 +7727,11 @@
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
     if (folderDetailScreen.classList.contains("is-open")) {
-      if (folderDetailConvMenuId || folderDetailPickerId) {
+      if (folderDetailPromptOpen) {
+        folderDetailPromptOpen = false;
+        renderFolderDetail();
+        folderDetailList.querySelector('[data-action="fd-prompt"]')?.focus();
+      } else if (folderDetailConvMenuId || folderDetailPickerId) {
         const closedId = folderDetailConvMenuId || folderDetailPickerId;
         folderDetailConvMenuId = null;
         folderDetailPickerId = null;
