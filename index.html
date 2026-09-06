@@ -441,9 +441,19 @@
     font: inherit;
     text-align: left;
     cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
     -webkit-tap-highlight-color: transparent;
+    transition: background-color 100ms ease;
   }
   .folder-page-open:disabled { opacity: .5; cursor: default; }
+  .folder-page-open:active { background: rgba(31,30,29,.045); }
+  /* 长按（桌面右键）弹出的文件夹菜单，挂在行内右侧 */
+  .folder-page-card.has-menu { overflow: visible; }
+  .folder-page-row.has-menu { z-index: 2; background: rgba(217,119,87,.09); }
+  .folder-page-row .conversation-menu { top: 56px; right: 8px; width: 204px; }
+  .folder-page-row .conversation-menu-button span { white-space: nowrap; }
   .folder-page-handle {
     display: grid;
     place-items: center;
@@ -481,10 +491,8 @@
     white-space: nowrap;
   }
   .folder-page-meta { color: var(--text-muted); font-size: 12px; }
-  .folder-page-pin,
-  .folder-page-chevron { display: grid; flex: none; place-items: center; }
-  .folder-page-pin svg,
-  .folder-page-chevron svg {
+  .folder-page-pin { display: grid; flex: none; place-items: center; }
+  .folder-page-pin svg {
     width: 15px;
     height: 15px;
     fill: none;
@@ -494,7 +502,6 @@
     stroke-linejoin: round;
   }
   .folder-page-pin { color: var(--accent); }
-  .folder-page-chevron { color: var(--text-muted); }
   .folder-page-empty {
     margin: 0;
     padding: 16px;
@@ -2991,6 +2998,8 @@
   let folderDetailConvMenuId = null;   // 详情页里打开了「…」的会话
   let folderDetailPickerId = null;     // 详情页里打开了「移到文件夹」的会话
   let folderDrag = null;               // 文件夹页正在拖动排序的行
+  let folderPageMenuId = null;         // 文件夹页里长按/右键打开了菜单的文件夹
+  let folderPageSwallowClick = false;  // 长按弹出菜单后，松手带出的那一次 click 要吞掉
   let renamingConversationId = null;
   let conversationSidebarTrigger = null;
   let pendingImages = [];
@@ -5013,6 +5022,7 @@
     conversationMenuId = null;
     folderMenuId = null;
     movePickerId = null;
+    folderPageMenuId = null;
     renderFolderScreen();
     folderScreen.classList.add("is-open");
     folderScreen.setAttribute("aria-hidden", "false");
@@ -5027,6 +5037,7 @@
     folderScreen.classList.remove("is-open");
     folderScreen.setAttribute("aria-hidden", "true");
     folderMenuId = null;
+    folderPageMenuId = null;
     syncInteractionState();
     renderConversationList();
     conversationsOpen.focus();
@@ -5076,11 +5087,6 @@
         pin.innerHTML = '<svg viewBox="0 0 24 24"><path d="M9 4h6l-1 6 3 3v2H7v-2l3-3-1-6Z"></path><path d="M12 15v6"></path></svg>';
         open.appendChild(pin);
       }
-      const chevron = document.createElement("span");
-      chevron.className = "folder-page-chevron";
-      chevron.setAttribute("aria-hidden", "true");
-      chevron.innerHTML = '<svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"></path></svg>';
-      open.appendChild(chevron);
       // 拖柄：按住拖动改变顺序（置顶组内、普通组内各自排）
       const handle = document.createElement("span");
       handle.className = "folder-page-handle";
@@ -5088,8 +5094,34 @@
       handle.setAttribute("aria-label", `拖动调整“${folder.name}”的顺序`);
       handle.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14M5 12h14M5 16h14"></path></svg>';
       row.append(open, handle);
+      if (folderPageMenuId === folder.id) {
+        row.classList.add("has-menu");
+        const menu = document.createElement("div");
+        menu.className = "conversation-menu conversation-folder-menu folder-page-menu";
+        menu.setAttribute("role", "group");
+        menu.setAttribute("aria-label", `文件夹${folder.name}的操作`);
+        menu.innerHTML = `
+          <button class="conversation-menu-button" type="button" data-action="fp-menu-new">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+            <span>在这个文件夹新建会话</span>
+          </button>
+          <button class="conversation-menu-button" type="button" data-action="folder-pin">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6l-1 6 3 3v2H7v-2l3-3-1-6Z"></path><path d="M12 15v6"></path></svg>
+            <span>${folder.pinned ? "取消置顶" : "置顶"}</span>
+          </button>
+          <button class="conversation-menu-button" type="button" data-action="folder-rename">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 20 4.2-1 10.6-10.6-3.2-3.2L5 15.8 4 20Z"></path><path d="m13.8 7 3.2 3.2"></path></svg>
+            <span>重命名</span>
+          </button>
+          <button class="conversation-menu-button danger" type="button" data-action="folder-delete">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"></path><path d="m9 7 .7-2h4.6l.7 2"></path><path d="m7 7 .7 13h8.6L17 7"></path></svg>
+            <span>删除文件夹</span>
+          </button>`;
+        row.appendChild(menu);
+      }
       card.appendChild(row);
     }
+    card.classList.toggle("has-menu", Boolean(folderPageMenuId));
     folderPageList.appendChild(card);
   }
 
@@ -5103,6 +5135,7 @@
     folderDetailMenuOpen = false;
     folderDetailConvMenuId = null;
     folderDetailPickerId = null;
+    folderPageMenuId = null;
     renderFolderDetail();
     folderDetailScreen.classList.add("is-open");
     folderDetailScreen.setAttribute("aria-hidden", "false");
@@ -6934,8 +6967,74 @@
     }
   });
   folderPageList.addEventListener("click", (event) => {
+    if (folderPageSwallowClick) {
+      folderPageSwallowClick = false;
+      return;
+    }
+    const menuButton = event.target.closest(".folder-page-menu [data-action]");
+    if (menuButton instanceof HTMLElement) {
+      const folderId = folderPageMenuId;
+      const action = menuButton.dataset.action;
+      folderPageMenuId = null;
+      if (action === "fp-menu-new") {
+        closeFolderScreen();
+        createNewConversation({ folderId });
+        return;
+      }
+      handleFolderAction(action, folderId);
+      if (folderScreenIsOpen()) renderFolderScreen();
+      return;
+    }
+    if (folderPageMenuId) {
+      // 菜单开着时点别处：只关菜单，不进详情
+      folderPageMenuId = null;
+      renderFolderScreen();
+      return;
+    }
     const row = event.target.closest('[data-action="fp-open"]');
     if (row instanceof HTMLElement && row.dataset.folderId) openFolderDetail(row.dataset.folderId);
+  });
+  // 长按行（或桌面右键）弹出文件夹菜单：按住约 450ms 且手指没挪开就算长按
+  function openFolderPageMenu(folderId) {
+    if (pending || !folderById(folderId)) return;
+    folderPageMenuId = folderId;
+    renderFolderScreen();
+  }
+  let folderLongPress = null;
+  const cancelFolderLongPress = () => {
+    if (!folderLongPress) return;
+    clearTimeout(folderLongPress.timer);
+    folderLongPress = null;
+  };
+  folderPageList.addEventListener("pointerdown", (event) => {
+    folderPageSwallowClick = false;
+    const open = event.target.closest(".folder-page-open");
+    if (!open || pending || folderPageMenuId || (event.pointerType === "mouse" && event.button !== 0)) return;
+    cancelFolderLongPress();
+    const folderId = open.dataset.folderId;
+    folderLongPress = {
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      timer: setTimeout(() => {
+        folderLongPress = null;
+        folderPageSwallowClick = true;
+        openFolderPageMenu(folderId);
+      }, 450),
+    };
+  });
+  folderPageList.addEventListener("pointermove", (event) => {
+    if (!folderLongPress || event.pointerId !== folderLongPress.pointerId) return;
+    if (Math.hypot(event.clientX - folderLongPress.x, event.clientY - folderLongPress.y) > 10) cancelFolderLongPress();
+  });
+  folderPageList.addEventListener("pointerup", cancelFolderLongPress);
+  folderPageList.addEventListener("pointercancel", cancelFolderLongPress);
+  folderPageList.addEventListener("contextmenu", (event) => {
+    const open = event.target.closest(".folder-page-open");
+    if (!open) return;
+    event.preventDefault();
+    cancelFolderLongPress();
+    if (folderPageMenuId !== open.dataset.folderId) openFolderPageMenu(open.dataset.folderId);
   });
   folderDetailList.addEventListener("click", (event) => {
     const item = event.target.closest("[data-action]");
@@ -7022,6 +7121,11 @@
   folderPageList.addEventListener("pointerdown", (event) => {
     const handle = event.target.closest(".folder-page-handle");
     if (!handle || pending) return;
+    if (folderPageMenuId) {
+      folderPageMenuId = null;
+      renderFolderScreen();
+      return;
+    }
     if (folderDrag) {
       // 上一次还在落位过渡中就又按下：先立刻结束上一次（从当前状态直接定稿），再开始新的
       if (!folderDrag.settling) return;
@@ -7239,6 +7343,10 @@
       folderDetailMenuOpen = false;
       renderFolderDetail();
     }
+    if (folderPageMenuId && !event.target.closest(`.folder-page-row[data-folder-id="${folderPageMenuId}"]`)) {
+      folderPageMenuId = null;
+      if (folderScreenIsOpen()) renderFolderScreen();
+    }
     if ((folderDetailConvMenuId || folderDetailPickerId) && !event.target.closest(".folder-page-item-row")) {
       folderDetailConvMenuId = null;
       folderDetailPickerId = null;
@@ -7269,7 +7377,14 @@
         closeFolderDetail({ instant: true });
       }
     } else if (folderScreen.classList.contains("is-open")) {
-      closeFolderScreen({ instant: true });
+      if (folderPageMenuId) {
+        const closedId = folderPageMenuId;
+        folderPageMenuId = null;
+        renderFolderScreen();
+        folderPageList.querySelector(`.folder-page-open[data-folder-id="${closedId}"]`)?.focus();
+      } else {
+        closeFolderScreen({ instant: true });
+      }
     } else if (modelScreen.classList.contains("is-open")) {
       closeModelScreen({ instant: true });
     } else if (promptScreen.classList.contains("is-open")) {
