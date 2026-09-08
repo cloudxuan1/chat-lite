@@ -3404,7 +3404,7 @@
   function normalizeSwipeActions(value) {
     const source = value && typeof value === "object" ? value : {};
     const pick = (item, fallback) => SWIPE_ACTION_OPTIONS.includes(item) ? item : fallback;
-    return { left: pick(source.left, "move"), right: pick(source.right, "delete") };
+    return { left: pick(source.left, "pin"), right: pick(source.right, "move") };
   }
 
   function parseStoredJson(key, fallback) {
