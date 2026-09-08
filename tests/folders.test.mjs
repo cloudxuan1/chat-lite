@@ -33,6 +33,7 @@ const functions = [
   "persistConversationStore", "persistFolderDraft", "moveConversationToFolder", "createFolderInteractive",
   "renameFolder", "toggleFolderPinned", "deleteFolder", "restoreFromBackup", "createNewConversation",
   "focusConversationMore", "conversationPreview", "formatConversationTime", "buildConversationItem",
+  "toggleConversationPinned", "sortedConversations",
 ].map((name) => extract(new RegExp(`^  (?:async )?function ${name}\\([^]*?^  }$`, "gm"))).join("\n");
 const constants = [
   "CONVERSATIONS_KEY", "CORRUPT_CONVERSATIONS_BACKUP_KEY", "CONVERSATION_TITLE_MAX_CHARACTERS",
@@ -403,4 +404,37 @@ test("pre-folder backups remain importable", async () => {
   await h.restore({ version: 1, activeId: "old", conversations: [conversation("old")] });
   assert.deepEqual(plain(h.context.conversationById("old")), conversation("old"));
   assert.equal(h.context.conversationStore.folders.length, 3);
+});
+
+
+test("conversation pin persists without changing messages, timestamps or session; unpin removes the key", () => {
+  const h = harness(); const c = h.context;
+  const before = plain(c.conversationById("c1"));
+  assert.equal(c.toggleConversationPinned("c1"), true);
+  assert.deepEqual(plain(c.conversationById("c1")), { ...before, pinned: true });
+  assert.equal(JSON.parse(h.storage.get(h.key)).conversations.find(x => x.id === "c1").pinned, true);
+  assert.equal(c.normalizeConversationStore(JSON.parse(h.storage.get(h.key))).conversations.find(x => x.id === "c1").pinned, true);
+  assert.equal(c.toggleConversationPinned("c1"), true);
+  assert.deepEqual(plain(c.conversationById("c1")), before);
+});
+
+test("pin failure and pending reply preserve memory/storage; retry succeeds", () => {
+  const h = harness(); const c = h.context; const before = JSON.stringify(c.conversationStore);
+  c.failWrites = true; assert.equal(c.toggleConversationPinned("c1"), false);
+  assert.equal(JSON.stringify(c.conversationStore), before); assert.equal(h.storage.get(h.key), before);
+  c.failWrites = false; c.pending = true; assert.equal(c.toggleConversationPinned("c1"), false);
+  assert.equal(JSON.stringify(c.conversationStore), before);
+  c.pending = false; assert.equal(c.toggleConversationPinned("c1"), true);
+});
+
+test("pin sorts before newer unpinned conversations and backup import retains it", async () => {
+  const h = harness(); const c = h.context;
+  const backup = fixture(); backup.conversations = [conversation("imported", "f1")];
+  backup.conversations[0].pinned = true; backup.conversations[0].updatedAt = "2020-01-01T00:00:00.000Z";
+  await h.restore(backup);
+  assert.equal(c.sortedConversations()[0].id, "imported");
+  assert.equal(c.toggleConversationPinned("imported"), true);
+  assert.notEqual(c.sortedConversations()[0].id, "imported");
+  await h.restore(backup);
+  assert.equal(c.conversationById("imported").pinned, undefined, "old backup must not re-pin an existing conversation");
 });

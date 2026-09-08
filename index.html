@@ -5193,6 +5193,14 @@
     return row;
   }
   function resetSwipeState() {
+    // 两个列表共用状态：重绘其中一个时，也要收回另一个仍在 DOM 里的行。
+    if (swipeGesture) {
+      const { row, pointerId } = swipeGesture;
+      row.classList.remove("is-swiping", "will-commit");
+      closeSwipeRow(row, false);
+      try { row.releasePointerCapture(pointerId); } catch { /* 指针可能已被系统取消 */ }
+    }
+    closeSwipeRow(swipeOpenRow, false);
     swipeGesture = null;
     swipeOpenRow = null;
   }
@@ -5232,6 +5240,7 @@
     if (kind === "move") {
       if (surface === "detail") {
         folderDetailConvMenuId = null;
+        folderDetailMenuOpen = false;
         folderDetailPromptOpen = false;
         folderDetailPickerId = conversationId;
         renderFolderDetail();
@@ -5265,6 +5274,7 @@
     }
   }
   document.addEventListener("pointerdown", (event) => {
+    if (event.isPrimary === false || swipeGesture) return;
     const row = event.target.closest(".swipe-row");
     if (swipeOpenRow && swipeOpenRow !== row) closeSwipeRow();
     if (!row || pending || (event.pointerType === "mouse" && event.button !== 0)) return;
@@ -5314,6 +5324,11 @@
     if (!gesture.axis) return;
     const { row, dx, width } = gesture;
     row.classList.remove("is-swiping", "will-commit");
+    // 系统接管滚动、切换应用等取消事件不是用户确认，绝不能执行快捷动作。
+    if (event.type === "pointercancel") {
+      closeSwipeRow(row);
+      return;
+    }
     // 滑完松手浏览器还会补一个 click，别让它当成点了会话
     swipeSwallowClick = true;
     window.setTimeout(() => { swipeSwallowClick = false; }, 400);
@@ -8218,6 +8233,8 @@
     if (!event.composedPath().includes(document.querySelector(".model-control"))) {
       closeQuickPanel();
     }
+    // 快捷按钮在会话内容外；它刚打开的选择器不能被这次 click 当成外部点击关掉。
+    if (event.target.closest(".swipe-action")) return;
     if (folderDetailMenuOpen && !event.target.closest("#folder-detail-more, .folder-detail-menu")) {
       folderDetailMenuOpen = false;
       renderFolderDetail();
