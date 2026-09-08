@@ -27,7 +27,7 @@ DOM、整页渲染、焦点、弹窗和 localStorage 都是测试替身。图片
 如需验证测试能抓住修复前的问题（该提交需已在本地）：
 
 ```sh
-CHAT_LITE_TEST_REF=d38e370e5ac228a509c6a4a0c87b8bdf24ae45e5 node --test tests/folders.test.mjs
+CHAT_LITE_TEST_REF=d38e370e5ac228a509c6a4a0c87b8bdf24ae45e5 node --test tests/*.test.mjs
 ```
 
 预期旧代码 13 项失败，修复后 25 项全部通过。
@@ -52,3 +52,16 @@ CHAT_LITE_TEST_REF=66afd7513f38af7f8ebeb1f925f431148b42e8da node --test tests/fo
 修复前预期 4 项失败；修复后排序 9 项、全部前端 34 项通过。
 
 浏览器/手机待验：第一次拖动松手后，在落位动画结束前立即拖另一个文件夹，多次重复，核对没有新增同名文件夹、跟手正常、刷新后顺序一致；测试环境模拟 localStorage 写入失败，应立即恢复原顺序，恢复写入后可重新拖动。另补 PR #13 原有长按/右键菜单、详情页会话菜单与 Esc 层级验收。
+
+
+## 会话置顶与滑动（PR #15）
+
+`conversation-swipe.test.mjs` 用生产手势监听器和生产 document 点击监听器验证：两处列表的露出按钮移动菜单、系统取消不执行动作、短滑/长滑、竖滑、多指、重绘清理和回复中禁用。`folders.test.mjs` 另覆盖会话置顶保存失败、排序、规范化刷新及备份去重保留主动取消置顶。均为 VM + DOM 替身，不模拟原生触摸事件重定向或实际布局。
+
+复现修复前的 7 个失败用例：
+
+```sh
+CHAT_LITE_TEST_REF=4314fc4dfcb96f1a590ab0ca4d4c77a53159443f node --test tests/conversation-swipe.test.mjs
+```
+
+iPhone 预览验收：侧栏和文件夹详情页各左滑一点，松手再点「移到文件夹」，确认菜单持续可用；右滑触发删除确认后取消；上下滚动、两指意外触碰和切换页面后确认行能收回、没有误执行；菜单置顶后刷新确认顺序保留。
