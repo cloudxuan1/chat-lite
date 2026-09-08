@@ -324,12 +324,33 @@
   }
   /* 会话文件夹 */
   .conversation-section-label {
-    margin: 12px 10px 3px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: 12px 10px 3px 12px;
     color: var(--text-muted);
     font-size: 11px;
     font-weight: 600;
     letter-spacing: .3px;
   }
+  .conversation-section-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    margin: -6px -4px -6px 0;
+    padding: 6px;
+    color: var(--accent);
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    font: inherit;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .conversation-section-action:disabled { opacity: .5; cursor: default; }
+  .conversation-section-action svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
   .conversation-folders-entry {
     display: flex;
     align-items: center;
@@ -549,6 +570,24 @@
   .folder-page-item-row:not(:first-child) { border-top: .5px solid rgba(31,30,29,.1); }
   .folder-page-item-row.active { background: rgba(217,119,87,.09); }
   .folder-page-item-row .conversation-menu { top: 46px; right: 8px; }
+  .folder-page-prompt-row { position: relative; }
+  .folder-page-prompt-row .conversation-menu { top: 50px; right: 8px; width: min(260px, calc(100% - 16px)); }
+  .folder-page-prompt-row .conversation-menu-button span { white-space: normal; text-align: left; }
+  .folder-page-prompt svg { flex: none; width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+  .folder-page-prompt .folder-page-item-title { flex: none; }
+  .folder-page-prompt-value {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text-muted);
+    font-size: 13px;
+    text-align: right;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .folder-page-prompt .folder-page-prompt-chevron { width: 15px; height: 15px; color: var(--text-muted); stroke-width: 1.8; transition: transform var(--motion-fast) var(--ease-out); }
+  .folder-page-prompt[aria-expanded="true"] .folder-page-prompt-chevron { transform: rotate(90deg); }
+  .folder-page-prompt-row + .folder-page-new { border-top: .5px solid rgba(31,30,29,.1); }
   #folder-detail-list.has-menu { overflow: visible; }
   .folder-page-item-row .folder-page-item { width: auto; min-width: 0; padding-right: 4px; }
   .folder-page-item-row .folder-page-item:not(:first-child) { border-top: none; }
@@ -1029,8 +1068,9 @@
     text-align: center;
   }
   .msg.user {
-    background: var(--accent);
-    color: #fff;
+    background: #f3e3da;
+    color: var(--text-primary);
+    box-shadow: 0 0 0 .5px rgba(217,119,87,.25);
     border-bottom-right-radius: 6px;
   }
   .msg.assistant {
@@ -1296,6 +1336,139 @@
     color: #9a3412;
     box-shadow: none;
   }
+  /* ===== 选中回复文字 → 「就这段追问」小按钮 ===== */
+  .quote-pill {
+    position: fixed;
+    z-index: 30;
+    left: 50%;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 11px 18px;
+    color: #f6f4ef;
+    background: #1f1e1d;
+    border: none;
+    border-radius: 999px;
+    box-shadow: 0 8px 24px rgba(31,30,29,.22);
+    font: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    opacity: 0;
+    transform: translate(-50%, 10px) scale(.96);
+    transition: opacity var(--motion-fast) ease, transform var(--motion-fast) var(--ease-out);
+  }
+  .quote-pill[hidden] { display: none; }
+  .quote-pill.is-visible { opacity: 1; transform: translate(-50%, 0); }
+  .quote-pill:active { background: #3b3b3b; }
+  .quote-pill svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  @media (prefers-reduced-motion: reduce) {
+    .quote-pill { transition: opacity var(--motion-fast) ease; transform: translate(-50%, 0); }
+  }
+  /* ===== 回复 Markdown 渲染（只渲染 Claude 的回复，用户消息仍是纯文本）===== */
+  .msg.md { white-space: normal; line-height: 1.55; }
+  .msg.md > :first-child { margin-top: 0; }
+  .msg.md > :last-child { margin-bottom: 0; }
+  .msg.md p { margin: 0 0 .7em; }
+  .msg.md h1, .msg.md h2, .msg.md h3, .msg.md h4, .msg.md h5, .msg.md h6 {
+    margin: 1em 0 .45em;
+    font-weight: 650;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+  }
+  .msg.md h1 { font-size: 1.25em; }
+  .msg.md h2 { font-size: 1.15em; }
+  .msg.md h3 { font-size: 1.06em; }
+  .msg.md h4, .msg.md h5, .msg.md h6 { font-size: 1em; }
+  .msg.md ul, .msg.md ol { margin: 0 0 .7em; padding-left: 1.5em; }
+  .msg.md li { margin: .2em 0; }
+  .msg.md li > p { margin: 0; }
+  .msg.md ul ul, .msg.md ol ul, .msg.md ul ol, .msg.md ol ol { margin: .15em 0 0; }
+  .msg.md blockquote {
+    margin: 0 0 .7em;
+    padding: .1em 0 .1em .85em;
+    border-left: 2.5px solid rgba(217,119,87,.55);
+    color: var(--text-secondary);
+  }
+  .msg.md hr { margin: .9em 0; border: none; border-top: .5px solid rgba(31,30,29,.16); }
+  .msg.md a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; }
+  .msg.md strong { font-weight: 650; }
+  .msg.md code {
+    padding: .1em .35em;
+    background: rgba(31,30,29,.06);
+    border-radius: 5px;
+    font-family: 'SF Mono', 'Fira Code', Menlo, Consolas, monospace;
+    font-size: .88em;
+  }
+  .msg.md pre {
+    margin: .2em 0 .8em;
+    padding: 0;
+    background: #1f1e1d;
+    color: #f3f1ec;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .msg.md pre code {
+    display: block;
+    padding: 11px 13px 12px;
+    background: transparent;
+    color: inherit;
+    font-size: 12.5px;
+    line-height: 1.5;
+    white-space: pre;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .md-code-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 8px 6px 13px;
+    color: rgba(243,241,236,.6);
+    font-size: 11px;
+    border-bottom: .5px solid rgba(255,255,255,.1);
+  }
+  .md-code-copy {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    color: rgba(243,241,236,.75);
+    background: rgba(255,255,255,.08);
+    border: none;
+    border-radius: 7px;
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background-color var(--motion-fast) ease, color var(--motion-fast) ease;
+  }
+  .md-code-copy:active { background: rgba(255,255,255,.16); }
+  .md-code-copy.is-copied { color: #f6b79a; }
+  .md-table-wrap { margin: 0 0 .8em; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .msg.md table { border-collapse: collapse; font-size: .93em; }
+  .msg.md th, .msg.md td {
+    padding: 5px 10px;
+    border: .5px solid rgba(31,30,29,.16);
+    text-align: left;
+    vertical-align: top;
+    white-space: nowrap;
+  }
+  .msg.md th { background: rgba(31,30,29,.045); font-weight: 650; }
+  .msg.md img { max-width: 100%; border-radius: 8px; }
+  .msg.md mark { padding: 0 .15em; background: rgba(217,119,87,.22); color: inherit; border-radius: 3px; }
+  .msg.md sup, .msg.md sub { font-size: .75em; line-height: 0; }
+  .msg.md kbd { padding: .1em .35em; border: .5px solid rgba(31,30,29,.25); border-bottom-width: 1.5px; border-radius: 4px; font-family: inherit; font-size: .88em; }
+  .msg.md li:has(> .md-task) { list-style: none; margin-left: -1.3em; }
+  .msg.md .md-task { display: flex; align-items: baseline; gap: .45em; }
+  .msg.md .md-task input { flex: none; width: 15px; height: 15px; margin: 0; position: relative; top: 2px; accent-color: var(--accent); }
+  .msg.md .md-task:has(input:checked) { color: var(--text-muted); }
   .cache-badge {
     align-self: flex-start;
     max-width: 85%;
@@ -2411,6 +2584,9 @@
     outline: 2px solid rgba(217,119,87,.65);
     outline-offset: 2px;
   }
+  /* 手指/鼠标在用时不画焦点框（iOS 对脚本 focus() 会当成键盘操作画框）；按过 Tab 之后才画 */
+  html[data-input="pointer"] button:focus-visible,
+  html[data-input="pointer"] [role="button"]:focus-visible { outline: none; }
 
   @media (prefers-reduced-motion: reduce) {
     .conversation-sidebar,
@@ -2907,6 +3083,11 @@
   </form>
     </div>
   </div>
+  <!-- 选中回复里的一段文字后弹出的「就这段追问」 -->
+  <button class="quote-pill" id="quote-pill" type="button" hidden>
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h3v3a3 3 0 0 1-3 3H6"></path><path d="M14 7h3v3a3 3 0 0 1-3 3h-1"></path><path d="M6 17h12"></path></svg>
+    <span>就这段追问</span>
+  </button>
 
 <script>
   // ===== 可配置常量 =====
@@ -2997,6 +3178,7 @@
   let folderDetailMenuOpen = false;
   let folderDetailConvMenuId = null;   // 详情页里打开了「…」的会话
   let folderDetailPickerId = null;     // 详情页里打开了「移到文件夹」的会话
+  let folderDetailPromptOpen = false;  // 详情页里打开了「提示词」选择列表
   let folderDrag = null;               // 文件夹页正在拖动排序的行
   let folderPageMenuId = null;         // 文件夹页里长按/右键打开了菜单的文件夹
   let folderPageSwallowClick = false;  // 长按弹出菜单后，松手带出的那一次 click 要吞掉
@@ -3172,6 +3354,17 @@
 
   function activePrompt(library) {
     return library.items.find((item) => item.id === library.activeId) || library.items[0];
+  }
+
+  // 文件夹绑定的提示词（提示词已被删就当没绑定）
+  function folderBoundPrompt(folder) {
+    if (!folder?.promptId) return null;
+    return promptLibrary.items.find((item) => item.id === folder.promptId) || null;
+  }
+  // 发消息时实际用的系统提示词：会话所在文件夹绑定了就用它，否则用设置里当前选中的
+  function effectiveSystemPrompt(conversation) {
+    const bound = folderBoundPrompt(folderById(conversation?.folderId));
+    return (bound ? bound.content : systemPrompt).trim();
   }
 
   function promptSummaryText(library) {
@@ -3504,12 +3697,15 @@
         let id = typeof item.id === "string" && /^[A-Za-z0-9._:-]{1,64}$/.test(item.id) ? item.id : "";
         if (!id || seen.has(id)) id = createFolderId();
         seen.add(id);
+        // 绑定的提示词 id（提示词库里的 id）；没绑定不写键，保持老数据原样
+        const promptId = typeof item.promptId === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(item.promptId) ? item.promptId : "";
         return {
           id,
           name: normalizeFolderName(item.name),
           pinned: Boolean(item.pinned),
           collapsed: Boolean(item.collapsed),
           createdAt: validStoredDate(item.createdAt, now),
+          ...(promptId ? { promptId } : {}),
         };
       });
   }
@@ -4530,7 +4726,8 @@
       conversationList.appendChild(buildSectionLabel("已置顶"));
       pinned.forEach((folder) => conversationList.appendChild(buildFolder(folder, byFolder.get(folder.id))));
     }
-    if (loose.length) conversationList.appendChild(buildSectionLabel("最近"));
+    // 有文件夹时「最近」标签一直显示，并带「新建」：当前会话在文件夹里时，头部的新建会跟进同一个文件夹，这里是建散会话的入口
+    if (loose.length || folders.length) conversationList.appendChild(buildSectionLabel("最近", folders.length ? { action: "new-loose", label: "新建" } : null));
     loose.forEach((conversation) => conversationList.appendChild(buildConversationItem(conversation)));
 
     if (renamingConversationId) {
@@ -4563,10 +4760,21 @@
     return entry;
   }
 
-  function buildSectionLabel(text) {
+  function buildSectionLabel(text, action = null) {
     const label = document.createElement("div");
     label.className = "conversation-section-label";
     label.textContent = text;
+    if (action) {
+      const button = document.createElement("button");
+      button.className = "conversation-section-action";
+      button.type = "button";
+      button.dataset.action = action.action;
+      button.disabled = pending;
+      button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg><span></span>';
+      button.querySelector("span").textContent = action.label;
+      button.setAttribute("aria-label", `${action.label}不在文件夹里的会话`);
+      label.appendChild(button);
+    }
     return label;
   }
 
@@ -5135,6 +5343,7 @@
     folderDetailMenuOpen = false;
     folderDetailConvMenuId = null;
     folderDetailPickerId = null;
+    folderDetailPromptOpen = false;
     folderPageMenuId = null;
     renderFolderDetail();
     folderDetailScreen.classList.add("is-open");
@@ -5197,7 +5406,43 @@
 
     folderDetailList.replaceChildren();
     // 有菜单打开时放开卡片的 overflow，避免最后一行的菜单被卡片裁掉
-    folderDetailList.classList.toggle("has-menu", Boolean(folderDetailConvMenuId || folderDetailPickerId));
+    folderDetailList.classList.toggle("has-menu", Boolean(folderDetailConvMenuId || folderDetailPickerId || folderDetailPromptOpen));
+    // 提示词行：这个文件夹里的会话用哪份系统提示词（默认跟随设置）
+    const promptRow = document.createElement("div");
+    promptRow.className = "folder-page-prompt-row";
+    const promptButton = document.createElement("button");
+    promptButton.className = "folder-page-item folder-page-prompt";
+    promptButton.type = "button";
+    promptButton.dataset.action = "fd-prompt";
+    promptButton.disabled = pending;
+    promptButton.setAttribute("aria-expanded", String(folderDetailPromptOpen));
+    const bound = folderBoundPrompt(folder);
+    const promptLabel = bound ? bound.name : folder.promptId ? "跟随设置（原绑定已删除）" : "跟随设置";
+    promptButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h10M4 18h7"></path></svg><span class="folder-page-item-title">提示词</span><span class="folder-page-prompt-value"></span><svg class="folder-page-prompt-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>';
+    promptButton.querySelector(".folder-page-prompt-value").textContent = promptLabel;
+    promptRow.appendChild(promptButton);
+    if (folderDetailPromptOpen) {
+      const menu = document.createElement("div");
+      menu.className = "conversation-menu conversation-move-menu folder-prompt-menu";
+      menu.setAttribute("role", "group");
+      menu.setAttribute("aria-label", `选择“${folder.name}”使用的提示词`);
+      const check = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5 9-10"></path></svg>';
+      const dot = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="1.2"></circle></svg>';
+      const options = [{ id: "", name: `跟随设置（现在是“${activePrompt(promptLibrary).name}”）` }, ...promptLibrary.items];
+      for (const option of options) {
+        const current = option.id ? folder.promptId === option.id : !bound;
+        const button = document.createElement("button");
+        button.className = `conversation-menu-button${current ? " is-current" : ""}`;
+        button.type = "button";
+        button.dataset.action = "fd-prompt-set";
+        button.dataset.promptId = option.id;
+        button.innerHTML = `${current ? check : dot}<span></span>`;
+        button.querySelector("span").textContent = option.name;
+        menu.appendChild(button);
+      }
+      promptRow.appendChild(menu);
+    }
+    folderDetailList.appendChild(promptRow);
     const create = document.createElement("button");
     create.className = "folder-page-item folder-page-new";
     create.type = "button";
@@ -5319,6 +5564,19 @@
     const draft = cloneConversationStore();
     draft.folders = [...(draft.folders || []), folder];
     return persistFolderDraft(draft, `已新建文件夹“${folder.name}”。`) ? folder : null;
+  }
+
+  // 给文件夹绑定/解绑提示词（promptId 为空 = 跟随设置）
+  function setFolderPrompt(folderId, promptId) {
+    const folder = folderById(folderId);
+    if (!folder || pending) return false;
+    const prompt = promptId ? promptLibrary.items.find((item) => item.id === promptId) : null;
+    if (promptId && !prompt) return false;
+    const draft = cloneConversationStore();
+    const target = folderById(folderId, draft);
+    if (prompt) target.promptId = prompt.id;
+    else delete target.promptId;
+    return persistFolderDraft(draft, prompt ? `“${folder.name}”里的会话改用提示词“${prompt.name}”。` : `“${folder.name}”改为跟随设置里的提示词。`);
   }
 
   function renameFolder(folderId) {
@@ -5486,6 +5744,84 @@
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
+  // 代码块右上角的「复制」：拷贝该块的原始代码
+  messagesEl.addEventListener("click", async (event) => {
+    const button = event.target.closest(".md-code-copy");
+    if (!(button instanceof HTMLElement)) return;
+    const code = button.closest("pre")?.querySelector("code")?.textContent || "";
+    try {
+      await writeClipboard(code);
+      button.textContent = "已复制";
+      button.classList.add("is-copied");
+    } catch {
+      button.textContent = "复制失败";
+    }
+    window.setTimeout(() => {
+      button.textContent = "复制";
+      button.classList.remove("is-copied");
+    }, 1200);
+  });
+
+  // 记录最近一次是手指/鼠标还是键盘在操作，决定要不要画焦点框
+  document.addEventListener("pointerdown", () => { document.documentElement.dataset.input = "pointer"; }, true);
+  document.addEventListener("keydown", (e) => { if (e.key === "Tab" || e.key.startsWith("Arrow")) document.documentElement.dataset.input = "keyboard"; }, true);
+  document.documentElement.dataset.input = "pointer";
+
+  // ===== 选中一段追问：在 Claude 的回复里选中文字，弹出小按钮，点了把引用带进输入框 =====
+  const quotePill = document.getElementById("quote-pill");
+  let quoteText = "";
+  let quoteTimer = 0;
+  function selectedReplyText() {
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed || !selection.rangeCount) return null;
+    const range = selection.getRangeAt(0);
+    const node = range.commonAncestorContainer;
+    const element = node.nodeType === 1 ? node : node.parentElement;
+    const bubble = element?.closest(".message-item.assistant .msg");
+    if (!bubble || bubble.classList.contains("error") || bubble.closest(".message-item")?.classList.contains("is-editing")) return null;
+    const text = selection.toString().replace(/\r/g, "").trim();
+    if (!text) return null;
+    return { text };
+  }
+  function hideQuotePill() {
+    if (quotePill.hidden) return;
+    quotePill.classList.remove("is-visible");
+    quotePill.hidden = true;
+  }
+  function updateQuotePill() {
+    const found = anySettingsScreenOpen() || pending ? null : selectedReplyText();
+    if (!found) { hideQuotePill(); return; }
+    quoteText = found.text;
+    quotePill.hidden = false;
+    // 固定在输入栏上方正中：iOS 自带的复制菜单会贴着选区上下弹，跟着选区放必然撞上
+    const composerTop = document.getElementById("composer").getBoundingClientRect().top;
+    quotePill.style.bottom = `${Math.round(window.innerHeight - composerTop + 12)}px`;
+    requestAnimationFrame(() => { if (!quotePill.hidden) quotePill.classList.add("is-visible"); });
+  }
+  document.addEventListener("selectionchange", () => {
+    clearTimeout(quoteTimer);
+    quoteTimer = setTimeout(updateQuotePill, 140);
+  });
+  messagesEl.addEventListener("scroll", hideQuotePill, { passive: true });
+  // 点别处（包括打开设置/侧栏的按钮）先收起；重新选中会再弹
+  document.addEventListener("pointerdown", (event) => { if (!event.target.closest("#quote-pill")) hideQuotePill(); }, true);
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") hideQuotePill(); }, true);
+  // 按住按钮时别让浏览器先把选区清掉
+  quotePill.addEventListener("pointerdown", (event) => event.preventDefault());
+  quotePill.addEventListener("click", () => {
+    const text = quoteText;
+    hideQuotePill();
+    if (!text) return;
+    const quote = text.split("\n").map((line) => `> ${line}`).join("\n") + "\n\n";
+    const existing = input.value.trimEnd();
+    input.value = (existing ? existing + "\n\n" : "") + quote;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    window.getSelection()?.removeAllRanges();
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+    input.scrollTop = input.scrollHeight;
+  });
+
   async function writeClipboard(text) {
     if (navigator.clipboard && window.isSecureContext) {
       try {
@@ -5566,6 +5902,7 @@
     area.rows = 1; // 默认 rows=2 会让单行消息的编辑框固定占两行高
     area.value = message.content;
     area.setAttribute("aria-label", `编辑${messageRoleName(message.role)}的消息`);
+    bubble.classList.remove("md");
     textTarget.textContent = "";
     textTarget.appendChild(area);
     root.classList.add("is-editing");
@@ -5602,7 +5939,7 @@
     };
 
     const cancelEdit = () => {
-      textTarget.textContent = message.content;
+      setBubbleText(bubble, message.content);
       exitEdit();
     };
 
@@ -5622,7 +5959,7 @@
       }
       persistConversationStore(draft, { keepInMemoryOnFailure: true });
       // 就地更新，保留当前会话里已经显示的思考/来源/缓存徽章，不整段重渲染
-      textTarget.textContent = value;
+      setBubbleText(bubble, value);
       exitEdit();
       const copy = originalTools?.querySelector(".message-copy");
       if (copy) {
@@ -5709,7 +6046,7 @@
 
     const updated = getActiveConversation().messages[index];
     const bubble = root.querySelector(".msg");
-    if (bubble) bubble.textContent = updated.content;
+    if (bubble) setBubbleText(bubble, updated.content);
     const copy = root.querySelector(".message-copy");
     if (copy) {
       copy.dataset.copyText = updated.content;
@@ -5739,6 +6076,139 @@
     box.querySelector(".message-variant-label").textContent = `${active + 1}/${count}`;
     box.querySelector('.message-variant-btn[data-dir="-1"]').disabled = active <= 0;
     box.querySelector('.message-variant-btn[data-dir="1"]').disabled = active >= count - 1;
+  }
+
+  // ===== Markdown → HTML（只给 Claude 的回复用）=====
+  // 先把整段文本做 HTML 转义，之后只由我们自己拼标签，所以回复里的 <script> 之类只会原样显示。
+  function escapeHtml(text) {
+    return String(text)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+  function safeHref(url) {
+    const value = String(url).trim();
+    return /^(https?:\/\/|mailto:)/i.test(value) ? value : "";
+  }
+  function renderInline(text) {
+    // 行内代码先摘出来占位，避免里面的 * _ [ 被当作格式
+    const codes = [];
+    let out = text.replace(/`([^`\n]+)`/g, (_, code) => {
+      codes.push(`<code>${code}</code>`);
+      return `\u0000${codes.length - 1}\u0000`;
+    });
+    out = out
+      .replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (m, alt, url) => safeHref(url) ? `<img src="${safeHref(url)}" alt="${alt}" loading="lazy">` : m)
+      .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, label, url) => safeHref(url) ? `<a href="${safeHref(url)}" target="_blank" rel="noopener noreferrer">${label}</a>` : m)
+      .replace(/(^|[^"=>])(https?:\/\/[^\s<]+[^\s<.,;:!?)\]'"])/g, (_, lead, url) => `${lead}<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`)
+      .replace(/\*\*([^*\n]+?)\*\*/g, "<strong>$1</strong>")
+      .replace(/__([^_\n]+?)__/g, "<strong>$1</strong>")
+      .replace(/(^|[^*\w])\*([^*\n]+?)\*(?!\w)/g, "$1<em>$2</em>")
+      .replace(/(^|[^_\w])_([^_\n]+?)_(?!\w)/g, "$1<em>$2</em>")
+      .replace(/~~([^~\n]+?)~~/g, "<del>$1</del>")
+      .replace(/==([^=\n]+?)==/g, "<mark>$1</mark>")
+      // 模型有时直接写几个简单 HTML 标签（下划线、上下标、高亮）；只放行这几个不带属性的
+      .replace(/&lt;(\/?)(u|mark|sup|sub|b|i|s|del|strong|em|kbd)&gt;/g, "<$1$2>")
+      .replace(/&lt;br\s*\/?&gt;/g, "<br>");
+    return out.replace(/\u0000(\d+)\u0000/g, (_, i) => codes[Number(i)]);
+  }
+  function renderMarkdown(source) {
+    const lines = escapeHtml(source).replace(/\r\n?/g, "\n").split("\n");
+    const html = [];
+    let i = 0;
+    const isBlank = (line) => !line.trim();
+    const listItem = (line) => line.match(/^(\s*)([-*+]|\d+[.)])\s+(.*)$/);
+    const tableRow = (line) => /^\s*\|.*\|\s*$/.test(line);
+    const tableSep = (line) => /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(line);
+    const splitCells = (line) => line.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+    const blockStart = (line) =>
+      /^```/.test(line) || /^#{1,6}\s/.test(line) || /^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line) ||
+      /^&gt;\s?/.test(line) || Boolean(listItem(line)) || tableRow(line);
+
+    function renderList(startIndent) {
+      // 返回 <ul>/<ol>…，按缩进处理子列表
+      const first = listItem(lines[i]);
+      const ordered = /\d/.test(first[2]);
+      const items = [];
+      while (i < lines.length) {
+        const m = listItem(lines[i]);
+        if (!m || m[1].length < startIndent) break;
+        if (m[1].length > startIndent) {
+          // 更深的缩进：作为上一个条目的子列表
+          if (!items.length) break;
+          items[items.length - 1] += renderList(m[1].length);
+          continue;
+        }
+        if (ordered !== /\d/.test(m[2])) break;
+        let body = m[3];
+        i++;
+        // 条目的续行：缩进大于等于条目内容起点且不是新条目
+        while (i < lines.length && !isBlank(lines[i]) && !listItem(lines[i]) && /^\s{2,}/.test(lines[i]) && !/^```/.test(lines[i].trim())) {
+          body += "<br>" + lines[i].trim();
+          i++;
+        }
+        // 任务列表：- [ ] / - [x]
+        const task = body.match(/^\[( |x|X)\]\s+(.*)$/);
+        if (task) items.push(`<label class="md-task"><input type="checkbox" disabled${task[1] !== " " ? " checked" : ""}>${renderInline(task[2])}</label>`);
+        else items.push(renderInline(body));
+      }
+      const tag = ordered ? "ol" : "ul";
+      const startAttr = ordered && first[2] !== "1." && first[2] !== "1)" ? ` start="${parseInt(first[2], 10)}"` : "";
+      return `<${tag}${startAttr}>${items.map((item) => `<li>${item}</li>`).join("")}</${tag}>`;
+    }
+
+    while (i < lines.length) {
+      const line = lines[i];
+      if (isBlank(line)) { i++; continue; }
+      // 代码块（流式输出到一半没闭合时，剩下的都当代码）
+      const fence = line.match(/^```\s*([\w+#.-]*)/);
+      if (fence) {
+        const lang = fence[1];
+        const code = [];
+        i++;
+        while (i < lines.length && !/^```\s*$/.test(lines[i])) { code.push(lines[i]); i++; }
+        i++;
+        const label = lang ? `<span class="md-code-lang">${lang}</span>` : "<span></span>";
+        html.push(`<pre><div class="md-code-head">${label}<button class="md-code-copy" type="button">复制</button></div><code>${code.join("\n")}</code></pre>`);
+        continue;
+      }
+      const heading = line.match(/^(#{1,6})\s+(.*?)\s*#*\s*$/);
+      if (heading) { html.push(`<h${heading[1].length}>${renderInline(heading[2])}</h${heading[1].length}>`); i++; continue; }
+      if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) { html.push("<hr>"); i++; continue; }
+      if (/^&gt;\s?/.test(line)) {
+        const quoted = [];
+        while (i < lines.length && /^&gt;\s?/.test(lines[i])) { quoted.push(lines[i].replace(/^&gt;\s?/, "")); i++; }
+        html.push(`<blockquote>${renderMarkdown(quoted.map((q) => q.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'")).join("\n"))}</blockquote>`);
+        continue;
+      }
+      if (listItem(line)) { html.push(renderList(listItem(line)[1].length)); continue; }
+      if (tableRow(line) && i + 1 < lines.length && tableSep(lines[i + 1])) {
+        const head = splitCells(line);
+        i += 2;
+        const rows = [];
+        while (i < lines.length && tableRow(lines[i])) { rows.push(splitCells(lines[i])); i++; }
+        const th = head.map((c) => `<th>${renderInline(c)}</th>`).join("");
+        const body = rows.map((r) => `<tr>${head.map((_, c) => `<td>${renderInline(r[c] ?? "")}</td>`).join("")}</tr>`).join("");
+        html.push(`<div class="md-table-wrap"><table><thead><tr>${th}</tr></thead><tbody>${body}</tbody></table></div>`);
+        continue;
+      }
+      // 段落：连续非空行，单个换行保留为 <br>（中文回复常靠换行分层，不能像 GitHub 那样合并成空格）
+      const para = [];
+      while (i < lines.length && !isBlank(lines[i]) && !(para.length && blockStart(lines[i]))) { para.push(lines[i]); i++; }
+      html.push(`<p>${para.map((l) => renderInline(l.trim())).join("<br>")}</p>`);
+    }
+    return html.join("");
+  }
+  // 往气泡里写正文：Claude 的回复渲染 Markdown，用户消息保持纯文本；空文本不渲染（保留 typing 光标）
+  function setBubbleText(bubble, text) {
+    const target = bubble.querySelector(".message-text") || bubble;
+    const isAssistant = bubble.classList.contains("assistant") && !bubble.classList.contains("error");
+    if (isAssistant && text) {
+      bubble.classList.add("md");
+      target.innerHTML = renderMarkdown(text);
+    } else {
+      bubble.classList.remove("md");
+      target.textContent = text;
+    }
   }
 
   function makeMessageTools(role, bubble, visible, copyText = "") {
@@ -5893,7 +6363,6 @@
       el.classList.add("has-images");
       const textElement = document.createElement("span");
       textElement.className = "message-text";
-      textElement.textContent = text;
       const grid = document.createElement("span");
       grid.className = `message-images${attachments.length === 1 ? " single" : ""}`;
       attachments.forEach(() => {
@@ -5903,9 +6372,10 @@
         grid.appendChild(loading);
       });
       el.append(textElement, grid);
+      setBubbleText(el, text);
       void hydrateMessageImages(grid, attachments, conversationId || getActiveConversation().id);
     } else {
-      el.textContent = text;
+      setBubbleText(el, text);
     }
     root.append(el, makeMessageTools(role, el, Boolean(text || attachments.length), text));
     if (messageIndex !== null) {
@@ -6688,9 +7158,17 @@
       // 思考块从底部挪到被重掷气泡的上方
       if (reasoningBox) bubble.closest(".message-item")?.before(reasoningBox.root);
       bubble.classList.remove("error");
-      bubble.textContent = "";
+      setBubbleText(bubble, "");
     }
     bubble.classList.add("typing");
+    // 流式输出：攒下全文，每帧最多重渲染一次 Markdown
+    let streamed = "";
+    let renderQueued = false;
+    const renderStreamed = () => {
+      renderQueued = false;
+      setBubbleText(bubble, streamed);
+      if (conversationStore.activeId === conversationId) scrollToBottom();
+    };
 
     try {
       const storedConversation = conversationById(conversationId);
@@ -6701,8 +7179,9 @@
           ? storedConversation.messages.slice(0, assistantIndex)
           : storedConversation.messages,
       );
-      const requestMessages = systemPrompt.trim()
-        ? [{ role: "system", content: systemPrompt.trim() }, ...history]
+      const requestSystemPrompt = effectiveSystemPrompt(storedConversation);
+      const requestMessages = requestSystemPrompt
+        ? [{ role: "system", content: requestSystemPrompt }, ...history]
         : history;
       const res = await fetch(WORKER_URL, {
         method: "POST",
@@ -6745,14 +7224,19 @@
         },
         onContent(delta) {
           bubble.classList.remove("typing");
-          bubble.textContent += delta;
-          if (conversationStore.activeId === conversationId) scrollToBottom();
+          streamed += delta;
+          if (!renderQueued) {
+            renderQueued = true;
+            requestAnimationFrame(renderStreamed);
+          }
         },
       });
 
       bubble.classList.remove("typing");
       reasoningBox?.finish();
       if (full) {
+        streamed = full;
+        renderStreamed();
         const completedDraft = cloneConversationStore();
         const completedConversation = conversationById(conversationId, completedDraft);
         if (completedConversation) {
@@ -6788,12 +7272,14 @@
         }
       } else {
         bubble.classList.add("error");
+        bubble.classList.remove("md");
         bubble.textContent = "⚠️ 没有收到回复内容";
       }
     } catch (err) {
       reasoningBox?.finish();
       bubble.classList.remove("typing");
       bubble.classList.add("error");
+      bubble.classList.remove("md");
       bubble.textContent = "⚠️ " + err.message;
       if (err.code === 401) {
         localStorage.removeItem(PW_KEY);
@@ -6817,6 +7303,8 @@
 
   // 输入框随内容自动长高
   input.addEventListener("input", () => {
+    // 只剩空白（比如把引用块删光只剩换行）就清空，占位文字和高度都回来
+    if (input.value && !input.value.trim()) input.value = "";
     input.style.height = "auto";
     input.style.height = Math.min(input.scrollHeight, 120) + "px";
     updateConversationActionState();
@@ -6939,6 +7427,8 @@
       if (cancelledConversationId) focusConversationMore(cancelledConversationId);
     } else if (action === "open-folders") {
       openFolderScreen();
+    } else if (action === "new-loose") {
+      createNewConversation({ folderId: "" });
     } else if (action === "move-open" && conversationId) {
       movePickerId = conversationId;
       conversationMenuId = null;
@@ -7048,7 +7538,19 @@
       if (folderScreenIsOpen()) renderFolderScreen();
       if (folderDetailIsOpen() && folderById(folderDetailId)) renderFolderDetail();
     };
-    if (action === "fp-new") {
+    if (action === "fd-prompt") {
+      folderDetailPromptOpen = !folderDetailPromptOpen;
+      folderDetailConvMenuId = null;
+      folderDetailPickerId = null;
+      folderDetailMenuOpen = false;
+      renderFolderDetail();
+      if (!folderDetailPromptOpen) folderDetailList.querySelector('[data-action="fd-prompt"]')?.focus();
+    } else if (action === "fd-prompt-set") {
+      folderDetailPromptOpen = false;
+      setFolderPrompt(folderDetailId, item.dataset.promptId || "");
+      rerender();
+      folderDetailList.querySelector('[data-action="fd-prompt"]')?.focus();
+    } else if (action === "fp-new") {
       const folderId = folderDetailId;
       closeFolderScreen();
       createNewConversation({ folderId });
@@ -7056,6 +7558,7 @@
       closeFolderScreen();
       switchConversation(conversationId);
     } else if (action === "fd-menu" && conversationId) {
+      folderDetailPromptOpen = false;
       const closing = folderDetailConvMenuId === conversationId || folderDetailPickerId === conversationId;
       folderDetailConvMenuId = closing ? null : conversationId;
       folderDetailPickerId = null;
@@ -7222,6 +7725,7 @@
     folderDetailMenuOpen = !folderDetailMenuOpen;
     folderDetailConvMenuId = null;
     folderDetailPickerId = null;
+    folderDetailPromptOpen = false;
     renderFolderDetail();
     if (!folderDetailMenuOpen) folderDetailMore.focus();
   });
@@ -7357,6 +7861,10 @@
       folderPageMenuId = null;
       if (folderScreenIsOpen()) renderFolderScreen();
     }
+    if (folderDetailPromptOpen && !event.target.closest(".folder-page-prompt-row")) {
+      folderDetailPromptOpen = false;
+      if (folderDetailIsOpen()) renderFolderDetail();
+    }
     if ((folderDetailConvMenuId || folderDetailPickerId) && !event.target.closest(".folder-page-item-row")) {
       folderDetailConvMenuId = null;
       folderDetailPickerId = null;
@@ -7373,7 +7881,11 @@
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
     if (folderDetailScreen.classList.contains("is-open")) {
-      if (folderDetailConvMenuId || folderDetailPickerId) {
+      if (folderDetailPromptOpen) {
+        folderDetailPromptOpen = false;
+        renderFolderDetail();
+        folderDetailList.querySelector('[data-action="fd-prompt"]')?.focus();
+      } else if (folderDetailConvMenuId || folderDetailPickerId) {
         const closedId = folderDetailConvMenuId || folderDetailPickerId;
         folderDetailConvMenuId = null;
         folderDetailPickerId = null;
