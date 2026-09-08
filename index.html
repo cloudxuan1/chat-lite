@@ -1400,7 +1400,7 @@
     box-shadow: none;
   }
   /* ===== 新建 / 编辑文件夹弹窗（手机是底部弹出的卡，宽屏居中）===== */
-  .folder-editor { position: fixed; inset: 0; z-index: 35; }
+  .folder-editor { position: fixed; inset: 0; z-index: 29; }
   .folder-editor[hidden] { display: none; }
   .folder-editor-scrim {
     position: absolute;
@@ -1471,7 +1471,7 @@
     -webkit-tap-highlight-color: transparent;
     transition: transform var(--motion-fast) var(--ease-out), box-shadow var(--motion-fast) ease;
   }
-  .folder-editor-color[aria-checked="true"] { box-shadow: inset 0 0 0 2px var(--swatch-fg), 0 0 0 2px var(--bg-card), 0 0 0 4px var(--swatch-fg); }
+  .folder-editor-color[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--swatch-fg), 0 0 0 2px var(--bg-card), 0 0 0 4px var(--swatch-fg); }
   .folder-editor-color:active { transform: scale(.92); }
   .folder-editor-icons {
     display: grid;
@@ -1494,9 +1494,11 @@
     transition: background-color var(--motion-fast) ease, color var(--motion-fast) ease, transform var(--motion-fast) var(--ease-out);
   }
   .folder-editor-icon svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-  .folder-editor-icon[aria-checked="true"] { color: var(--pick-fg); background: var(--pick-bg); }
+  .folder-editor-icon[aria-pressed="true"] { color: var(--pick-fg); background: var(--pick-bg); }
   .folder-editor-icon:active { transform: scale(.92); }
   .folder-editor-prompt-row { display: block; margin-bottom: 16px; }
+  .folder-editor-error { margin: 0 0 12px; color: #9a3412; font-size: 13px; }
+  .folder-editor-error:empty { display: none; }
   .folder-editor-actions { display: flex; justify-content: flex-end; gap: 8px; }
   .folder-editor-cancel,
   .folder-editor-save {
@@ -3301,14 +3303,15 @@
       <h3 class="folder-editor-title" id="folder-editor-title">新建文件夹</h3>
       <div class="folder-editor-head">
         <span class="folder-editor-preview" id="folder-editor-preview"></span>
-        <input class="identity-input folder-editor-name" id="folder-editor-name" type="text" maxlength="40" placeholder="文件夹名称" autocomplete="off" enterkeyhint="done" />
+        <input class="identity-input folder-editor-name" id="folder-editor-name" type="text" maxlength="40" placeholder="文件夹名称" aria-label="文件夹名称" autocomplete="off" enterkeyhint="done" />
       </div>
-      <div class="folder-editor-colors" id="folder-editor-colors" role="radiogroup" aria-label="颜色"></div>
-      <div class="folder-editor-icons" id="folder-editor-icons" role="radiogroup" aria-label="图标"></div>
+      <div class="folder-editor-colors" id="folder-editor-colors" role="group" aria-label="颜色"></div>
+      <div class="folder-editor-icons" id="folder-editor-icons" role="group" aria-label="图标"></div>
       <label class="folder-editor-prompt-row" for="folder-editor-prompt">
         <span class="folder-editor-label">提示词</span>
         <select class="identity-input identity-select folder-editor-prompt" id="folder-editor-prompt"></select>
       </label>
+      <p class="folder-editor-error" id="folder-editor-error" role="alert"></p>
       <div class="folder-editor-actions">
         <button class="folder-editor-cancel" id="folder-editor-cancel" type="button">取消</button>
         <button class="folder-editor-save" id="folder-editor-save" type="submit">创建</button>
@@ -5640,6 +5643,8 @@
     const settingsOpenNow = anySettingsScreenOpen();
     const mobileSidebarOpen = sidebarOpen && !desktopSidebarMedia.matches;
     const gateOpenNow = gateIsOpen();
+    appShell.inert = folderEditorIsOpen();
+    folderEditor.inert = !folderEditorIsOpen() || gateOpenNow;
     chatShell.inert = mobileSidebarOpen || gateOpenNow;
     topbarEl.inert = settingsOpenNow;
     messagesEl.inert = settingsOpenNow;
@@ -6124,7 +6129,8 @@
   const folderEditorIcons = document.getElementById("folder-editor-icons");
   const folderEditorPrompt = document.getElementById("folder-editor-prompt");
   const folderEditorSave = document.getElementById("folder-editor-save");
-  let folderEditorState = null;   // { resolve, color, icon, previousFocus }
+  const folderEditorError = document.getElementById("folder-editor-error");
+  let folderEditorState = null;   // { resolve, commit, previewId, color, icon, previousFocus }
   function folderEditorIsOpen() {
     return Boolean(folderEditorState);
   }
@@ -6134,21 +6140,23 @@
     const previewFolder = { id: state.previewId, name: folderEditorName.value, color: state.color, icon: state.icon };
     folderEditorPreview.replaceChildren(buildFolderTile(previewFolder, "lg"));
     const { bg, fg } = folderTileColor(previewFolder);
-    for (const button of folderEditorColors.children) button.setAttribute("aria-checked", String(button.dataset.color === state.color));
+    for (const button of folderEditorColors.children) button.setAttribute("aria-pressed", String(button.dataset.color === state.color));
     for (const button of folderEditorIcons.children) {
       const checked = button.dataset.icon === (state.icon || FOLDER_ICONS[0].key);
-      button.setAttribute("aria-checked", String(checked));
+      button.setAttribute("aria-pressed", String(checked));
       button.style.setProperty("--pick-bg", bg);
       button.style.setProperty("--pick-fg", fg);
     }
     folderEditorSave.disabled = !folderEditorName.value.trim();
   }
-  function openFolderEditor({ folder = null } = {}) {
+  function openFolderEditor({ folder = null, previewId = folder?.id || createFolderId(), commit = null } = {}) {
     if (folderEditorState) closeFolderEditor(null);
+    hideQuotePill();
     return new Promise((resolve) => {
-      folderEditorState = {
+      const state = folderEditorState = {
         resolve,
-        previewId: folder?.id || createFolderId(),
+        commit,
+        previewId,
         color: folder?.color || "",
         icon: folder?.icon || "",
         previousFocus: document.activeElement,
@@ -6156,13 +6164,13 @@
       folderEditorTitle.textContent = folder ? "编辑文件夹" : "新建文件夹";
       folderEditorSave.textContent = folder ? "保存" : "创建";
       folderEditorName.value = folder?.name || "";
+      folderEditorError.textContent = "";
       // 颜色圆点 + 图标格子只建一次
       if (!folderEditorColors.children.length) {
         for (const color of FOLDER_COLORS) {
           const button = document.createElement("button");
           button.type = "button";
           button.className = "folder-editor-color";
-          button.setAttribute("role", "radio");
           button.setAttribute("aria-label", color.name);
           button.dataset.color = color.key;
           button.style.setProperty("--swatch-bg", color.bg);
@@ -6173,7 +6181,6 @@
           const button = document.createElement("button");
           button.type = "button";
           button.className = "folder-editor-icon";
-          button.setAttribute("role", "radio");
           button.setAttribute("aria-label", icon.name);
           button.dataset.icon = icon.key;
           button.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${icon.path}"></path></svg>`;
@@ -6191,7 +6198,9 @@
       folderEditorPrompt.value = folder?.promptId && promptLibrary.items.some((item) => item.id === folder.promptId) ? folder.promptId : "";
       renderFolderEditorPicks();
       folderEditor.hidden = false;
+      syncInteractionState();
       requestAnimationFrame(() => {
+        if (folderEditorState !== state) return;
         folderEditor.classList.add("is-open");
         folderEditorName.focus();
         if (folder) folderEditorName.select();
@@ -6203,12 +6212,19 @@
     if (!state) return;
     folderEditorState = null;
     folderEditor.classList.remove("is-open");
+    syncInteractionState();
     const finish = () => { if (!folderEditorState) folderEditor.hidden = true; };
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) finish();
     else window.setTimeout(finish, 260);
     const previous = state.previousFocus;
-    if (previous instanceof HTMLElement && previous.isConnected) previous.focus();
     state.resolve(result);
+    // 保存后的调用方可能重绘或打开详情页；等它完成，别把焦点还给已拆掉的菜单。
+    requestAnimationFrame(() => {
+      if (folderEditorState || gateIsOpen()) return;
+      if (document.activeElement !== document.body && !folderEditor.contains(document.activeElement)) return;
+      if (previous instanceof HTMLElement && previous.isConnected && previous.getClientRects().length && !previous.closest("[inert]")) previous.focus();
+      else focusActiveLayerAfterGate();
+    });
   }
   folderEditorColors.addEventListener("click", (event) => {
     const button = event.target.closest(".folder-editor-color");
@@ -6228,14 +6244,34 @@
     event.preventDefault();
     const state = folderEditorState;
     if (!state || !folderEditorName.value.trim()) return;
-    closeFolderEditor({ name: folderEditorName.value, color: state.color, icon: state.icon, promptId: folderEditorPrompt.value || "" });
+    const result = { name: folderEditorName.value, color: state.color, icon: state.icon, promptId: folderEditorPrompt.value || "" };
+    // 落盘成功才关弹窗；失败保留全部输入，避免用户重新配一遍。
+    if (state.commit && !state.commit(result)) {
+      folderEditorError.textContent = "未能保存，输入已保留。请检查本地存储空间或等待回复结束后重试。";
+      return;
+    }
+    closeFolderEditor(result);
   });
   document.getElementById("folder-editor-cancel").addEventListener("click", () => closeFolderEditor(null));
   document.getElementById("folder-editor-scrim").addEventListener("click", () => closeFolderEditor(null));
   folderEditor.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape") return;
-    event.stopPropagation();
-    closeFolderEditor(null);
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      closeFolderEditor(null);
+    } else if (event.key === "Tab") {
+      const controls = [...folderEditorForm.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled])')]
+        .filter((element) => element.getClientRects().length > 0);
+      const first = controls[0];
+      const last = controls.at(-1);
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first?.focus();
+      }
+    }
   });
 
   async function createFolderInteractive() {
@@ -6243,21 +6279,27 @@
       announceConversation("回复完成后可新建文件夹。");
       return null;
     }
-    const result = await openFolderEditor();
-    if (!result || !result.name.trim()) return null;
-    const folder = {
-      id: createFolderId(),
-      name: normalizeFolderName(result.name),
-      pinned: false,
-      collapsed: false,
-      createdAt: new Date().toISOString(),
-      ...(folderColorByKey(result.color) ? { color: result.color } : {}),
-      ...(folderIconByKey(result.icon) ? { icon: result.icon } : {}),
-      ...(result.promptId && promptLibrary.items.some((item) => item.id === result.promptId) ? { promptId: result.promptId } : {}),
-    };
-    const draft = cloneConversationStore();
-    draft.folders = [...(draft.folders || []), folder];
-    return persistFolderDraft(draft, `已新建文件夹“${folder.name}”。`) ? folder : null;
+    const id = createFolderId();
+    let createdFolder = null;
+    await openFolderEditor({ previewId: id, commit: (result) => {
+      if (pending || !result.name.trim()) return false;
+      const folder = {
+        id,
+        name: normalizeFolderName(result.name),
+        pinned: false,
+        collapsed: false,
+        createdAt: new Date().toISOString(),
+        ...(folderColorByKey(result.color) ? { color: result.color } : {}),
+        ...(folderIconByKey(result.icon) ? { icon: result.icon } : {}),
+        ...(result.promptId && promptLibrary.items.some((item) => item.id === result.promptId) ? { promptId: result.promptId } : {}),
+      };
+      const draft = cloneConversationStore();
+      draft.folders = [...(draft.folders || []), folder];
+      if (!persistFolderDraft(draft, `已新建文件夹“${folder.name}”。`)) return false;
+      createdFolder = folder;
+      return true;
+    } });
+    return createdFolder;
   }
 
   // 给文件夹绑定/解绑提示词（promptId 为空 = 跟随设置）
@@ -6277,17 +6319,19 @@
   async function editFolder(folderId) {
     const folder = folderById(folderId);
     if (!folder || pending) return false;
-    const result = await openFolderEditor({ folder });
-    if (!result || !result.name.trim()) return false;
-    const draft = cloneConversationStore();
-    const target = folderById(folderId, draft);
-    if (!target) return false;
-    target.name = normalizeFolderName(result.name);
-    if (folderColorByKey(result.color)) target.color = result.color; else delete target.color;
-    if (folderIconByKey(result.icon)) target.icon = result.icon; else delete target.icon;
-    if (result.promptId && promptLibrary.items.some((item) => item.id === result.promptId)) target.promptId = result.promptId;
-    else delete target.promptId;
-    return persistFolderDraft(draft);
+    const result = await openFolderEditor({ folder, commit: (values) => {
+      if (pending || !values.name.trim()) return false;
+      const draft = cloneConversationStore();
+      const target = folderById(folderId, draft);
+      if (!target) return false;
+      target.name = normalizeFolderName(values.name);
+      if (folderColorByKey(values.color)) target.color = values.color; else delete target.color;
+      if (folderIconByKey(values.icon)) target.icon = values.icon; else delete target.icon;
+      if (values.promptId && promptLibrary.items.some((item) => item.id === values.promptId)) target.promptId = values.promptId;
+      else delete target.promptId;
+      return persistFolderDraft(draft);
+    } });
+    return Boolean(result);
   }
 
   function toggleFolderPinned(folderId) {
@@ -8045,7 +8089,9 @@
   }
   function focusActiveLayerAfterGate() {
     let target = input;
-    if (folderDetailScreen.classList.contains("is-open")) {
+    if (folderEditorIsOpen()) {
+      target = folderEditorName;
+    } else if (folderDetailScreen.classList.contains("is-open")) {
       target = folderDetailBack;
     } else if (folderScreen.classList.contains("is-open")) {
       target = folderBack;
@@ -8291,10 +8337,11 @@
       moveConversationToFolder(conversationId, "");
       rerender();
     } else if (action === "move-new-folder" && conversationId) {
-      folderDetailPickerId = null;
-      rerender();
       createFolderInteractive().then((folder) => {
-        if (folder) moveConversationToFolder(conversationId, folder.id);
+        if (folder) {
+          moveConversationToFolder(conversationId, folder.id);
+          if (conversationById(conversationId)?.folderId === folder.id) folderDetailPickerId = null;
+        }
         rerender();
       });
     } else if (action === "fd-delete" && conversationId) {
@@ -8566,7 +8613,7 @@
       closeQuickPanel();
     }
     // 快捷按钮在会话内容外；它刚打开的选择器不能被这次 click 当成外部点击关掉。
-    if (event.target.closest(".swipe-action")) return;
+    if (event.target.closest(".swipe-action, .folder-editor") || folderEditorIsOpen()) return;
     if (folderDetailMenuOpen && !event.target.closest("#folder-detail-more, .folder-detail-menu")) {
       folderDetailMenuOpen = false;
       renderFolderDetail();
