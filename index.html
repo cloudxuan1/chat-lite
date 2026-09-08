@@ -567,7 +567,9 @@
     grid-template-columns: minmax(0, 1fr) 44px;
     align-items: center;
   }
-  .folder-page-item-row:not(:first-child) { border-top: .5px solid rgba(31,30,29,.1); }
+  .folder-page-item-row { border-top: .5px solid rgba(31,30,29,.1); }
+  .folder-page-item-pin { display: inline-grid; flex: none; place-items: center; color: var(--accent); }
+  .folder-page-item-pin svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   .folder-page-item-row.active { background: rgba(217,119,87,.09); }
   .folder-page-item-row .conversation-menu { top: 46px; right: 8px; }
   .folder-page-prompt-row { position: relative; }
@@ -3819,6 +3821,7 @@
         createdAt,
         updatedAt,
         ...(folderId ? { folderId } : {}),
+        ...(item?.pinned === true ? { pinned: true } : {}),
       });
     }
 
@@ -4657,6 +4660,8 @@
       updateTopbar();
       updateMessageLabels();
       updateAttachmentState();
+      renderConversationList();
+      if (folderDetailIsOpen() && folderById(folderDetailId)) renderFolderDetail();
     }
     closeSettings({ force: true });
   }
@@ -4954,6 +4959,13 @@
       title.title = conversation.title;
       const meta = document.createElement("span");
       meta.className = "conversation-meta";
+      if (conversation.pinned) {
+        const pin = document.createElement("span");
+        pin.className = "conversation-pin";
+        pin.setAttribute("aria-label", "已置顶");
+        pin.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6l-1 6 3 3v2H7v-2l3-3-1-6Z"></path><path d="M12 15v6"></path></svg>';
+        meta.appendChild(pin);
+      }
       const preview = conversationPreview(conversation);
       if (preview) {
         const previewEl = document.createElement("span");
@@ -4988,6 +5000,10 @@
         menu.setAttribute("role", "group");
         menu.setAttribute("aria-label", `${conversation.title}的操作`);
         menu.innerHTML = `
+          <button class="conversation-menu-button" type="button" data-action="pin" data-conversation-id="${conversation.id}">
+            ${conversation.pinned ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6l-1 6 3 3v2H7v-2l3-3-1-6Z"></path><path d="M12 15v6"></path><path d="m4 4 16 16"></path></svg>' : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6l-1 6 3 3v2H7v-2l3-3-1-6Z"></path><path d="M12 15v6"></path></svg>'}
+            <span>${conversation.pinned ? "取消置顶" : "置顶"}</span>
+          </button>
           <button class="conversation-menu-button" type="button" data-action="rename" data-conversation-id="${conversation.id}">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 20 4.2-1 10.6-10.6-3.2-3.2L5 15.8 4 20Z"></path><path d="m13.8 7 3.2 3.2"></path></svg>
             <span>重命名</span>
@@ -5465,11 +5481,19 @@
       const title = document.createElement("span");
       title.className = "folder-page-item-title";
       title.textContent = conversation.title;
+      if (conversation.pinned) {
+        const pin = document.createElement("span");
+        pin.className = "folder-page-item-pin";
+        pin.setAttribute("aria-label", "已置顶");
+        pin.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6l-1 6 3 3v2H7v-2l3-3-1-6Z"></path><path d="M12 15v6"></path></svg>';
+        button.appendChild(pin);
+      }
       const time = document.createElement("time");
       time.className = "folder-page-item-time";
       time.dateTime = conversation.updatedAt;
       time.textContent = formatConversationTime(conversation.updatedAt);
-      button.append(title, time);
+      button.prepend(title);
+      button.appendChild(time);
       const more = document.createElement("button");
       more.className = "conversation-more";
       more.type = "button";
@@ -5488,6 +5512,10 @@
         menu.setAttribute("role", "group");
         menu.setAttribute("aria-label", `${conversation.title}的操作`);
         menu.innerHTML = `
+          <button class="conversation-menu-button" type="button" data-action="fd-pin" data-conversation-id="${conversation.id}">
+            ${conversation.pinned ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6l-1 6 3 3v2H7v-2l3-3-1-6Z"></path><path d="M12 15v6"></path><path d="m4 4 16 16"></path></svg>' : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6l-1 6 3 3v2H7v-2l3-3-1-6Z"></path><path d="M12 15v6"></path></svg>'}
+            <span>${conversation.pinned ? "取消置顶" : "置顶"}</span>
+          </button>
           <button class="conversation-menu-button" type="button" data-action="fd-rename" data-conversation-id="${conversation.id}">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 20 4.2-1 10.6-10.6-3.2-3.2L5 15.8 4 20Z"></path><path d="m13.8 7 3.2 3.2"></path></svg>
             <span>重命名</span>
@@ -7418,6 +7446,10 @@
       movePickerId = null;
       renamingConversationId = conversationId;
       renderConversationList();
+    } else if (action === "pin" && conversationId) {
+      conversationMenuId = null;
+      if (!toggleConversationPinned(conversationId)) renderConversationList();
+      focusConversationMore(conversationId);
     } else if (action === "delete" && conversationId) {
       deleteConversation(conversationId);
     } else if (action === "cancel-rename") {
@@ -7564,6 +7596,9 @@
       folderDetailPickerId = null;
       folderDetailMenuOpen = false;
       renderFolderDetail();
+    } else if (action === "fd-pin" && conversationId) {
+      folderDetailConvMenuId = null;
+      if (!toggleConversationPinned(conversationId)) rerender();
     } else if (action === "fd-rename" && conversationId) {
       folderDetailConvMenuId = null;
       const target = conversationById(conversationId);
