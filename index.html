@@ -1399,6 +1399,122 @@
     color: #9a3412;
     box-shadow: none;
   }
+  /* ===== 新建 / 编辑文件夹弹窗（手机是底部弹出的卡，宽屏居中）===== */
+  .folder-editor { position: fixed; inset: 0; z-index: 35; }
+  .folder-editor[hidden] { display: none; }
+  .folder-editor-scrim {
+    position: absolute;
+    inset: 0;
+    background: rgba(31,30,29,.32);
+    opacity: 0;
+    transition: opacity var(--motion-panel) ease;
+  }
+  .folder-editor-card {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    max-height: min(88dvh, 640px);
+    margin: 0;
+    padding: 18px 18px calc(16px + env(safe-area-inset-bottom));
+    overflow-y: auto;
+    background: var(--bg-card);
+    border-radius: 22px 22px 0 0;
+    box-shadow: 0 -12px 40px rgba(31,30,29,.16);
+    transform: translateY(24px);
+    opacity: 0;
+    transition: transform var(--motion-panel) var(--ease-drawer), opacity var(--motion-fast) ease;
+  }
+  .folder-editor.is-open .folder-editor-scrim { opacity: 1; }
+  .folder-editor.is-open .folder-editor-card { transform: none; opacity: 1; }
+  @media (min-width: 720px) {
+    .folder-editor-card {
+      top: 50%;
+      bottom: auto;
+      left: 50%;
+      right: auto;
+      width: min(440px, calc(100vw - 32px));
+      max-height: min(86vh, 680px);
+      border-radius: 22px;
+      transform: translate(-50%, calc(-50% + 16px));
+    }
+    .folder-editor.is-open .folder-editor-card { transform: translate(-50%, -50%); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .folder-editor-card { transition: opacity var(--motion-fast) ease; transform: none; }
+    .folder-editor.is-open .folder-editor-card { transform: none; }
+    @media (min-width: 720px) {
+      .folder-editor-card, .folder-editor.is-open .folder-editor-card { transform: translate(-50%, -50%); }
+    }
+  }
+  .folder-editor-title { margin: 0 0 14px; font-size: 17px; font-weight: 650; }
+  .folder-editor-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .folder-editor-preview { display: contents; }
+  .folder-editor-name { flex: 1; min-width: 0; }
+  .folder-editor-label { display: block; margin-bottom: 8px; font-size: 13px; font-weight: 650; }
+  .folder-editor-colors {
+    display: grid;
+    grid-template-columns: repeat(10, 1fr);
+    gap: 6px;
+    margin-bottom: 14px;
+  }
+  .folder-editor-color {
+    position: relative;
+    aspect-ratio: 1;
+    width: 100%;
+    padding: 0;
+    background: var(--swatch-bg);
+    border: none;
+    border-radius: 50%;
+    box-shadow: inset 0 0 0 2px var(--swatch-fg);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: transform var(--motion-fast) var(--ease-out), box-shadow var(--motion-fast) ease;
+  }
+  .folder-editor-color[aria-checked="true"] { box-shadow: inset 0 0 0 2px var(--swatch-fg), 0 0 0 2px var(--bg-card), 0 0 0 4px var(--swatch-fg); }
+  .folder-editor-color:active { transform: scale(.92); }
+  .folder-editor-icons {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 7px;
+    margin-bottom: 16px;
+  }
+  .folder-editor-icon {
+    display: grid;
+    place-items: center;
+    aspect-ratio: 1;
+    width: 100%;
+    padding: 0;
+    color: var(--text-secondary);
+    background: rgba(31,30,29,.045);
+    border: none;
+    border-radius: 11px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background-color var(--motion-fast) ease, color var(--motion-fast) ease, transform var(--motion-fast) var(--ease-out);
+  }
+  .folder-editor-icon svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .folder-editor-icon[aria-checked="true"] { color: var(--pick-fg); background: var(--pick-bg); }
+  .folder-editor-icon:active { transform: scale(.92); }
+  .folder-editor-prompt-row { display: block; margin-bottom: 16px; }
+  .folder-editor-actions { display: flex; justify-content: flex-end; gap: 8px; }
+  .folder-editor-cancel,
+  .folder-editor-save {
+    min-height: 40px;
+    padding: 0 18px;
+    border: none;
+    border-radius: 999px;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: transform 100ms ease-out, opacity var(--motion-fast) ease;
+  }
+  .folder-editor-cancel { color: var(--text-primary); background: rgba(31,30,29,.06); }
+  .folder-editor-save { color: #fff; background: var(--btn-primary-bg); }
+  .folder-editor-save:disabled { opacity: .4; cursor: default; }
+  .folder-editor-cancel:active, .folder-editor-save:not(:disabled):active { transform: scale(.97); }
   /* ===== 选中回复文字 → 「就这段追问」小按钮 ===== */
   .quote-pill {
     position: fixed;
@@ -3178,6 +3294,27 @@
   </form>
     </div>
   </div>
+  <!-- 新建 / 编辑文件夹：名字、颜色、图标、提示词 -->
+  <div class="folder-editor" id="folder-editor" hidden>
+    <div class="folder-editor-scrim" id="folder-editor-scrim"></div>
+    <form class="folder-editor-card" id="folder-editor-form" role="dialog" aria-modal="true" aria-labelledby="folder-editor-title">
+      <h3 class="folder-editor-title" id="folder-editor-title">新建文件夹</h3>
+      <div class="folder-editor-head">
+        <span class="folder-editor-preview" id="folder-editor-preview"></span>
+        <input class="identity-input folder-editor-name" id="folder-editor-name" type="text" maxlength="40" placeholder="文件夹名称" autocomplete="off" enterkeyhint="done" />
+      </div>
+      <div class="folder-editor-colors" id="folder-editor-colors" role="radiogroup" aria-label="颜色"></div>
+      <div class="folder-editor-icons" id="folder-editor-icons" role="radiogroup" aria-label="图标"></div>
+      <label class="folder-editor-prompt-row" for="folder-editor-prompt">
+        <span class="folder-editor-label">提示词</span>
+        <select class="identity-input identity-select folder-editor-prompt" id="folder-editor-prompt"></select>
+      </label>
+      <div class="folder-editor-actions">
+        <button class="folder-editor-cancel" id="folder-editor-cancel" type="button">取消</button>
+        <button class="folder-editor-save" id="folder-editor-save" type="submit">创建</button>
+      </div>
+    </form>
+  </div>
   <!-- 选中回复里的一段文字后弹出的「就这段追问」 -->
   <button class="quote-pill" id="quote-pill" type="button" hidden>
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h3v3a3 3 0 0 1-3 3H6"></path><path d="M14 7h3v3a3 3 0 0 1-3 3h-1"></path><path d="M6 17h12"></path></svg>
@@ -3214,6 +3351,57 @@
   const IMAGE_QUALITY_KEY = "ember_image_quality";
   const SWIPE_ACTIONS_KEY = "ember_swipe_actions";  // 会话行左滑/右滑绑定的动作 { left, right }
   const SWIPE_ACTION_OPTIONS = ["move", "delete", "pin", "rename", "none"];
+  // 文件夹色块：马卡龙 10 色（淡底 + 同色系深一档的线条）；没选过的文件夹按 id 哈希取一个
+  const FOLDER_COLORS = [
+    { key: "peach", name: "蜜桃", bg: "#fde3d3", fg: "#c96a3f" },
+    { key: "coral", name: "珊瑚", bg: "#fbd9d2", fg: "#c4553f" },
+    { key: "sakura", name: "樱花", bg: "#f9d7e2", fg: "#bd5478" },
+    { key: "lavender", name: "薰衣草", bg: "#e8dcf5", fg: "#7b5fb3" },
+    { key: "sky", name: "天蓝", bg: "#d6e4f7", fg: "#4a72a8" },
+    { key: "mint", name: "薄荷", bg: "#cfe9e4", fg: "#3d8a80" },
+    { key: "matcha", name: "抹茶", bg: "#d8ebd0", fg: "#5a8a4a" },
+    { key: "lemon", name: "柠檬", bg: "#f8efc6", fg: "#a98416" },
+    { key: "cream", name: "奶油", bg: "#f1e7d6", fg: "#9a7449" },
+    { key: "mist", name: "雾灰", bg: "#e0e5ec", fg: "#5b6b80" },
+  ];
+  // 文件夹图标（24 viewBox 线条图标，和其他图标同一套笔触）
+  const FOLDER_ICONS = [
+    { key: "folder", name: "文件夹", path: "M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z" },
+    { key: "briefcase", name: "工作", path: "M3 9a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9Z M8 7V5.5A1.5 1.5 0 0 1 9.5 4h5A1.5 1.5 0 0 1 16 5.5V7 M3 13h18" },
+    { key: "book", name: "学习", path: "M4 19.5A2.5 2.5 0 0 1 6.5 17H20 M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" },
+    { key: "pen", name: "写作", path: "m4 20 4.2-1 10.6-10.6-3.2-3.2L5 15.8 4 20Z m13.8 7 3.2 3.2" },
+    { key: "code", name: "代码", path: "m8 8-4 4 4 4 m8-8 4 4-4 4 m-2-10-4 16" },
+    { key: "chat", name: "闲聊", path: "M21 12a8 8 0 0 1-11.5 7.2L4 21l1.8-5.1A8 8 0 1 1 21 12Z" },
+    { key: "heart", name: "喜欢", path: "M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.5-7 10-7 10Z" },
+    { key: "star", name: "收藏", path: "M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3Z" },
+    { key: "bulb", name: "灵感", path: "M9 18h6 M10 21h4 M12 3a6 6 0 0 0-3.5 10.9c.6.5.9 1.1 1 1.9h5c.1-.8.4-1.4 1-1.9A6 6 0 0 0 12 3Z" },
+    { key: "sparkles", name: "AI", path: "M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z M19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8L19 16Z" },
+    { key: "flask", name: "研究", path: "M9 3h6 M10 3v6l-5.5 9a2 2 0 0 0 1.7 3h11.6a2 2 0 0 0 1.7-3L14 9V3" },
+    { key: "globe", name: "世界", path: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z M3 12h18 M12 3a14 14 0 0 1 0 18 M12 3a14 14 0 0 0 0 18" },
+    { key: "plane", name: "旅行", path: "M21 3 3 10l7.5 3L14 21l7-18Z M10.5 13 21 3" },
+    { key: "home", name: "生活", path: "M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1v-9Z" },
+    { key: "cart", name: "购物", path: "M2 3h3l2.5 12h11L21 7H6.2 M9 20a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z M18 20a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" },
+    { key: "coffee", name: "咖啡", path: "M5 8h11v6a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5V8Z M16 10h2a2 2 0 0 1 0 4h-2 M4 21h13" },
+    { key: "leaf", name: "植物", path: "M5 21c0-8 4-14 14-16-1 10-6 15-14 16Z M5 21c3-5 6-8 10-11" },
+    { key: "music", name: "音乐", path: "M9 18V6l11-2v12 M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z M17 19a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" },
+    { key: "camera", name: "照片", path: "M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z M12 16.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" },
+    { key: "film", name: "影视", path: "M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z M7 4v16 M17 4v16 M3 9h4 M3 15h4 M17 9h4 M17 15h4" },
+    { key: "game", name: "游戏", path: "M6 11h4 M8 9v4 M15 12h.01 M18 10h.01 M7 6h10a5 5 0 0 1 5 5v2a5 5 0 0 1-5 5h-1l-2-2h-4l-2 2H7a5 5 0 0 1-5-5v-2a5 5 0 0 1 5-5Z" },
+    { key: "gift", name: "礼物", path: "M20 12v9H4v-9 M2 7h20v5H2Z M12 7v14 M12 7c-2-3-6-3-6 0h6Zm0 0c2-3 6-3 6 0h-6Z" },
+    { key: "calendar", name: "日程", path: "M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z M3 10h18 M8 3v4 M16 3v4" },
+    { key: "flag", name: "重要", path: "M5 21V4 M5 4h12l-2 4 2 4H5" },
+    { key: "bookmark", name: "书签", path: "M6 3h12v18l-6-4-6 4V3Z" },
+    { key: "moon", name: "夜晚", path: "M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z" },
+    { key: "sun", name: "日常", path: "M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z M12 2v2 M12 20v2 M2 12h2 M20 12h2 m4.9 4.9 1.4 1.4 m17.7 17.7 1.4 1.4 m4.9 19.1 1.4-1.4 m17.7 6.3 1.4-1.4" },
+    { key: "paw", name: "宠物", path: "M12 20c-3.3 0-5.5-1.8-5.5-4 0-2.2 2.5-4.5 5.5-4.5s5.5 2.3 5.5 4.5c0 2.2-2.2 4-5.5 4Z M8 8.5a1.7 1.7 0 1 0 0-3.4 1.7 1.7 0 0 0 0 3.4Z M16 8.5a1.7 1.7 0 1 0 0-3.4 1.7 1.7 0 0 0 0 3.4Z M4 12.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z M20 12.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z" },
+    { key: "clawd", name: "Clawd", path: "M7.5 6h9A3.5 3.5 0 0 1 20 9.5v6a3.5 3.5 0 0 1-3.5 3.5h-9A3.5 3.5 0 0 1 4 15.5v-6A3.5 3.5 0 0 1 7.5 6Z M9.5 11v2.5 M14.5 11v2.5 M4 12.5 1.8 11 M4 12.5l-2.2 1.5 M20 12.5l2.2-1.5 M20 12.5l2.2 1.5 M8.5 19v2 M12 19v2 M15.5 19v2" },
+  ];
+  function folderColorByKey(key) {
+    return FOLDER_COLORS.find((item) => item.key === key) || null;
+  }
+  function folderIconByKey(key) {
+    return FOLDER_ICONS.find((item) => item.key === key) || null;
+  }
   const IMAGE_DB_NAME = "ember_images_v1";
   const IMAGE_DB_STORE = "images";
   const MAX_IMAGES_PER_MESSAGE = 8;
@@ -3804,8 +3992,10 @@
         let id = typeof item.id === "string" && /^[A-Za-z0-9._:-]{1,64}$/.test(item.id) ? item.id : "";
         if (!id || seen.has(id)) id = createFolderId();
         seen.add(id);
-        // 绑定的提示词 id（提示词库里的 id）；没绑定不写键，保持老数据原样
+        // 绑定的提示词 id（提示词库里的 id）、颜色/图标 key；没设不写键，保持老数据原样
         const promptId = typeof item.promptId === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(item.promptId) ? item.promptId : "";
+        const color = typeof item.color === "string" && folderColorByKey(item.color) ? item.color : "";
+        const icon = typeof item.icon === "string" && folderIconByKey(item.icon) ? item.icon : "";
         return {
           id,
           name: normalizeFolderName(item.name),
@@ -3813,36 +4003,33 @@
           collapsed: Boolean(item.collapsed),
           createdAt: validStoredDate(item.createdAt, now),
           ...(promptId ? { promptId } : {}),
+          ...(color ? { color } : {}),
+          ...(icon ? { icon } : {}),
         };
       });
   }
 
   // 每个文件夹按 id 固定分配一个色块颜色（GPT 项目那种带底色的方形图标）
-  const FOLDER_TILE_COLORS = [
-    ["rgba(217,119,87,.16)", "#c2410c"],
-    ["rgba(245,158,11,.18)", "#b45309"],
-    ["rgba(34,197,94,.16)", "#15803d"],
-    ["rgba(20,184,166,.16)", "#0f766e"],
-    ["rgba(59,130,246,.16)", "#1d4ed8"],
-    ["rgba(139,92,246,.16)", "#6d28d9"],
-    ["rgba(236,72,153,.16)", "#be185d"],
-    ["rgba(100,116,139,.18)", "#334155"],
-  ];
-
+  // 文件夹的色块颜色：选过就用选的，没选过按 id 哈希固定取一个
   function folderTileColor(folder) {
+    const chosen = folderColorByKey(folder?.color);
+    if (chosen) return chosen;
     let hash = 0;
     for (const char of String(folder?.id || "")) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
-    return FOLDER_TILE_COLORS[hash % FOLDER_TILE_COLORS.length];
+    return FOLDER_COLORS[hash % FOLDER_COLORS.length];
+  }
+  function folderTileIcon(folder) {
+    return folderIconByKey(folder?.icon) || FOLDER_ICONS[0];
   }
 
   function buildFolderTile(folder, size = "md") {
-    const [bg, fg] = folderTileColor(folder);
+    const { bg, fg } = folderTileColor(folder);
     const tile = document.createElement("span");
     tile.className = `folder-tile folder-tile-${size}`;
     tile.style.setProperty("--tile-bg", bg);
     tile.style.setProperty("--tile-fg", fg);
     tile.setAttribute("aria-hidden", "true");
-    tile.innerHTML = '<svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"></path></svg>';
+    tile.innerHTML = `<svg viewBox="0 0 24 24"><path d="${folderTileIcon(folder).path}"></path></svg>`;
     return tile;
   }
 
@@ -4957,7 +5144,7 @@
       menu.innerHTML = `
         <button class="conversation-menu-button" type="button" data-action="folder-rename" data-folder-id="${folder.id}">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 20 4.2-1 10.6-10.6-3.2-3.2L5 15.8 4 20Z"></path><path d="m13.8 7 3.2 3.2"></path></svg>
-          <span>重命名</span>
+          <span>编辑</span>
         </button>
         <button class="conversation-menu-button" type="button" data-action="folder-pin" data-folder-id="${folder.id}">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6l-1 6 3 3v2H7v-2l3-3-1-6Z"></path><path d="M12 15v6"></path></svg>
@@ -5677,7 +5864,7 @@
           </button>
           <button class="conversation-menu-button" type="button" data-action="folder-rename">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 20 4.2-1 10.6-10.6-3.2-3.2L5 15.8 4 20Z"></path><path d="m13.8 7 3.2 3.2"></path></svg>
-            <span>重命名</span>
+            <span>编辑</span>
           </button>
           <button class="conversation-menu-button danger" type="button" data-action="folder-delete">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"></path><path d="m9 7 .7-2h4.6l.7 2"></path><path d="m7 7 .7 13h8.6L17 7"></path></svg>
@@ -5753,7 +5940,7 @@
         </button>
         <button class="conversation-menu-button" type="button" data-action="folder-rename">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 20 4.2-1 10.6-10.6-3.2-3.2L5 15.8 4 20Z"></path><path d="m13.8 7 3.2 3.2"></path></svg>
-          <span>重命名</span>
+          <span>编辑</span>
         </button>
         <button class="conversation-menu-button danger" type="button" data-action="folder-delete">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"></path><path d="m9 7 .7-2h4.6l.7 2"></path><path d="m7 7 .7 13h8.6L17 7"></path></svg>
@@ -5908,10 +6095,12 @@
   function handleFolderAction(action, folderId) {
     if (action === "folder-rename") {
       folderMenuId = null;
-      renameFolder(folderId);
       renderConversationList();
-      if (folderScreenIsOpen()) renderFolderScreen();
-      if (folderDetailIsOpen()) renderFolderDetail();
+      editFolder(folderId).then(() => {
+        renderConversationList();
+        if (folderScreenIsOpen()) renderFolderScreen();
+        if (folderDetailIsOpen() && folderById(folderDetailId)) renderFolderDetail();
+      });
     } else if (action === "folder-pin") {
       folderMenuId = null;
       toggleFolderPinned(folderId);
@@ -5924,14 +6113,148 @@
     }
   }
 
-  function createFolderInteractive() {
+  // ===== 新建 / 编辑文件夹弹窗 =====
+  // 打开弹窗，返回 Promise：{ name, color, icon, promptId } 或 null（取消）
+  const folderEditor = document.getElementById("folder-editor");
+  const folderEditorForm = document.getElementById("folder-editor-form");
+  const folderEditorTitle = document.getElementById("folder-editor-title");
+  const folderEditorPreview = document.getElementById("folder-editor-preview");
+  const folderEditorName = document.getElementById("folder-editor-name");
+  const folderEditorColors = document.getElementById("folder-editor-colors");
+  const folderEditorIcons = document.getElementById("folder-editor-icons");
+  const folderEditorPrompt = document.getElementById("folder-editor-prompt");
+  const folderEditorSave = document.getElementById("folder-editor-save");
+  let folderEditorState = null;   // { resolve, color, icon, previousFocus }
+  function folderEditorIsOpen() {
+    return Boolean(folderEditorState);
+  }
+  function renderFolderEditorPicks() {
+    const state = folderEditorState;
+    if (!state) return;
+    const previewFolder = { id: state.previewId, name: folderEditorName.value, color: state.color, icon: state.icon };
+    folderEditorPreview.replaceChildren(buildFolderTile(previewFolder, "lg"));
+    const { bg, fg } = folderTileColor(previewFolder);
+    for (const button of folderEditorColors.children) button.setAttribute("aria-checked", String(button.dataset.color === state.color));
+    for (const button of folderEditorIcons.children) {
+      const checked = button.dataset.icon === (state.icon || FOLDER_ICONS[0].key);
+      button.setAttribute("aria-checked", String(checked));
+      button.style.setProperty("--pick-bg", bg);
+      button.style.setProperty("--pick-fg", fg);
+    }
+    folderEditorSave.disabled = !folderEditorName.value.trim();
+  }
+  function openFolderEditor({ folder = null } = {}) {
+    if (folderEditorState) closeFolderEditor(null);
+    return new Promise((resolve) => {
+      folderEditorState = {
+        resolve,
+        previewId: folder?.id || createFolderId(),
+        color: folder?.color || "",
+        icon: folder?.icon || "",
+        previousFocus: document.activeElement,
+      };
+      folderEditorTitle.textContent = folder ? "编辑文件夹" : "新建文件夹";
+      folderEditorSave.textContent = folder ? "保存" : "创建";
+      folderEditorName.value = folder?.name || "";
+      // 颜色圆点 + 图标格子只建一次
+      if (!folderEditorColors.children.length) {
+        for (const color of FOLDER_COLORS) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "folder-editor-color";
+          button.setAttribute("role", "radio");
+          button.setAttribute("aria-label", color.name);
+          button.dataset.color = color.key;
+          button.style.setProperty("--swatch-bg", color.bg);
+          button.style.setProperty("--swatch-fg", color.fg);
+          folderEditorColors.appendChild(button);
+        }
+        for (const icon of FOLDER_ICONS) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "folder-editor-icon";
+          button.setAttribute("role", "radio");
+          button.setAttribute("aria-label", icon.name);
+          button.dataset.icon = icon.key;
+          button.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${icon.path}"></path></svg>`;
+          folderEditorIcons.appendChild(button);
+        }
+      }
+      folderEditorPrompt.replaceChildren();
+      const options = [{ id: "", name: `跟随设置（现在是“${activePrompt(promptLibrary).name}”）` }, ...promptLibrary.items];
+      for (const option of options) {
+        const element = document.createElement("option");
+        element.value = option.id;
+        element.textContent = option.name;
+        folderEditorPrompt.appendChild(element);
+      }
+      folderEditorPrompt.value = folder?.promptId && promptLibrary.items.some((item) => item.id === folder.promptId) ? folder.promptId : "";
+      renderFolderEditorPicks();
+      folderEditor.hidden = false;
+      requestAnimationFrame(() => {
+        folderEditor.classList.add("is-open");
+        folderEditorName.focus();
+        if (folder) folderEditorName.select();
+      });
+    });
+  }
+  function closeFolderEditor(result) {
+    const state = folderEditorState;
+    if (!state) return;
+    folderEditorState = null;
+    folderEditor.classList.remove("is-open");
+    const finish = () => { if (!folderEditorState) folderEditor.hidden = true; };
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) finish();
+    else window.setTimeout(finish, 260);
+    const previous = state.previousFocus;
+    if (previous instanceof HTMLElement && previous.isConnected) previous.focus();
+    state.resolve(result);
+  }
+  folderEditorColors.addEventListener("click", (event) => {
+    const button = event.target.closest(".folder-editor-color");
+    if (!button || !folderEditorState) return;
+    // 再点一次当前颜色 = 取消选择，回到自动配色
+    folderEditorState.color = folderEditorState.color === button.dataset.color ? "" : button.dataset.color;
+    renderFolderEditorPicks();
+  });
+  folderEditorIcons.addEventListener("click", (event) => {
+    const button = event.target.closest(".folder-editor-icon");
+    if (!button || !folderEditorState) return;
+    folderEditorState.icon = button.dataset.icon === FOLDER_ICONS[0].key ? "" : button.dataset.icon;
+    renderFolderEditorPicks();
+  });
+  folderEditorName.addEventListener("input", renderFolderEditorPicks);
+  folderEditorForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const state = folderEditorState;
+    if (!state || !folderEditorName.value.trim()) return;
+    closeFolderEditor({ name: folderEditorName.value, color: state.color, icon: state.icon, promptId: folderEditorPrompt.value || "" });
+  });
+  document.getElementById("folder-editor-cancel").addEventListener("click", () => closeFolderEditor(null));
+  document.getElementById("folder-editor-scrim").addEventListener("click", () => closeFolderEditor(null));
+  folderEditor.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    event.stopPropagation();
+    closeFolderEditor(null);
+  });
+
+  async function createFolderInteractive() {
     if (pending) {
       announceConversation("回复完成后可新建文件夹。");
       return null;
     }
-    const raw = window.prompt("文件夹名称", "");
-    if (raw === null || !raw.trim()) return null;
-    const folder = { id: createFolderId(), name: normalizeFolderName(raw), pinned: false, collapsed: false, createdAt: new Date().toISOString() };
+    const result = await openFolderEditor();
+    if (!result || !result.name.trim()) return null;
+    const folder = {
+      id: createFolderId(),
+      name: normalizeFolderName(result.name),
+      pinned: false,
+      collapsed: false,
+      createdAt: new Date().toISOString(),
+      ...(folderColorByKey(result.color) ? { color: result.color } : {}),
+      ...(folderIconByKey(result.icon) ? { icon: result.icon } : {}),
+      ...(result.promptId && promptLibrary.items.some((item) => item.id === result.promptId) ? { promptId: result.promptId } : {}),
+    };
     const draft = cloneConversationStore();
     draft.folders = [...(draft.folders || []), folder];
     return persistFolderDraft(draft, `已新建文件夹“${folder.name}”。`) ? folder : null;
@@ -5950,14 +6273,21 @@
     return persistFolderDraft(draft, prompt ? `“${folder.name}”里的会话改用提示词“${prompt.name}”。` : `“${folder.name}”改为跟随设置里的提示词。`);
   }
 
-  function renameFolder(folderId) {
+  // 编辑文件夹：名字、颜色、图标、提示词一起改
+  async function editFolder(folderId) {
     const folder = folderById(folderId);
-    if (!folder || pending) return;
-    const raw = window.prompt("文件夹名称", folder.name);
-    if (raw === null || !raw.trim()) return;
+    if (!folder || pending) return false;
+    const result = await openFolderEditor({ folder });
+    if (!result || !result.name.trim()) return false;
     const draft = cloneConversationStore();
-    folderById(folderId, draft).name = normalizeFolderName(raw);
-    persistFolderDraft(draft);
+    const target = folderById(folderId, draft);
+    if (!target) return false;
+    target.name = normalizeFolderName(result.name);
+    if (folderColorByKey(result.color)) target.color = result.color; else delete target.color;
+    if (folderIconByKey(result.icon)) target.icon = result.icon; else delete target.icon;
+    if (result.promptId && promptLibrary.items.some((item) => item.id === result.promptId)) target.promptId = result.promptId;
+    else delete target.promptId;
+    return persistFolderDraft(draft);
   }
 
   function toggleFolderPinned(folderId) {
@@ -6160,7 +6490,7 @@
     quotePill.hidden = true;
   }
   function updateQuotePill() {
-    const found = anySettingsScreenOpen() || pending ? null : selectedReplyText();
+    const found = anySettingsScreenOpen() || folderEditorIsOpen() || pending ? null : selectedReplyText();
     if (!found) { hideQuotePill(); return; }
     quoteText = found.text;
     quotePill.hidden = false;
@@ -7761,13 +8091,13 @@
   conversationSidebar.addEventListener("keydown", trapConversationSidebarFocus);
   conversationNew.addEventListener("click", createNewConversation);
   // 侧栏头部新建文件夹：建完打开文件夹页并展开它（未置顶的文件夹不在侧栏里显示，不然看不到建在哪）
-  conversationNewFolder.addEventListener("click", () => {
-    const folder = createFolderInteractive();
+  conversationNewFolder.addEventListener("click", async () => {
+    const folder = await createFolderInteractive();
     if (!folder) return;
     openFolderScreen();
     openFolderDetail(folder.id);
   });
-  conversationList.addEventListener("click", (event) => {
+  conversationList.addEventListener("click", async (event) => {
     const actionTarget = event.target.closest("[data-action]");
     if (!(actionTarget instanceof HTMLElement) || !conversationList.contains(actionTarget)) return;
     const action = actionTarget.dataset.action;
@@ -7814,7 +8144,7 @@
     } else if (action === "move-out" && conversationId) {
       moveConversationToFolder(conversationId, "");
     } else if (action === "move-new-folder" && conversationId) {
-      const folder = createFolderInteractive();
+      const folder = await createFolderInteractive();
       if (folder) moveConversationToFolder(conversationId, folder.id);
       else renderConversationList();
     } else {
@@ -7962,9 +8292,11 @@
       rerender();
     } else if (action === "move-new-folder" && conversationId) {
       folderDetailPickerId = null;
-      const folder = createFolderInteractive();
-      if (folder) moveConversationToFolder(conversationId, folder.id);
       rerender();
+      createFolderInteractive().then((folder) => {
+        if (folder) moveConversationToFolder(conversationId, folder.id);
+        rerender();
+      });
     } else if (action === "fd-delete" && conversationId) {
       folderDetailConvMenuId = null;
       deleteConversation(conversationId);
@@ -8115,8 +8447,8 @@
     if (folderDetailIsOpen()) renderFolderDetail();
   });
   folderDetailBack.addEventListener("click", () => closeFolderDetail());
-  folderNew.addEventListener("click", () => {
-    const folder = createFolderInteractive();
+  folderNew.addEventListener("click", async () => {
+    const folder = await createFolderInteractive();
     if (folder) openFolderDetail(folder.id);
   });
   folderBack.addEventListener("click", () => closeFolderScreen());
