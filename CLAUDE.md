@@ -69,13 +69,23 @@ Claude = 提供创意
 - 当要求更新时，判断内容属于哪个文件再更新，不要把细节往 CLAUDE.md 塞；状态类改动一律进 docs/交接.md。
 - 项目概述除了第一次可修改，后面除非允许不得修改。
 
+## 6. 文件结构规矩（2026-09-10 拆分后，轩定）
+
+前端已从单文件拆成 `index.html` + `css/` + `js/`（文件清单和加载顺序见 `docs/项目详情.md`「文件结构」）。为了以后加再多界面也不长回一坨：
+
+1. **新界面、新功能开新文件，不往别人的文件里塞。** 一个界面一组文件（它的 js + 它的 css），共用的东西才进 `js/shared/`。
+2. **单个文件超过 800 行，先拆再加功能。** PR 里任何文件行数过线，监工按这条打回。
+3. **运行时状态只在 `js/shared/store.js` 声明。** 新状态先去那里加一行 `let`，界面文件不得自己私藏全局状态；以后状态收口（改为只能通过 store 读写）也从这里做。
+4. **不引入打包器、不改成 ES module、不上框架**——保持"改一行 push 就上线、手机上能合 PR"。要变这条得轩明确拍板。
+5. `index.html` 里 `<script>` 的先后顺序有讲究（`shared/store.js` 必须在纯函数文件之后、事件绑定之前），加文件时按项目详情里的原则放，不要随手排。
+
 ---
 
 # 项目快照
 
 ## 项目概述
 
-chat-lite（曾用名 ember，2026 年迁仓改名）—— 跟 Claude 聊天的单页网页小工具。前端（原生 HTML/CSS/JS）托管在 GitHub Pages，经 Cloudflare Worker 代理调 OpenRouter；打开要输访问密码。聊天历史存本地浏览器（localStorage），可手动清空。
+chat-lite（曾用名 ember，2026 年迁仓改名）—— 跟 Claude 聊天的单页网页小工具。前端（原生 HTML/CSS/JS，无构建，2026-09-10 起拆成 index.html + css/ + js/）托管在 GitHub Pages，经 Cloudflare Worker 代理调 OpenRouter；打开要输访问密码。聊天历史存本地浏览器（localStorage），可手动清空。
 
 - 网址：https://cloudxuan1.github.io/chat-lite/
 - 仓库：https://github.com/cloudxuan1/chat-lite （public）
