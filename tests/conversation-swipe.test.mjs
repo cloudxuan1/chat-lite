@@ -38,7 +38,7 @@ function harness(surface = 'sidebar') {
     folderDetailConvMenuId: null, folderDetailPickerId: null, folderDetailPromptOpen: false, folderDetailMenuOpen: false,
     movePickerId: null, conversationMenuId: null, folderMenuId: null, folderPageMenuId: null, renamingConversationId: null,
     folderDetailId: 'f1', folderById: () => ({}), folderDetailIsOpen: () => surface === 'detail', folderScreenIsOpen: () => false,
-    closeQuickPanel() {}, announceConversation() {}, renderFolderScreen() {},
+    closeQuickPanel() {}, folderEditorIsOpen: () => false, announceConversation() {}, renderFolderScreen() {},
     deleteConversation: id => calls.push(['delete', id]), toggleConversationPinned: id => { calls.push(['pin', id]); return true; },
     rubberband: x => x * 0.2,
   });

@@ -31,15 +31,15 @@ const functions = [
   "isRecoverableConversationStore", "preserveCorruptConversationStore", "normalizeConversationStore",
   "loadConversationStore", "cloneConversationStore", "getActiveConversation", "conversationById",
   "persistConversationStore", "persistFolderDraft", "moveConversationToFolder", "createFolderInteractive",
-  "renameFolder", "toggleFolderPinned", "deleteFolder", "restoreFromBackup", "createNewConversation",
+  "editFolder", "toggleFolderPinned", "deleteFolder", "restoreFromBackup", "createNewConversation",
   "focusConversationMore", "conversationPreview", "formatConversationTime", "buildConversationItem",
-  "toggleConversationPinned", "sortedConversations",
+  "toggleConversationPinned", "sortedConversations", "folderColorByKey", "folderIconByKey",
 ].map((name) => extract(new RegExp(`^  (?:async )?function ${name}\\([^]*?^  }$`, "gm"))).join("\n");
 const constants = [
   "CONVERSATIONS_KEY", "CORRUPT_CONVERSATIONS_BACKUP_KEY", "CONVERSATION_TITLE_MAX_CHARACTERS",
-  "MAX_IMAGES_PER_MESSAGE", "SUPPORTED_IMAGE_TYPES",
+  "MAX_IMAGES_PER_MESSAGE", "SUPPORTED_IMAGE_TYPES", "FOLDER_COLORS", "FOLDER_ICONS",
 ].map((name) => extract(new RegExp(`^  const ${name} = [^]*?;$`, "gm"))).join("\n");
-const clickListener = extract(/^  conversationList\.addEventListener\("click", \(event\) => \{[^]*?^  \}\);$/gm);
+const clickListener = extract(/^  conversationList\.addEventListener\("click", (?:async )?\(event\) => \{[^]*?^  \}\);$/gm);
 const escapeListener = extract(/^  document\.addEventListener\("keydown", \(event\) => \{[^]*?^  \}\);$/gm);
 
 function conversation(id, folderId) {
@@ -111,6 +111,14 @@ function harness(store = fixture()) {
     folderDetailMenuOpen: false, folderDetailId: "f1", sidebarOpen: false, pending: false,
     folderScreenOpen: false, folderDetailOpen: false, failWrites: false, failOnWrite: 0, writeCount: 0, promptResult: null,
     confirmResult: true, focused: null, conversationList, document, HTMLElement: Element,
+    // 新建/编辑文件夹弹窗的替身：promptResult 为 null 或空白 = 取消
+    openFolderEditor: async ({ folder = null, commit } = {}) => {
+      if (context.promptResult === null || !String(context.promptResult).trim()) return null;
+      const result = { name: context.promptResult, color: folder?.color || "", icon: folder?.icon || "", promptId: folder?.promptId || "" };
+      // 此套件只测调用方；失败后的保留/重试由 folder-editor.test.mjs 执行真实弹窗验证。
+      return !commit || commit(result) ? result : null;
+    },
+    promptLibrary: { activeId: "p1", items: [{ id: "p1", name: "默认", content: "" }] },
     crypto: { randomUUID },
     window: {
       requestAnimationFrame: (callback) => frames.push(callback),
@@ -156,11 +164,13 @@ function harness(store = fixture()) {
   const flush = () => { while (frames.length) frames.shift()(); };
   return {
     context, calls, storage, key, entry, flush,
+    // 监听器现在是 async 的：同步分支立刻生效（不 await 也能断言），新建文件夹分支要 await
     click(action, id = "c1", folderId = "") {
       const target = new Element();
       target.dataset = { action, conversationId: id, folderId };
-      conversationList.click({ target });
+      const result = conversationList.click({ target });
       flush();
+      return Promise.resolve(result).then(flush);
     },
     async restore(backupStore) {
       const button = new Element();
@@ -226,11 +236,11 @@ test("pending reply and stale destinations cannot move or unclassify a conversat
   assert.equal(h.calls.renders.length, 0);
 });
 
-test("new-folder move closes the picker and focuses the folder entry", () => {
+test("new-folder move closes the picker and focuses the folder entry", async () => {
   const h = harness();
   h.context.movePickerId = "c1";
   h.context.promptResult = "新文件夹";
-  h.click("move-new-folder");
+  await h.click("move-new-folder");
   const added = h.context.conversationStore.folders.at(-1);
   assert.equal(added.name, "新文件夹");
   assert.equal(h.context.conversationById("c1").folderId, added.id);
@@ -239,31 +249,31 @@ test("new-folder move closes the picker and focuses the folder entry", () => {
 });
 
 for (const failOnWrite of [1, 2]) {
-  test(`new-folder move remains retryable when save ${failOnWrite} fails`, () => {
+  test(`new-folder move remains retryable when save ${failOnWrite} fails`, async () => {
     const h = harness();
     const c = h.context;
     c.movePickerId = "c1";
     c.promptResult = "新文件夹";
     c.failOnWrite = failOnWrite;
-    h.click("move-new-folder");
+    await h.click("move-new-folder");
     assert.equal(c.conversationById("c1").folderId, "f1");
     assert.equal(c.movePickerId, "c1");
     assert.equal(c.conversationStore.folders.length, failOnWrite === 1 ? 3 : 4);
     assert.equal(h.calls.announcements.some((message) => message.startsWith("已移到")), false);
     assert.deepEqual(JSON.parse(h.storage.get(h.key)), plain(c.conversationStore));
     c.failOnWrite = 0;
-    h.click("move-to", "c1", c.conversationStore.folders.at(-1).id);
+    await h.click("move-to", "c1", c.conversationStore.folders.at(-1).id);
     assert.equal(c.movePickerId, null);
   });
 }
 
 for (const promptResult of [null, "   "]) {
-  test(`cancel/empty new folder leaves the move picker available (${JSON.stringify(promptResult)})`, () => {
+  test(`cancel/empty new folder leaves the move picker available (${JSON.stringify(promptResult)})`, async () => {
     const h = harness();
     h.context.movePickerId = "c1";
     h.context.promptResult = promptResult;
     const before = JSON.stringify(h.context.conversationStore);
-    h.click("move-new-folder");
+    await h.click("move-new-folder");
     assert.equal(JSON.stringify(h.context.conversationStore), before);
     assert.equal(h.context.movePickerId, "c1");
   });
@@ -341,11 +351,11 @@ test("deleting a folder only unclassifies members; cancellation/failure is non-d
   assert.equal(h.context.conversationStore.activeId, "c1");
 });
 
-test("renaming and pinning folders preserve conversations and persist folder state", () => {
+test("renaming and pinning folders preserve conversations and persist folder state", async () => {
   const h = harness();
   const before = plain(h.context.conversationStore.conversations);
   h.context.promptResult = " 新名字 ";
-  h.context.renameFolder("f1");
+  await h.context.editFolder("f1");
   h.context.toggleFolderPinned("f1");
   assert.equal(h.context.folderById("f1").name, "新名字");
   assert.equal(h.context.folderById("f1").pinned, false);
@@ -437,4 +447,21 @@ test("pin sorts before newer unpinned conversations and backup import retains it
   assert.notEqual(c.sortedConversations()[0].id, "imported");
   await h.restore(backup);
   assert.equal(c.conversationById("imported").pinned, undefined, "old backup must not re-pin an existing conversation");
+});
+
+test("backup appearance round-trip retains new folder choices without overriding existing ones", async () => {
+  const h = harness(); const backup = fixture();
+  backup.folders = [
+    { ...backup.folders[0], color: "sakura", icon: "heart" },
+    { ...backup.folders[1], id: "imported-folder", color: "mint", icon: "clawd", promptId: "p1" },
+  ];
+  backup.conversations = [conversation("imported", "imported-folder")];
+  await h.restore(backup);
+  assert.equal(h.context.folderById("f1").color, undefined, "existing choices are never overwritten");
+  const imported = h.context.folderById("imported-folder");
+  assert.equal(imported.color, "mint"); assert.equal(imported.icon, "clawd"); assert.equal(imported.promptId, "p1");
+  const reloaded = h.context.normalizeConversationStore(JSON.parse(h.storage.get(h.key)));
+  assert.deepEqual(plain(h.context.folderById("imported-folder", reloaded)), plain(imported));
+  await h.restore(backup);
+  assert.equal(h.context.conversationStore.folders.filter(f => f.id === "imported-folder").length, 1);
 });
