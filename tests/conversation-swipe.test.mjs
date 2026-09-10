@@ -1,17 +1,12 @@
 // Production gesture and document-click listeners; DOM and actions are doubles.
 // Native touch capture, scrolling and layout still need browser acceptance.
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import vm from 'node:vm';
-const root = new URL('../', import.meta.url);
-const html = process.env.CHAT_LITE_TEST_REF
-  ? execFileSync('git', ['show', `${process.env.CHAT_LITE_TEST_REF}:index.html`], { cwd: root, encoding: 'utf8' })
-  : readFileSync(new URL('index.html', root), 'utf8');
-const source = html.match(/<script>([\s\S]*?)<\/script>/)[1];
-const swipe = source.slice(source.indexOf('  const SWIPE_ACTION_META'), source.indexOf('  function focusConversationMore'));
-const outside = source.match(/^  document\.addEventListener\("click", \(event\) => \{\n    if \(!event\.composedPath\(\)[\s\S]*?^  \}\);/m)[0];
+// Production source = the js/ files index.html loads, in order (see tests/source.mjs).
+import { source } from './source.mjs';
+const swipe = source.slice(source.indexOf('const SWIPE_ACTION_META'), source.indexOf('function focusConversationMore'));
+const outside = source.match(/^document\.addEventListener\("click", \(event\) => \{\n  if \(!event\.composedPath\(\)[\s\S]*?^\}\);/m)[0];
 class Element {
   constructor(className = '', parent = null) {
     this.className = className; this.parent = parent; this.children = []; this.dataset = {}; this.style = { transform: '' }; this.isConnected = true;

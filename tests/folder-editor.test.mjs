@@ -1,16 +1,11 @@
 // Real editor, save functions, normalization and document handlers in a VM.
 // DOM, layout, frame/timer scheduling and storage are doubles, not browser tests.
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import vm from 'node:vm';
+// Production source = the js/ files index.html loads, in order (see tests/source.mjs).
+import { source as script } from './source.mjs';
 
-const root = new URL('../', import.meta.url);
-const html = process.env.CHAT_LITE_TEST_REF
-  ? execFileSync('git', ['show', `${process.env.CHAT_LITE_TEST_REF}:index.html`], { cwd: root, encoding: 'utf8' })
-  : readFileSync(new URL('index.html', root), 'utf8');
-const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 function extract(pattern) {
   const matches = [...script.matchAll(pattern)];
   assert.equal(matches.length, 1, `unique production extraction: ${pattern}`);
@@ -19,12 +14,12 @@ function extract(pattern) {
 const functions = ['folderColorByKey', 'folderIconByKey', 'folderTileColor', 'folderTileIcon', 'buildFolderTile',
   'normalizeFolderName', 'normalizeFolders', 'validStoredDate', 'folderById', 'createFolderInteractive', 'editFolder',
   'syncInteractionState', 'focusActiveLayerAfterGate']
-  .map(name => extract(new RegExp(`^  (?:async )?function ${name}\\([^]*?^  }$`, 'gm'))).join('\n');
+  .map(name => extract(new RegExp(`^(?:async )?function ${name}\\([^]*?^}$`, 'gm'))).join('\n');
 const constants = ['FOLDER_COLORS', 'FOLDER_ICONS']
-  .map(name => extract(new RegExp(`^  const ${name} = \\[[^]*?^  \\];$`, 'gm'))).join('\n');
-const editor = script.slice(script.indexOf('  const folderEditor ='), script.indexOf('  async function createFolderInteractive'));
-const outside = extract(/^  document\.addEventListener\("click", \(event\) => \{\n    if \(!event\.composedPath\(\)[^]*?^  \}\);$/gm);
-const detailClick = extract(/^  folderDetailList\.addEventListener\("click", \(event\) => \{[^]*?^  \}\);$/gm);
+  .map(name => extract(new RegExp(`^const ${name} = \\[[^]*?^\\];$`, 'gm'))).join('\n');
+const editor = script.slice(script.indexOf('const folderEditor ='), script.indexOf('async function createFolderInteractive'));
+const outside = extract(/^document\.addEventListener\("click", \(event\) => \{\n  if \(!event\.composedPath\(\)[^]*?^\}\);$/gm);
+const detailClick = extract(/^folderDetailList\.addEventListener\("click", \(event\) => \{[^]*?^\}\);$/gm);
 const plain = v => JSON.parse(JSON.stringify(v));
 
 function harness({ mobile = false } = {}) {
