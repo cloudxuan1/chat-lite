@@ -2,13 +2,19 @@
 // Runs production functions/listeners extracted from the single-page app in a VM.
 // DOM, rendering, dialogs and storage are test doubles, NOT a browser/E2E test.
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
-// Production source = the js/ files index.html loads, in order (see tests/source.mjs).
-// CHAT_LITE_TEST_REF still lets us prove the regressions fail before a fix.
-import { source as script } from "./source.mjs";
 
+const root = new URL("../", import.meta.url);
+// Optional historical source lets us prove the regressions fail before a fix.
+const html = process.env.CHAT_LITE_TEST_REF
+  ? execFileSync("git", ["show", `${process.env.CHAT_LITE_TEST_REF}:index.html`], { cwd: root, encoding: "utf8" })
+  : readFileSync(new URL("index.html", root), "utf8");
+const script = html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
+assert.ok(script, "index.html must contain the app script");
 const plain = (value) => JSON.parse(JSON.stringify(value));
 const date = "2026-09-01T00:00:00.000Z";
 
@@ -28,13 +34,13 @@ const functions = [
   "renameFolder", "toggleFolderPinned", "deleteFolder", "restoreFromBackup", "createNewConversation",
   "focusConversationMore", "conversationPreview", "formatConversationTime", "buildConversationItem",
   "toggleConversationPinned", "sortedConversations",
-].map((name) => extract(new RegExp(`^(?:async )?function ${name}\\([^]*?^}$`, "gm"))).join("\n");
+].map((name) => extract(new RegExp(`^  (?:async )?function ${name}\\([^]*?^  }$`, "gm"))).join("\n");
 const constants = [
   "CONVERSATIONS_KEY", "CORRUPT_CONVERSATIONS_BACKUP_KEY", "CONVERSATION_TITLE_MAX_CHARACTERS",
   "MAX_IMAGES_PER_MESSAGE", "SUPPORTED_IMAGE_TYPES",
-].map((name) => extract(new RegExp(`^const ${name} = [^]*?;$`, "gm"))).join("\n");
-const clickListener = extract(/^conversationList\.addEventListener\("click", \(event\) => \{[^]*?^\}\);$/gm);
-const escapeListener = extract(/^document\.addEventListener\("keydown", \(event\) => \{[^]*?^\}\);$/gm);
+].map((name) => extract(new RegExp(`^  const ${name} = [^]*?;$`, "gm"))).join("\n");
+const clickListener = extract(/^  conversationList\.addEventListener\("click", \(event\) => \{[^]*?^  \}\);$/gm);
+const escapeListener = extract(/^  document\.addEventListener\("keydown", \(event\) => \{[^]*?^  \}\);$/gm);
 
 function conversation(id, folderId) {
   return {
