@@ -1,17 +1,10 @@
 // No browser/network: production rendering, normalization, persistence and drag listeners
 // run against a small DOM double that preserves node identity and detach/reinsert behavior.
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
-
-const root = new URL("../", import.meta.url);
-const html = process.env.CHAT_LITE_TEST_REF
-  ? execFileSync("git", ["show", `${process.env.CHAT_LITE_TEST_REF}:index.html`], { cwd: root, encoding: "utf8" })
-  : readFileSync(new URL("index.html", root), "utf8");
-const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+import { source as script } from "./source.mjs";
 const plain = (value) => JSON.parse(JSON.stringify(value));
 function extract(pattern) {
   const matches = [...script.matchAll(pattern)];
@@ -24,8 +17,8 @@ const functions = [
   "createConversation", "createFolderId", "normalizeFolderName", "normalizeFolders",
   "normalizeConversationStore", "preserveCorruptConversationStore", "cloneConversationStore",
   "persistConversationStore", "persistFolderDraft", "renderFolderScreen", "commitFolderOrderFromDom",
-].map((name) => extract(new RegExp(`^  function ${name}\\([^]*?^  }$`, "gm"))).join("\n");
-const dragSource = extract(/^  function rubberband\([^]*?^  folderPageList\.addEventListener\("pointercancel", endFolderDrag\);$/gm);
+].map((name) => extract(new RegExp(`^function ${name}\\([^]*?^}$`, "gm"))).join("\n");
+const dragSource = extract(/^function rubberband\([^]*?^folderPageList\.addEventListener\("pointercancel", endFolderDrag\);$/gm);
 
 // Deliberately small DOM double. Layout uses equal-height rows; CSS, native pointer
 // capture/event retargeting, and touch hit-testing still require browser acceptance.
