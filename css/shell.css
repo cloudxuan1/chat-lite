@@ -1,0 +1,176 @@
+/* 应用框架 + 会话侧栏（抽屉/常驻侧栏、会话列表、文件夹）。 */
+/* ===== 应用框架与会话侧栏 ===== */
+.app-shell {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.chat-shell {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.app-status {
+  position: fixed;
+  z-index: 40;
+  top: calc(12px + env(safe-area-inset-top));
+  left: 50%;
+  width: min(calc(100vw - 32px), 520px);
+  padding: 10px 14px;
+  color: #7c2d12;
+  background: rgba(255,255,255,.96);
+  border: .5px solid rgba(154,52,18,.22);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(31,30,29,.12);
+  font-size: 13px;
+  line-height: 1.45;
+  text-align: center;
+  visibility: hidden;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -8px);
+  transition:
+    opacity var(--motion-fast) ease,
+    transform var(--motion-fast) var(--ease-out),
+    visibility 0s linear var(--motion-fast);
+}
+.app-status.is-visible {
+  visibility: visible;
+  opacity: 1;
+  transform: translate(-50%, 0);
+  transition-delay: 0s;
+}
+.conversation-sidebar {
+  position: fixed;
+  inset: 0 auto 0 0;
+  z-index: 12;
+  width: min(86vw, 320px);
+  overflow: hidden;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  border-right: .5px solid rgba(31,30,29,.13);
+  box-shadow: 16px 0 44px rgba(31,30,29,.1);
+  visibility: hidden;
+  pointer-events: none;
+  transform: translate3d(-100%, 0, 0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  will-change: transform;
+  transition:
+    transform var(--motion-panel) var(--ease-drawer),
+    visibility 0s linear var(--motion-panel);
+}
+.app-shell.sidebar-is-open .conversation-sidebar {
+  visibility: visible;
+  pointer-events: auto;
+  transform: translate3d(0, 0, 0);
+  transition-delay: 0s;
+}
+.conversation-sidebar-inner {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding:
+    calc(8px + env(safe-area-inset-top))
+    10px
+    calc(10px + env(safe-area-inset-bottom));
+}
+.conversation-sidebar-header {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  align-items: center;
+  gap: 2px;
+  min-height: 48px;
+  padding-left: 8px;
+}
+.conversation-sidebar-header h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 21px;
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: .1px;
+}
+.conversation-sidebar-action,
+.conversation-more,
+.conversation-menu-button,
+.conversation-rename-action {
+  display: grid;
+  place-items: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition:
+    color var(--motion-fast) ease,
+    background-color var(--motion-fast) ease,
+    transform var(--motion-fast) var(--ease-out);
+}
+.conversation-sidebar-action svg,
+.conversation-more svg,
+.conversation-menu-button svg,
+.conversation-rename-action svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.65;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.conversation-sidebar-action:disabled,
+.conversation-more:disabled,
+.conversation-menu-button:disabled,
+.conversation-rename-action:disabled {
+  opacity: .35;
+  cursor: default;
+}
+.conversation-pending-note {
+  min-height: 0;
+  margin: 0 8px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.conversation-pending-note:not(:empty) {
+  min-height: 30px;
+  padding: 5px 0 8px;
+}
+.conversation-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 3px 0 16px;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+.conversation-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px;
+  align-items: center;
+  min-height: 60px;
+  margin: 2px 0;
+  border-radius: 14px;
+}
+.conversation-pin {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  color: var(--accent);
+}
+.conversation-pin svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
