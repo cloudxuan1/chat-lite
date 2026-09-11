@@ -8,7 +8,9 @@ node worker/cache.test.mjs
 git diff --check
 ```
 
-`folders.test.mjs` 从 `index.html` 提取真实生产函数和 click/Escape 监听器，在隔离的 VM 中执行，不复制业务实现。提取不到唯一函数会直接失败，完整内联脚本也会做语法检查。
+功能测试通过 `source.mjs` 按 `index.html` 的 script 顺序读取真实生产函数和监听器，在隔离的 VM 中执行，不复制业务实现。提取不到唯一函数会直接失败，拼接源码也会做语法检查。
+
+`script-loading.test.mjs` 新增 2 项无依赖检查：空存储 / 有旧提示词的情况下，按 HTML 顺序逐个执行经典脚本，在文件间触发选区事件并运行其定时器，确保不会读到尚未初始化的状态；同时检查顶层 `let` 只在 store、各文件独立语法有效。DOM 是替身，不执行 `init.js` 的首屏渲染，不等于浏览器验收。`CHAT_LITE_TEST_REF=d8026b0 node --test tests/script-loading.test.mjs` 可复现原 PR #18 的两项 `pending is not defined` 失败。
 
 `folder-order.test.mjs` 另提取生产文件夹渲染、存档归一化/保存和拖动监听器，新增 9 项检查：组内上下排序、拖回原位不写入、保存失败立即回滚与重试、落位中再次拖动（含第一次保存失败）、拒绝旧 DOM、减少动态效果时立即保存。测试 DOM 保留节点身份和移除/插入行为；布局、指针捕获和事件为替身，不等于浏览器触摸验收。
 

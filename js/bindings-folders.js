@@ -33,7 +33,6 @@ function openFolderPageMenu(folderId) {
   folderPageMenuId = folderId;
   renderFolderScreen();
 }
-let folderLongPress = null;
 const cancelFolderLongPress = () => {
   if (!folderLongPress) return;
   clearTimeout(folderLongPress.timer);

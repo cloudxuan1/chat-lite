@@ -5,7 +5,10 @@ import test from 'node:test';
 import vm from 'node:vm';
 // Production source = the js/ files index.html loads, in order (see tests/source.mjs).
 import { source } from './source.mjs';
-const swipe = source.slice(source.indexOf('const SWIPE_ACTION_META'), source.indexOf('function focusConversationMore'));
+const statePattern = /^let (?:swipeGesture|swipeOpenRow|swipeSwallowClick) = .*$/gm;
+const swipeState = [...source.matchAll(statePattern)].map(match => match[0]).join('\n');
+assert.equal([...source.matchAll(statePattern)].length, 3);
+const swipe = swipeState + '\n' + source.match(/^const SWIPE_ACTION_META[^]*?^  runSwipeAction\(button\);\n\}\);/m)[0].replace(statePattern, '');
 const outside = source.match(/^document\.addEventListener\("click", \(event\) => \{\n  if \(!event\.composedPath\(\)[\s\S]*?^\}\);/m)[0];
 class Element {
   constructor(className = '', parent = null) {

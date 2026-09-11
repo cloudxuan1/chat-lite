@@ -1,8 +1,6 @@
 // 选中一段追问：选中回复文字弹小按钮，点了把引用带进输入框。
 // ===== 选中一段追问：在 Claude 的回复里选中文字，弹出小按钮，点了把引用带进输入框 =====
 const quotePill = document.getElementById("quote-pill");
-let quoteText = "";
-let quoteTimer = 0;
 function selectedReplyText() {
   const selection = window.getSelection();
   if (!selection || selection.isCollapsed || !selection.rangeCount) return null;

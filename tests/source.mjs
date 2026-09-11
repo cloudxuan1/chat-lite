@@ -26,8 +26,9 @@ const html = read("index.html");
 const inline = html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
 const files = [...html.matchAll(/<script src="([^"]+)"><\/script>/g)].map((m) => m[1]);
 
-export const source = inline
-  ? dedent(inline)
-  : files.map((path) => read(path)).join("\n");
+export const scripts = inline
+  ? [{ path: "index.html", source: dedent(inline) }]
+  : files.map((path) => ({ path, source: read(path) }));
+export const source = scripts.map((script) => script.source).join("\n");
 
 assert.ok(source.trim(), "index.html must inline or reference the app script");

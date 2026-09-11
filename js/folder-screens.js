@@ -373,7 +373,6 @@ const folderEditorIcons = document.getElementById("folder-editor-icons");
 const folderEditorPrompt = document.getElementById("folder-editor-prompt");
 const folderEditorSave = document.getElementById("folder-editor-save");
 const folderEditorError = document.getElementById("folder-editor-error");
-let folderEditorState = null;   // { resolve, commit, previewId, color, icon, previousFocus }
 function folderEditorIsOpen() {
   return Boolean(folderEditorState);
 }

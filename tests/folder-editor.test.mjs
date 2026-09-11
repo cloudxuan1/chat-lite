@@ -17,7 +17,9 @@ const functions = ['folderColorByKey', 'folderIconByKey', 'folderTileColor', 'fo
   .map(name => extract(new RegExp(`^(?:async )?function ${name}\\([^]*?^}$`, 'gm'))).join('\n');
 const constants = ['FOLDER_COLORS', 'FOLDER_ICONS']
   .map(name => extract(new RegExp(`^const ${name} = \\[[^]*?^\\];$`, 'gm'))).join('\n');
-const editor = script.slice(script.indexOf('const folderEditor ='), script.indexOf('async function createFolderInteractive'));
+const editorState = extract(/^let folderEditorState = .*$/gm);
+const editor = editorState + '\n' + script.slice(script.indexOf('const folderEditor ='), script.indexOf('async function createFolderInteractive'))
+  .replace(/^let folderEditorState = .*$/gm, '');
 const outside = extract(/^document\.addEventListener\("click", \(event\) => \{\n  if \(!event\.composedPath\(\)[^]*?^\}\);$/gm);
 const detailClick = extract(/^folderDetailList\.addEventListener\("click", \(event\) => \{[^]*?^\}\);$/gm);
 const plain = v => JSON.parse(JSON.stringify(v));

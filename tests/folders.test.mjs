@@ -175,7 +175,7 @@ function harness(store = fixture()) {
   };
 }
 
-test("the complete inline application script parses", () => { new vm.Script(script); });
+test("the complete application source parses", () => { new vm.Script(script); });
 
 for (const [name, target] of [["pinned to pinned", "f2"], ["same folder", "f1"], ["move out", ""], ["unpinned destination", "f3"]]) {
   test(`move: ${name} saves, closes all menus before rendering and restores focus`, () => {

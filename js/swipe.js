@@ -7,9 +7,6 @@ const SWIPE_ACTION_META = {
   rename: { label: "重命名", icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 20 4.2-1 10.6-10.6-3.2-3.2L5 15.8 4 20Z"></path><path d="m13.8 7 3.2 3.2"></path></svg>' },
 };
 const SWIPE_REVEAL = 88;   // 滑一点松手后露出的按钮宽度
-let swipeGesture = null;    // 正在进行的滑动
-let swipeOpenRow = null;    // 当前停在露出按钮状态的行
-let swipeSwallowClick = false;
 
 // 把会话行包成可滑动的行：动作按钮在下层贴边，行内容在上层跟手指平移
 function wrapSwipeRow(content, conversation, surface) {
