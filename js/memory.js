@@ -137,22 +137,30 @@ function finalizeToolCalls(accumulator) {
     }));
 }
 
-// OpenRouter 的 reasoning_details 流式到达时按 index 分片：文本类字段拼接，其余字段（type/id/format/signature）后到覆盖先到。
+// OpenRouter 把 reasoning_details 按词切成碎片流过来（reasoning.text / reasoning.summary / reasoning.encrypted）。
+// 合并规则跟别家验证过的一致（hermes-agent PR #96782）：相邻、同 type、index 相同或缺失的碎片合成一条，
+// text/summary/data 拼接，signature/id/format/index 后到补上。不能拼错：Anthropic 要求回放的思考块和原文逐字一致。
 function mergeReasoningDetails(accumulator, details) {
   if (!Array.isArray(details)) return accumulator;
-  details.forEach((detail, position) => {
-    if (!detail || typeof detail !== "object") return;
-    const index = Number.isInteger(detail.index) ? detail.index : position;
-    const entry = accumulator[index] || (accumulator[index] = {});
+  for (const detail of details) {
+    if (!detail || typeof detail !== "object") continue;
+    const last = accumulator[accumulator.length - 1];
+    const sameBlock = last && last.type === detail.type && (
+      !Number.isInteger(last.index) || !Number.isInteger(detail.index) || last.index === detail.index
+    );
+    if (!sameBlock) {
+      accumulator.push({ ...detail });
+      continue;
+    }
     for (const [key, value] of Object.entries(detail)) {
       if (value === undefined || value === null) continue;
       if ((key === "text" || key === "summary" || key === "data") && typeof value === "string") {
-        entry[key] = (typeof entry[key] === "string" ? entry[key] : "") + value;
+        last[key] = (typeof last[key] === "string" ? last[key] : "") + value;
       } else {
-        entry[key] = value;
+        last[key] = value;
       }
     }
-  });
+  }
   return accumulator;
 }
 

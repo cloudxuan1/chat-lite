@@ -74,12 +74,16 @@ test("流式增量：tool_calls 参数按 index 分片拼接，reasoning_details
   deepEq(h.parseToolArguments({ function: { arguments: "{坏 json" } }), {});
 
   const reasoning = [];
-  h.mergeReasoningDetails(reasoning, [{ type: "reasoning.text", index: 0, text: "先想", id: "r1" }]);
-  h.mergeReasoningDetails(reasoning, [{ type: "reasoning.text", index: 0, text: "一想", signature: "sig" }]);
+  h.mergeReasoningDetails(reasoning, [{ type: "reasoning.text", text: "先想", id: "r1" }]);                      // 第一片没 index
+  h.mergeReasoningDetails(reasoning, [{ type: "reasoning.text", index: 0, text: "一想", signature: "sig" }]);   // 后到的补 index/签名
   h.mergeReasoningDetails(reasoning, [{ type: "reasoning.encrypted", index: 1, data: "abc" }, { type: "reasoning.encrypted", index: 1, data: "def" }]);
+  h.mergeReasoningDetails(reasoning, [{ type: "reasoning.encrypted", index: 2, data: "xyz" }]);                 // 不同 index 的密文块各自独立
+  h.mergeReasoningDetails(reasoning, [{ type: "reasoning.text", text: "再" }, { type: "reasoning.text", text: "想" }]); // 新的一段文字
   deepEq(h.finalizeReasoningDetails(reasoning), [
     { type: "reasoning.text", index: 0, text: "先想一想", id: "r1", signature: "sig" },
     { type: "reasoning.encrypted", index: 1, data: "abcdef" },
+    { type: "reasoning.encrypted", index: 2, data: "xyz" },
+    { type: "reasoning.text", text: "再想" },
   ]);
 });
 
