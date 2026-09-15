@@ -103,7 +103,7 @@ function harness({ mobile = false } = {}) {
     window: { requestAnimationFrame: fn => frames.push(fn), setTimeout: fn => timers.push(fn), matchMedia: () => ({ matches: false }) },
   });
   for (const name of ['topbarEl', 'messagesEl', 'composer', 'input', 'folderDetailScreen', 'folderScreen', 'modelScreen',
-    'promptScreen', 'identityScreen', 'webSettingsScreen', 'imageSettingsScreen', 'settingsScreen', 'folderDetailBack',
+    'promptScreen', 'identityScreen', 'webSettingsScreen', 'memorySettingsScreen', 'imageSettingsScreen', 'settingsScreen', 'folderDetailBack',
     'folderBack', 'modelBack', 'promptBack', 'identityBack', 'webSettingsBack', 'imageSettingsBack', 'settingsBack', 'conversationClose']) {
     c[name] = chatShell.appendChild(new Element(name, name.endsWith('Screen') ? 'section' : 'button'));
   }

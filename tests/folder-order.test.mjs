@@ -15,7 +15,8 @@ function extract(pattern) {
 }
 const functions = [
   "createSessionId", "createConversationId", "visibleCharacters", "normalizeConversationTitle",
-  "titleFromFirstMessage", "normalizeMessageAttachments", "normalizeStoredMessages", "validStoredDate",
+  "titleFromFirstMessage", "normalizeMessageAttachments", "normalizeStoredMessages",
+  "normalizeMemoryContext", "normalizeMemorySteps", "normalizeVariantSteps", "normalizeToolCalls", "normalizeReasoningDetailsList", "validStoredDate",
   "createConversation", "createFolderId", "normalizeFolderName", "normalizeFolders",
   "normalizeConversationStore", "preserveCorruptConversationStore", "cloneConversationStore",
   "persistConversationStore", "persistFolderDraft", "renderFolderScreen", "commitFolderOrderFromDom",
@@ -88,6 +89,7 @@ function harness() {
     pending: false, folderMenuId: null, conversationMenuId: null, movePickerId: null,
     CONVERSATIONS_KEY: "store", CORRUPT_CONVERSATIONS_BACKUP_KEY: "backup", CONVERSATION_TITLE_MAX_CHARACTERS: 48,
     MAX_IMAGES_PER_MESSAGE: 8, SUPPORTED_IMAGE_TYPES: new Set(["image/png"]),
+    MEMORY_CONTEXT_MAX_CHARS: 6000, MEMORY_TOOL_NAMES: new Set(["memory_search", "memory_recall"]),
     failWrites: false, writes: 0, persisted: plain(store), announcements: [], reducedMotion: false,
     setTimeout: (callback) => { timers.set(++timerId, callback); return timerId; },
     clearTimeout: (id) => timers.delete(id),
