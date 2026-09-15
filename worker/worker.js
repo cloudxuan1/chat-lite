@@ -170,6 +170,9 @@ async function handleRequest(request, env) {
     if (payload.memoryTools !== undefined && typeof payload.memoryTools !== "boolean") {
       return json({ error: "memoryTools 必须是布尔值" }, 400);
     }
+    if (payload.memoryToolsExhausted !== undefined && typeof payload.memoryToolsExhausted !== "boolean") {
+      return json({ error: "memoryToolsExhausted 必须是布尔值" }, 400);
+    }
     const imageValidationError = validateImageMessages(payload.messages);
     if (imageValidationError) {
       return json({ error: imageValidationError }, 400);
@@ -496,6 +499,8 @@ export function buildUpstreamBody(payload) {
   }
   if (payload.memoryTools) {
     body.tools = [...(body.tools || []), ...MEMORY_TOOLS];
+    // 保留工具定义和历史；本轮只根据已有结果回答，不再调用工具。
+    if (payload.memoryToolsExhausted) body.tool_choice = "none";
   }
   if (payload.session_id !== undefined) {
     body.session_id = payload.session_id;

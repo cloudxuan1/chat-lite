@@ -169,6 +169,7 @@ async function streamAssistantReply({ conversationId, sessionId, model, effort, 
           session_id: sessionId,
           webSearch: webSearchEnabled,
           ...(useMemoryTools ? { memoryTools: true } : {}),
+          ...(useMemoryTools && toolRounds >= MEMORY_MAX_TOOL_ROUNDS ? { memoryToolsExhausted: true } : {}),
           ...(webSearchMaxUses === null ? {} : { webSearchMaxUses }),
           ...(webSearchMaxResults === null ? {} : { webSearchMaxResults }),
           ...(maxCompletionTokens === null ? {} : { maxCompletionTokens }),
@@ -211,8 +212,12 @@ async function streamAssistantReply({ conversationId, sessionId, model, effort, 
       annotations.push(...result.annotations);
       usage = result.usage;
 
-      // 模型没要查记忆，或工具轮次到顶：这一轮就是最终回复
-      if (!useMemoryTools || !result.toolCalls.length || toolRounds >= MEMORY_MAX_TOOL_ROUNDS) break;
+      // 上限后的请求已用 tool_choice:none 要求收尾；异常供应商仍返回调用时也保留已有查询记录。
+      if (useMemoryTools && toolRounds >= MEMORY_MAX_TOOL_ROUNDS && result.toolCalls.length) {
+        full = "本轮记忆查询已达到上限，模型未能完成回答。查询记录已保留，可以缩小问题后重试。";
+        break;
+      }
+      if (!useMemoryTools || !result.toolCalls.length) break;
       toolRounds += 1;
       steps.push({
         role: "assistant",

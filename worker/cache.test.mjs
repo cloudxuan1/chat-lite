@@ -36,6 +36,17 @@ function cacheControlAt(message) {
   return message.content.at(-1)?.cache_control;
 }
 
+test("memory limit: keep tool definitions and history but force final answer", () => {
+  const payload = { messages: [{ role: "user", content: "test" }], memoryTools: true, webSearch: true };
+  const normal = buildUpstreamBody(payload);
+  const closing = buildUpstreamBody({ ...payload, memoryToolsExhausted: true });
+  assert.deepEqual(closing.tools, normal.tools);
+  assert.deepEqual(closing.messages, normal.messages);
+  assert.equal(normal.tool_choice, undefined);
+  assert.equal(closing.tool_choice, "none");
+  assert.equal(buildUpstreamBody({ ...payload, memoryTools: false, memoryToolsExhausted: true }).tool_choice, undefined);
+});
+
 test("Claude：断点打在首条 system、当前问题前一条和当前问题", () => {
   const messages = [
     { role: "system", content: "系统提示词" },
