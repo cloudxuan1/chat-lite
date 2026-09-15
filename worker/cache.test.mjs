@@ -960,3 +960,224 @@ await testAsync("陌生 Origin 不回显，仍返回正式域名", async () => {
   assert.strictEqual(response.headers.get("Access-Control-Allow-Origin"), "https://cloudxuan1.github.io");
   assert.strictEqual(response.headers.get("Vary"), null);
 });
+
+// ===== ember 记忆库：工具定义、缓存断点保护、两个 action =====
+
+test("buildUpstreamBody：memoryTools 挂上两个 function tool，且与联网搜索 server tool 共存", () => {
+  const withWeb = buildUpstreamBody({
+    messages: [{ role: "user", content: "hi" }],
+    webSearch: true,
+    memoryTools: true,
+  });
+  assert.deepStrictEqual(
+    withWeb.tools.map((tool) => tool.type === "function" ? tool.function.name : tool.type),
+    ["openrouter:web_search", "memory_search", "memory_recall"],
+  );
+  assert.deepStrictEqual(withWeb.tools[1].function.parameters.required, ["query"]);
+  assert.strictEqual(withWeb.tools[1].function.parameters.properties.limit.maximum, 8);
+
+  const onlyMemory = buildUpstreamBody({ messages: [{ role: "user", content: "hi" }], memoryTools: true });
+  assert.strictEqual(onlyMemory.tools.length, 2);
+
+  const off = buildUpstreamBody({ messages: [{ role: "user", content: "hi" }], memoryTools: false });
+  assert.strictEqual(off.tools, undefined);
+});
+
+test("applyPromptCache：tool 结果消息和空正文的 tool_calls 消息不加断点，正常消息照旧", () => {
+  const messages = [
+    { role: "system", content: "S" },
+    { role: "user", content: "问" },
+    { role: "assistant", content: "", tool_calls: [{ id: "c1", type: "function", function: { name: "memory_search", arguments: "{}" } }] },
+    { role: "tool", tool_call_id: "c1", content: "{\"ok\":true}" },
+  ];
+  const result = applyPromptCache(messages, "anthropic/claude-opus-4.6");
+  assert.deepStrictEqual(cacheControlAt(result[0]), { type: "ephemeral" });
+  assert.strictEqual(result[2].content, "");                 // 空正文不包成空文本块
+  assert.strictEqual(result[2].tool_calls, messages[2].tool_calls);
+  assert.strictEqual(result[3], messages[3]);                // tool 消息原样
+
+  const tailInput = [
+    { role: "user", content: "问" },
+    { role: "assistant", content: "", tool_calls: [] },
+    { role: "tool", tool_call_id: "c1", content: "x" },
+    { role: "user", content: "再问" },
+  ];
+  const tail = applyPromptCache(tailInput, "anthropic/claude-opus-4.6");
+  assert.strictEqual(tail[2], tailInput[2]);                // tool 在 -2 位也不被包装
+  assert.deepStrictEqual(cacheControlAt(tail[3]), { type: "ephemeral" });
+});
+
+await testAsync("memory-briefing：未配置 Secret 回 503 且不调上游", async () => {
+  const originalFetch = globalThis.fetch;
+  let called = false;
+  globalThis.fetch = async () => { called = true; throw new Error("不应调用"); };
+  try {
+    const response = await worker.fetch(
+      new Request("https://worker.example", {
+        method: "POST",
+        body: JSON.stringify({ action: "memory-briefing", password: "correct", topic: "最近怎么样" }),
+      }),
+      { ACCESS_PASSWORD: "correct" },
+    );
+    assert.strictEqual(response.status, 503);
+    assert.strictEqual(called, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+await testAsync("memory-briefing：带 Bearer 调 ember /internal/memory/briefing，只回精简字段", async () => {
+  const originalFetch = globalThis.fetch;
+  let seen = null;
+  globalThis.fetch = async (url, options) => {
+    seen = { url, options };
+    return new Response(JSON.stringify({
+      count: 1,
+      items: [{ id: 7, date: "2026-09-01", content: "她在准备欧洲行", reason: "最近的事", tags: "旅行", extra: "不该带回" }],
+    }), { status: 200 });
+  };
+  try {
+    const response = await worker.fetch(
+      new Request("https://worker.example", {
+        method: "POST",
+        body: JSON.stringify({ action: "memory-briefing", password: "correct", topic: "  下周出发  " }),
+      }),
+      { ACCESS_PASSWORD: "correct", EMBER_URL: "https://ember.example/", EMBER_TOKEN: "read-tok" },
+    );
+    const result = await response.json();
+    assert.strictEqual(response.status, 200);
+    assert.strictEqual(seen.url, "https://ember.example/internal/memory/briefing");
+    assert.strictEqual(seen.options.headers.Authorization, "Bearer read-tok");
+    assert.deepStrictEqual(JSON.parse(seen.options.body), { topic: "下周出发" });
+    assert.deepStrictEqual(result.items, [
+      { id: 7, date: "2026-09-01", content: "她在准备欧洲行", tags: "旅行", reason: "最近的事" },
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+await testAsync("memory-briefing：ember 超时/断网回 502（前端按空小抄处理）", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => { throw new Error("timeout"); };
+  try {
+    const response = await worker.fetch(
+      new Request("https://worker.example", {
+        method: "POST",
+        body: JSON.stringify({ action: "memory-briefing", password: "correct" }),
+      }),
+      { ACCESS_PASSWORD: "correct", EMBER_URL: "https://ember.example", EMBER_TOKEN: "read-tok" },
+    );
+    assert.strictEqual(response.status, 502);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+await testAsync("memory-tool：密码错 401；未配置、未知工具、参数错都回 200 + ok:false 不调上游", async () => {
+  const originalFetch = globalThis.fetch;
+  let called = false;
+  globalThis.fetch = async () => { called = true; throw new Error("不应调用"); };
+  const call = (body, env) => worker.fetch(
+    new Request("https://worker.example", { method: "POST", body: JSON.stringify({ action: "memory-tool", ...body }) }),
+    env,
+  );
+  const configured = { ACCESS_PASSWORD: "correct", EMBER_URL: "https://ember.example", EMBER_TOKEN: "t" };
+  try {
+    assert.strictEqual((await call({ password: "wrong", name: "memory_search", arguments: { query: "x" } }, configured)).status, 401);
+
+    let r = await (await call({ password: "correct", name: "memory_search", arguments: { query: "x" } }, { ACCESS_PASSWORD: "correct" })).json();
+    assert.strictEqual(r.ok, false);
+    assert.match(r.error, /未配置/);
+
+    r = await (await call({ password: "correct", name: "memory_delete", arguments: {} }, configured)).json();
+    assert.strictEqual(r.ok, false);
+
+    r = await (await call({ password: "correct", name: "memory_search", arguments: { query: "   " } }, configured)).json();
+    assert.match(r.error, /query/);
+    r = await (await call({ password: "correct", name: "memory_recall", arguments: { id: 0 } }, configured)).json();
+    assert.match(r.error, /id/);
+    assert.strictEqual(called, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+await testAsync("memory-tool：search 转发到 ember、limit 封顶 8、结果精简；recall 透传全文；404/超时软失败", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  let mode = "ok";
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url, body: JSON.parse(options.body) });
+    if (mode === "timeout") throw new Error("timeout");
+    if (mode === "404") return new Response(JSON.stringify({ detail: "记忆 9 不存在" }), { status: 404 });
+    if (url.endsWith("/search")) {
+      return new Response(JSON.stringify({
+        count: 1,
+        results: [{ id: 3, date: "2026-08-01", content: "目录条目", topic: "t", tags: "", tier: "normal", space: "personal", superseded_by: null }],
+      }), { status: 200 });
+    }
+    return new Response(JSON.stringify({ id: 3, content: "全文", sources: [{ source_ref: "r", quote: "q" }], edges: [] }), { status: 200 });
+  };
+  const call = (body) => worker.fetch(
+    new Request("https://worker.example", { method: "POST", body: JSON.stringify({ action: "memory-tool", password: "correct", ...body }) }),
+    { ACCESS_PASSWORD: "correct", EMBER_URL: "https://ember.example", EMBER_TOKEN: "t" },
+  );
+  try {
+    let r = await (await call({ name: "memory_search", arguments: { query: "欧洲", limit: 50, space: "all" } })).json();
+    assert.deepStrictEqual(calls[0], { url: "https://ember.example/internal/memory/search", body: { query: "欧洲", space: "all", limit: 8 } });
+    assert.deepStrictEqual(r, { ok: true, result: { count: 1, results: [
+      { id: 3, date: "2026-08-01", content: "目录条目", topic: "t", tier: "normal", space: "personal" },
+    ] } });
+
+    r = await (await call({ name: "memory_recall", arguments: { id: "3" } })).json();
+    assert.deepStrictEqual(calls[1].body, { id: 3 });
+    assert.strictEqual(r.ok, true);
+    assert.strictEqual(r.result.content, "全文");
+    assert.strictEqual(r.result.sources[0].quote, "q");
+
+    mode = "404";
+    r = await (await call({ name: "memory_recall", arguments: { id: 9 } })).json();
+    assert.deepStrictEqual(r, { ok: false, error: "记忆 9 不存在" });
+
+    mode = "timeout";
+    r = await (await call({ name: "memory_search", arguments: { query: "x" } })).json();
+    assert.strictEqual(r.ok, false);
+    assert.match(r.error, /超时/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+await testAsync("聊天请求：带 tool_calls / tool 消息的历史通过校验并原样转发，memoryTools 非布尔被拒", async () => {
+  const originalFetch = globalThis.fetch;
+  let forwarded = null;
+  globalThis.fetch = async (url, options) => {
+    forwarded = JSON.parse(options.body);
+    return new Response("data: [DONE]\n", { status: 200, headers: { "Content-Type": "text/event-stream" } });
+  };
+  const messages = [
+    { role: "user", content: "问" },
+    { role: "assistant", content: "", tool_calls: [{ id: "c1", type: "function", function: { name: "memory_search", arguments: "{\"query\":\"x\"}" } }], reasoning_details: [{ type: "reasoning.text", text: "想想", index: 0 }] },
+    { role: "tool", tool_call_id: "c1", content: "{\"ok\":true,\"result\":{\"count\":0,\"results\":[]}}" },
+  ];
+  try {
+    const bad = await worker.fetch(
+      new Request("https://worker.example", { method: "POST", body: JSON.stringify({ password: "correct", messages, memoryTools: "yes" }) }),
+      { ACCESS_PASSWORD: "correct", OPENROUTER_API_KEY: "k" },
+    );
+    assert.strictEqual(bad.status, 400);
+
+    const ok = await worker.fetch(
+      new Request("https://worker.example", { method: "POST", body: JSON.stringify({ password: "correct", messages, memoryTools: true }) }),
+      { ACCESS_PASSWORD: "correct", OPENROUTER_API_KEY: "k" },
+    );
+    assert.strictEqual(ok.status, 200);
+    assert.strictEqual(forwarded.messages[1].tool_calls[0].id, "c1");
+    assert.deepStrictEqual(forwarded.messages[1].reasoning_details, messages[1].reasoning_details);
+    assert.strictEqual(forwarded.messages[2].role, "tool");
+    assert.strictEqual(forwarded.tools.length, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

@@ -43,6 +43,51 @@ const MAX_IMAGES_PER_MESSAGE = 8;
 const MAX_IMAGE_BYTES_PER_MESSAGE = 6 * 1024 * 1024;
 const IMAGE_DATA_URL_PATTERN = /^data:image\/(?:png|jpeg|webp|gif);base64,/i;
 
+// ember 记忆库（只读）：Secrets EMBER_URL（根地址，如 https://ember.example.com）+ EMBER_TOKEN（= ember 的 EMBER_READ_TOKEN）。
+// 超时 2 秒、任何失败都软处理：开场小抄拿不到就不带，工具调用失败就把错误说明当结果还给模型，聊天照常。
+const EMBER_TIMEOUT_MS = 2000;
+const MEMORY_QUERY_MAX_CHARS = 500;
+const MEMORY_SPACE_MAX_CHARS = 40;
+const MEMORY_LIMIT_MAX = 8;
+// 挂给模型的两个 function tool（OpenAI 格式，OpenRouter 通吃）。说明文字就是模型的使用说明书，改行为要同步改。
+export const MEMORY_TOOLS = [
+  {
+    type: "function",
+    function: {
+      name: "memory_search",
+      description: [
+        "搜索用户的长期记忆库（语义 + 关键词），返回目录条目（短内容 + id），不含全文。",
+        "用户提到过去的事、人物、约定、偏好、近况时先调用；用自然的词直接搜即可。",
+        "不传 space 只搜个人层（关系与个人）；聊项目/技术话题显式传对应空间名；要跨全库传 \"all\"。",
+        "需要某条的完整内容和来源时再用 memory_recall(id)。",
+      ].join(""),
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "要搜的内容，自然语言即可" },
+          space: { type: "string", description: "记忆空间；不传 = personal，\"all\" = 全库" },
+          limit: { type: "integer", minimum: 1, maximum: MEMORY_LIMIT_MAX, description: "最多返回几条，默认 8" },
+        },
+        required: ["query"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "memory_recall",
+      description: "按 id 取一条记忆的完整内容、来源片段和关系边（边自带对方记忆的一行摘要）。",
+      parameters: {
+        type: "object",
+        properties: {
+          id: { type: "integer", minimum: 1, description: "memory_search 返回的记忆 id" },
+        },
+        required: ["id"],
+      },
+    },
+  },
+];
+
 export default {
   async fetch(request, env) {
     return applyCorsOrigin(await handleRequest(request, env), request);
@@ -81,6 +126,12 @@ async function handleRequest(request, env) {
     if (payload.action === "title") {
       return generateTitle(payload, env);
     }
+    if (payload.action === "memory-briefing") {
+      return memoryBriefing(payload, env);
+    }
+    if (payload.action === "memory-tool") {
+      return memoryTool(payload, env);
+    }
 
     if (!Array.isArray(payload.messages) || payload.messages.length === 0) {
       return json({ error: "messages 必须是非空数组" }, 400);
@@ -116,6 +167,9 @@ async function handleRequest(request, env) {
     if (!optionalIntegerInRange(payload.webSearchMaxResults, 1, WEB_SEARCH_MAX_RESULTS)) {
       return json({ error: `webSearchMaxResults 必须是 1 到 ${WEB_SEARCH_MAX_RESULTS} 的整数` }, 400);
     }
+    if (payload.memoryTools !== undefined && typeof payload.memoryTools !== "boolean") {
+      return json({ error: "memoryTools 必须是布尔值" }, 400);
+    }
     const imageValidationError = validateImageMessages(payload.messages);
     if (imageValidationError) {
       return json({ error: imageValidationError }, 400);
@@ -145,6 +199,136 @@ async function handleRequest(request, env) {
 
     return new Response(upstream.body, { status: upstream.status, headers });
   }
+}
+
+// ---- ember 记忆库 ----
+
+function emberConfigured(env) {
+  return typeof env.EMBER_URL === "string" && env.EMBER_URL.trim() !== ""
+    && typeof env.EMBER_TOKEN === "string" && env.EMBER_TOKEN !== "";
+}
+
+// 调 ember 的只读接口；返回 { status, data } 或抛错（超时/断网）。
+async function emberPost(env, path, body) {
+  const base = env.EMBER_URL.trim().replace(/\/+$/, "");
+  const requestOptions = {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${env.EMBER_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  };
+  if (typeof globalThis.AbortSignal?.timeout === "function") {
+    requestOptions.signal = globalThis.AbortSignal.timeout(EMBER_TIMEOUT_MS);
+  }
+  const upstream = await fetch(`${base}/internal/memory/${path}`, requestOptions);
+  let data = null;
+  try {
+    data = await upstream.json();
+  } catch {
+    data = null;
+  }
+  return { status: upstream.status, data };
+}
+
+// 只把模型需要的字段带回来，控制体积（目录条目本来就短）。
+function compactMemoryItem(item) {
+  if (!item || typeof item !== "object") return null;
+  const out = {};
+  for (const key of ["id", "date", "content", "topic", "tags", "tier", "space", "reason", "interval_status", "superseded_by", "start_date", "end_date"]) {
+    if (item[key] !== undefined && item[key] !== null && item[key] !== "") out[key] = item[key];
+  }
+  return typeof out.id === "number" && typeof out.content === "string" ? out : null;
+}
+
+// 开场小抄：新会话第一句话时前端调一次，拿不到就不带（前端按任何非 200 处理成空）。
+export async function memoryBriefing(payload, env) {
+  if (!emberConfigured(env)) {
+    return json({ error: "记忆库未配置" }, 503);
+  }
+  if (payload.topic !== undefined && typeof payload.topic !== "string") {
+    return json({ error: "topic 必须是字符串" }, 400);
+  }
+  const topic = typeof payload.topic === "string"
+    ? Array.from(payload.topic.trim()).slice(0, MEMORY_QUERY_MAX_CHARS).join("")
+    : "";
+  let upstream;
+  try {
+    upstream = await emberPost(env, "briefing", topic ? { topic } : {});
+  } catch {
+    return json({ error: "记忆库连接失败或超时" }, 502);
+  }
+  if (upstream.status !== 200 || !Array.isArray(upstream.data?.items)) {
+    return json({ error: `记忆库返回 ${upstream.status}` }, 502);
+  }
+  return json({ items: upstream.data.items.map(compactMemoryItem).filter(Boolean) });
+}
+
+// 模型调用的工具由前端转到这里代执行。参数错误、未配置、超时都回 200 + ok:false，
+// 错误说明会当作工具结果还给模型，让它知道这次没查到、可以换法子或直接回答。
+export async function memoryTool(payload, env) {
+  const name = payload.name;
+  const args = payload.arguments && typeof payload.arguments === "object" && !Array.isArray(payload.arguments)
+    ? payload.arguments
+    : {};
+  if (name !== "memory_search" && name !== "memory_recall") {
+    return json({ ok: false, error: `没有叫 ${String(name)} 的工具` });
+  }
+  if (!emberConfigured(env)) {
+    return json({ ok: false, error: "记忆库未配置，这次查不了，请直接回答" });
+  }
+
+  let path;
+  let body;
+  if (name === "memory_search") {
+    const query = typeof args.query === "string" ? args.query.trim() : "";
+    if (!query) return json({ ok: false, error: "参数错误：query 不能为空" });
+    body = { query: Array.from(query).slice(0, MEMORY_QUERY_MAX_CHARS).join("") };
+    if (args.space !== undefined && args.space !== null && args.space !== "") {
+      if (typeof args.space !== "string" || Array.from(args.space).length > MEMORY_SPACE_MAX_CHARS) {
+        return json({ ok: false, error: "参数错误：space 必须是不超过 40 字的字符串" });
+      }
+      body.space = args.space;
+    }
+    if (args.limit !== undefined && args.limit !== null) {
+      if (!Number.isSafeInteger(args.limit) || args.limit < 1) {
+        return json({ ok: false, error: `参数错误：limit 必须是 1 到 ${MEMORY_LIMIT_MAX} 的整数` });
+      }
+      body.limit = Math.min(args.limit, MEMORY_LIMIT_MAX);
+    }
+    path = "search";
+  } else {
+    const id = typeof args.id === "string" && /^\d+$/.test(args.id) ? Number(args.id) : args.id;
+    if (!Number.isSafeInteger(id) || id < 1) {
+      return json({ ok: false, error: "参数错误：id 必须是正整数" });
+    }
+    body = { id };
+    path = "recall";
+  }
+
+  let upstream;
+  try {
+    upstream = await emberPost(env, path, body);
+  } catch {
+    return json({ ok: false, error: "记忆库连接失败或超时（2 秒），这次查不了" });
+  }
+  if (upstream.status === 404) {
+    return json({ ok: false, error: `记忆 ${body.id} 不存在` });
+  }
+  if (upstream.status === 401 || upstream.status === 503) {
+    return json({ ok: false, error: "记忆库拒绝了这次查询（钥匙或配置问题），请直接回答" });
+  }
+  if (upstream.status !== 200 || !upstream.data || typeof upstream.data !== "object") {
+    return json({ ok: false, error: `记忆库返回 ${upstream.status}，这次查不了` });
+  }
+  if (name === "memory_search") {
+    const results = Array.isArray(upstream.data.results)
+      ? upstream.data.results.map(compactMemoryItem).filter(Boolean)
+      : [];
+    return json({ ok: true, result: { count: results.length, results } });
+  }
+  return json({ ok: true, result: upstream.data });
 }
 
 async function generateTitle(payload, env) {
@@ -310,6 +494,9 @@ export function buildUpstreamBody(payload) {
     if (Object.keys(parameters).length) tool.parameters = parameters;
     body.tools = [tool];
   }
+  if (payload.memoryTools) {
+    body.tools = [...(body.tools || []), ...MEMORY_TOOLS];
+  }
   if (payload.session_id !== undefined) {
     body.session_id = payload.session_id;
   }
@@ -385,7 +572,9 @@ export function applyPromptCache(messages, model) {
   if (lastIndex >= 0) cacheIndexes.add(lastIndex);
 
   return messages.map((msg, i) => {
-    if (!cacheIndexes.has(i)) {
+    // 工具结果消息（role: tool）和只带 tool_calls 的空正文消息不打断点：
+    // 空文本块会被 Anthropic 拒绝，tool 结果块加 cache_control 经 OpenRouter 转译不保证被接受。
+    if (!cacheIndexes.has(i) || msg.role === "tool") {
       return msg;
     }
     const content = addCacheControl(msg.content);
@@ -399,6 +588,7 @@ export function applyPromptCache(messages, model) {
 
 function addCacheControl(content) {
   if (typeof content === "string") {
+    if (content.length === 0) return content;
     return [
       {
         type: "text",
