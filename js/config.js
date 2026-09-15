@@ -26,6 +26,11 @@ const WEB_KEY = "ember_web";
 const WEB_MAX_USES_KEY = "ember_web_max_uses";
 const WEB_MAX_RESULTS_KEY = "ember_web_max_results";
 const IMAGE_QUALITY_KEY = "ember_image_quality";
+// 记忆库（js/memory.js）：总开关键（"1" 开，默认关）、一次回复里最多几轮工具调用、开场小抄存进消息的字符上限、允许的工具名
+const MEMORY_KEY = "ember_memory";
+const MEMORY_MAX_TOOL_ROUNDS = 6;
+const MEMORY_CONTEXT_MAX_CHARS = 6000;
+const MEMORY_TOOL_NAMES = new Set(["memory_search", "memory_recall"]);
 const SWIPE_ACTIONS_KEY = "ember_swipe_actions";  // 会话行左滑/右滑绑定的动作 { left, right }
 const SWIPE_ACTION_OPTIONS = ["move", "delete", "pin", "rename", "none"];
 // 文件夹色块：马卡龙 10 色（淡底 + 同色系深一档的线条）；没选过的文件夹按 id 哈希取一个

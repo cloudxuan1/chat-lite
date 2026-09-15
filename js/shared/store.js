@@ -16,6 +16,7 @@ let userDisplayName = normalizeDisplayName(localStorage.getItem(USER_NAME_KEY), 
 let assistantDisplayName = normalizeDisplayName(localStorage.getItem(ASSISTANT_NAME_KEY), "助手");
 let exportFileName = normalizeExportFileName(localStorage.getItem(EXPORT_FILE_NAME_KEY));
 let webSearchEnabled = localStorage.getItem(WEB_KEY) !== "0";
+let memoryEnabled = localStorage.getItem(MEMORY_KEY) === "1";   // 记忆库：默认关
 let webSearchMaxUses = loadBoundedInteger(WEB_MAX_USES_KEY, 1, 30);
 let webSearchMaxResults = loadBoundedInteger(WEB_MAX_RESULTS_KEY, 1, 25);
 let imageQuality = normalizeImageQuality(localStorage.getItem(IMAGE_QUALITY_KEY));

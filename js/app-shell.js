@@ -62,9 +62,11 @@ function renderActiveConversation() {
   if (!conversation.messages.length) {
     messagesEl.appendChild(hintEl);
   } else {
-    conversation.messages.forEach((item, index) =>
-      addBubble(item.role, item.content, item.attachments || [], conversation.id, index)
-    );
+    conversation.messages.forEach((item, index) => {
+      if (item.role === "assistant" && item.steps?.length) appendMemoryStepsTrace(item.steps);
+      addBubble(item.role, item.content, item.attachments || [], conversation.id, index);
+      if (item.role === "user" && item.memoryContext) appendMemoryBriefingTrace(item.memoryContext);
+    });
   }
   updateConversationActionState();
 }
@@ -77,6 +79,7 @@ function anySettingsScreenOpen() {
     promptScreen.classList.contains("is-open") ||
     identityScreen.classList.contains("is-open") ||
     webSettingsScreen.classList.contains("is-open") ||
+    memorySettingsScreen.classList.contains("is-open") ||
     imageSettingsScreen.classList.contains("is-open");
 }
 

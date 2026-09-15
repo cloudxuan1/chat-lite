@@ -132,6 +132,8 @@ function updateTopbar() {
   renderEffortOptions(quickEffortOptions, reasoningEffort, model, setQuickEffort);
   webToggle.setAttribute("aria-pressed", String(webSearchEnabled));
   webState.textContent = webSearchEnabled ? "开" : "关";
+  memoryToggle.setAttribute("aria-pressed", String(memoryEnabled));
+  memoryState.textContent = memoryEnabled ? "开" : "关";
 }
 
 function setQuickEffort(value) {
@@ -209,6 +211,9 @@ function updateToolSummaries() {
   settingsWebSummary.textContent = webSearchEnabled
     ? `开启 · ${searchDetails.join(" · ") || "自动"}`
     : "关闭";
+  settingsMemorySummary.textContent = memoryEnabled ? "开启 · 开场小抄 + 模型按需查" : "关闭";
+  memorySettingsToggle.setAttribute("aria-pressed", String(memoryEnabled));
+  memorySettingsState.textContent = memoryEnabled ? "开" : "关";
   settingsImageSummary.textContent = `最多 8 张 · ${
     draftImageQuality === "original" ? "保留原图" : "自动压缩"
   }`;
@@ -628,6 +633,22 @@ function closeWebSettingsScreen({ instant = false } = {}) {
   settingsScreen.inert = false;
   updateSettingsDirty();
   settingsWebOpen.focus();
+}
+
+function openMemorySettingsScreen() {
+  settingsScreen.inert = true;
+  memorySettingsScreen.classList.add("is-open");
+  memorySettingsScreen.setAttribute("aria-hidden", "false");
+  memorySettingsBack.focus();
+}
+
+function closeMemorySettingsScreen({ instant = false } = {}) {
+  if (instant) skipPanelMotionOnce(memorySettingsScreen);
+  memorySettingsScreen.classList.remove("is-open");
+  memorySettingsScreen.setAttribute("aria-hidden", "true");
+  settingsScreen.inert = false;
+  updateSettingsDirty();
+  settingsMemoryOpen.focus();
 }
 
 function openImageSettingsScreen() {

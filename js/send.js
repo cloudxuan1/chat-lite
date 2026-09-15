@@ -67,6 +67,17 @@ async function send() {
   if (shouldGenerateTitle && text) {
     void requestConversationTitle(requestConversationId, text);
   }
+  // 记忆库开着时，新会话第一句先去拿开场小抄，存进这条用户消息（memoryContext）再发；拿不到就不带
+  if (memoryEnabled && shouldGenerateTitle) {
+    const memoryContext = await requestMemoryBriefing(text);
+    const briefingDraft = cloneConversationStore();
+    const briefingMessage = conversationById(requestConversationId, briefingDraft)?.messages[requestUserIndex];
+    if (memoryContext && briefingMessage?.role === "user" && briefingMessage.content === text) {
+      briefingMessage.memoryContext = memoryContext;
+      persistConversationStore(briefingDraft, { keepInMemoryOnFailure: true });
+      if (conversationStore.activeId === requestConversationId) appendMemoryBriefingTrace(memoryContext);
+    }
+  }
   await streamAssistantReply({
     conversationId: requestConversationId,
     sessionId: requestSessionId,
@@ -123,6 +134,15 @@ async function streamAssistantReply({ conversationId, sessionId, model, effort, 
     if (conversationStore.activeId === conversationId) scrollToBottom();
   };
 
+  // 记忆工具：模型要查记忆时，前端代执行再把结果回给模型，中间消息攒在 steps 里随最终回复落盘
+  const useMemoryTools = memoryEnabled;
+  const steps = [];
+  let memoryTrace = null;
+  let toolRounds = 0;
+  let full = "";
+  const annotations = [];
+  let usage = null;
+
   try {
     const storedConversation = conversationById(conversationId);
     if (!storedConversation) throw new Error("当前会话已不存在");
@@ -133,57 +153,89 @@ async function streamAssistantReply({ conversationId, sessionId, model, effort, 
         : storedConversation.messages,
     );
     const requestSystemPrompt = effectiveSystemPrompt(storedConversation);
-    const requestMessages = requestSystemPrompt
+    const baseMessages = requestSystemPrompt
       ? [{ role: "system", content: requestSystemPrompt }, ...history]
       : history;
-    const res = await fetch(WORKER_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        messages: requestMessages,
-        model,
-        password: accessPw,
-        reasoningEffort: effort,
-        session_id: sessionId,
-        webSearch: webSearchEnabled,
-        ...(webSearchMaxUses === null ? {} : { webSearchMaxUses }),
-        ...(webSearchMaxResults === null ? {} : { webSearchMaxResults }),
-        ...(maxCompletionTokens === null ? {} : { maxCompletionTokens }),
-      }),
-    });
 
-    // 密码错误：清掉本地密码，待会弹回密码界面
-    if (res.status === 401) {
-      const e = new Error("访问密码错误");
-      e.code = 401;
-      throw e;
-    }
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`服务返回 ${res.status}：${errText.slice(0, 300)}`);
-    }
-    // 正常应是 SSE 流；若不是，多半是 JSON 错误体
-    if (!(res.headers.get("Content-Type") || "").includes("text/event-stream")) {
-      const data = await res.json().catch(() => null);
-      const msg = data?.error?.message || data?.error || "返回了非流式响应";
-      throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
-    }
+    while (true) {
+      const res = await fetch(WORKER_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: [...baseMessages, ...expandMemorySteps(steps)],
+          model,
+          password: accessPw,
+          reasoningEffort: effort,
+          session_id: sessionId,
+          webSearch: webSearchEnabled,
+          ...(useMemoryTools ? { memoryTools: true } : {}),
+          ...(webSearchMaxUses === null ? {} : { webSearchMaxUses }),
+          ...(webSearchMaxResults === null ? {} : { webSearchMaxResults }),
+          ...(maxCompletionTokens === null ? {} : { maxCompletionTokens }),
+        }),
+      });
 
-    const { full, annotations, usage } = await readStream(res.body, {
-      onReasoning(delta) {
-        if (!reasoningBox) return;
-        reasoningBox.append(delta);
-        if (conversationStore.activeId === conversationId) scrollToBottom();
-      },
-      onContent(delta) {
-        bubble.classList.remove("typing");
-        streamed += delta;
-        if (!renderQueued) {
-          renderQueued = true;
-          requestAnimationFrame(renderStreamed);
-        }
-      },
-    });
+      // 密码错误：清掉本地密码，待会弹回密码界面
+      if (res.status === 401) {
+        const e = new Error("访问密码错误");
+        e.code = 401;
+        throw e;
+      }
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`服务返回 ${res.status}：${errText.slice(0, 300)}`);
+      }
+      // 正常应是 SSE 流；若不是，多半是 JSON 错误体
+      if (!(res.headers.get("Content-Type") || "").includes("text/event-stream")) {
+        const data = await res.json().catch(() => null);
+        const msg = data?.error?.message || data?.error || "返回了非流式响应";
+        throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+      }
+
+      const result = await readStream(res.body, {
+        onReasoning(delta) {
+          if (!reasoningBox) return;
+          reasoningBox.append(delta);
+          if (conversationStore.activeId === conversationId) scrollToBottom();
+        },
+        onContent(delta) {
+          bubble.classList.remove("typing");
+          streamed += delta;
+          if (!renderQueued) {
+            renderQueued = true;
+            requestAnimationFrame(renderStreamed);
+          }
+        },
+      });
+      full = result.full;
+      annotations.push(...result.annotations);
+      usage = result.usage;
+
+      // 模型没要查记忆，或工具轮次到顶：这一轮就是最终回复
+      if (!useMemoryTools || !result.toolCalls.length || toolRounds >= MEMORY_MAX_TOOL_ROUNDS) break;
+      toolRounds += 1;
+      steps.push({
+        role: "assistant",
+        content: full,
+        tool_calls: result.toolCalls,
+        ...(result.reasoningDetails.length ? { reasoning_details: result.reasoningDetails } : {}),
+      });
+      if (!memoryTrace && conversationStore.activeId === conversationId) {
+        memoryTrace = buildMemoryTrace(memoryStepsSummary(steps), memoryStepEntries(steps));
+        (bubble.closest(".message-item") || bubble).before(memoryTrace.root);
+      }
+      memoryTrace?.render(memoryStepsSummary(steps), memoryStepEntries(steps));
+      for (const call of result.toolCalls) {
+        const content = await runMemoryTool(call);
+        steps.push({ role: "tool", tool_call_id: call.id, content });
+        memoryTrace?.render(memoryStepsSummary(steps), memoryStepEntries(steps));
+      }
+      // 下一轮从空气泡开始流；这轮的过渡文字已经存进 steps
+      streamed = "";
+      setBubbleText(bubble, "");
+      bubble.classList.add("typing");
+      if (conversationStore.activeId === conversationId) scrollToBottom();
+    }
 
     bubble.classList.remove("typing");
     reasoningBox?.finish();
@@ -197,13 +249,20 @@ async function streamAssistantReply({ conversationId, sessionId, model, effort, 
           const target = completedConversation.messages[assistantIndex];
           if (target?.role === "assistant") {
             const variants = target.variants?.length ? [...target.variants] : [target.content];
+            // 每个版本各自的记忆步骤：老版本沿用已存的（没有 variantSteps 时只有当前版本可能有 steps）
+            const previousSteps = Array.isArray(target.variantSteps)
+              ? [...target.variantSteps]
+              : variants.map((_, i) => (i === (target.activeVariant ?? variants.length - 1) ? target.steps || null : null));
             variants.push(full);
+            previousSteps.push(steps.length ? steps : null);
             target.variants = variants;
             target.activeVariant = variants.length - 1;
             target.content = full;
+            if (steps.length) target.steps = steps; else delete target.steps;
+            if (previousSteps.some(Boolean)) target.variantSteps = previousSteps; else delete target.variantSteps;
           }
         } else {
-          completedConversation.messages.push({ role: "assistant", content: full });
+          completedConversation.messages.push({ role: "assistant", content: full, ...(steps.length ? { steps } : {}) });
         }
         completedConversation.updatedAt = new Date().toISOString();
         persistConversationStore(completedDraft, { keepInMemoryOnFailure: true });

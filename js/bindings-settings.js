@@ -27,11 +27,13 @@ settingsModelOpen.addEventListener("click", openModelScreen);
 settingsPromptOpen.addEventListener("click", openPromptScreen);
 settingsIdentityOpen.addEventListener("click", openIdentityScreen);
 settingsWebOpen.addEventListener("click", openWebSettingsScreen);
+settingsMemoryOpen.addEventListener("click", openMemorySettingsScreen);
 settingsImageOpen.addEventListener("click", openImageSettingsScreen);
 modelBack.addEventListener("click", closeModelScreen);
 promptBack.addEventListener("click", closePromptScreen);
 identityBack.addEventListener("click", closeIdentityScreen);
 webSettingsBack.addEventListener("click", closeWebSettingsScreen);
+memorySettingsBack.addEventListener("click", closeMemorySettingsScreen);
 imageSettingsBack.addEventListener("click", closeImageSettingsScreen);
 modelSearch.addEventListener("input", renderModelList);
 modelsRetry.addEventListener("click", () => void fetchModels({ force: true }));
@@ -108,6 +110,8 @@ webToggle.addEventListener("click", () => {
   localStorage.setItem(WEB_KEY, webSearchEnabled ? "1" : "0");
   updateTopbar();
 });
+memoryToggle.addEventListener("click", () => setMemoryEnabled(!memoryEnabled));
+memorySettingsToggle.addEventListener("click", () => setMemoryEnabled(!memoryEnabled));
 document.addEventListener("click", (event) => {
   if (!event.composedPath().includes(document.querySelector(".model-control"))) {
     closeQuickPanel();
@@ -176,6 +180,8 @@ document.addEventListener("keydown", (event) => {
     closeIdentityScreen({ instant: true });
   } else if (webSettingsScreen.classList.contains("is-open")) {
     closeWebSettingsScreen({ instant: true });
+  } else if (memorySettingsScreen.classList.contains("is-open")) {
+    closeMemorySettingsScreen({ instant: true });
   } else if (imageSettingsScreen.classList.contains("is-open")) {
     closeImageSettingsScreen({ instant: true });
   } else if (settingsScreen.classList.contains("is-open")) {
