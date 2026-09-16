@@ -44,8 +44,10 @@ const MAX_IMAGE_BYTES_PER_MESSAGE = 6 * 1024 * 1024;
 const IMAGE_DATA_URL_PATTERN = /^data:image\/(?:png|jpeg|webp|gif);base64,/i;
 
 // ember 记忆库（只读）：Secrets EMBER_URL（根地址，如 https://ember.example.com）+ EMBER_TOKEN（= ember 的 EMBER_READ_TOKEN）。
-// 超时 2 秒、任何失败都软处理：开场小抄拿不到就不带，工具调用失败就把错误说明当结果还给模型，聊天照常。
-const EMBER_TIMEOUT_MS = 2000;
+// 超时 15 秒（轩 09-16 定：ember 冷启动第一次检索见过 10 秒多，既然已经在查了就宁可慢一点也别失败；
+// 真连不上是秒回失败，超时只在 ember 收到请求但算得慢时才发生）。任何失败都软处理：
+// 开场小抄拿不到就不带，工具调用失败就把错误说明当结果还给模型，聊天照常。
+const EMBER_TIMEOUT_MS = 15000;
 const MEMORY_QUERY_MAX_CHARS = 500;
 const MEMORY_SPACE_MAX_CHARS = 40;
 const MEMORY_LIMIT_MAX = 8;
@@ -314,7 +316,7 @@ export async function memoryTool(payload, env) {
   try {
     upstream = await emberPost(env, path, body);
   } catch {
-    return json({ ok: false, error: "记忆库连接失败或超时（2 秒），这次查不了" });
+    return json({ ok: false, error: "记忆库连接失败或超时（15 秒），这次查不了" });
   }
   if (upstream.status === 404) {
     return json({ ok: false, error: `记忆 ${body.id} 不存在` });
