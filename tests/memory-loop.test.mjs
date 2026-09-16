@@ -11,7 +11,7 @@ async function runLoop({ memory = true, rounds = 6, ignoresStop = false } = {}) 
   const conversation = { messages: [{ role: "user", content: "测试问题" }] };
   const bubble = { classList: { add() {}, remove() {} }, closest: () => null };
   const context = {
-    MEMORY_MAX_TOOL_ROUNDS: 6, memoryEnabled: memory, WORKER_URL: "https://mock.invalid",
+    memoryMaxToolRounds: 6, memoryEnabled: memory, WORKER_URL: "https://mock.invalid",
     accessPw: "mock", webSearchEnabled: false, webSearchMaxUses: null,
     webSearchMaxResults: null, maxCompletionTokens: null,
     conversationStore: { activeId: "other" },

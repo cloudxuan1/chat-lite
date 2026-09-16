@@ -138,6 +138,7 @@ async function streamAssistantReply({ conversationId, sessionId, model, effort, 
 
   // 记忆工具：模型要查记忆时，前端代执行再把结果回给模型，中间消息攒在 steps 里随最终回复落盘
   const useMemoryTools = memoryEnabled;
+  const maxToolRounds = memoryMaxToolRounds;   // 设置项，发送那一刻定下来，中途改设置不影响本次
   const steps = [];
   let memoryTrace = null;
   let toolRounds = 0;
@@ -171,7 +172,7 @@ async function streamAssistantReply({ conversationId, sessionId, model, effort, 
           session_id: sessionId,
           webSearch: webSearchEnabled,
           ...(useMemoryTools ? { memoryTools: true } : {}),
-          ...(useMemoryTools && toolRounds >= MEMORY_MAX_TOOL_ROUNDS ? { memoryToolsExhausted: true } : {}),
+          ...(useMemoryTools && toolRounds >= maxToolRounds ? { memoryToolsExhausted: true } : {}),
           ...(webSearchMaxUses === null ? {} : { webSearchMaxUses }),
           ...(webSearchMaxResults === null ? {} : { webSearchMaxResults }),
           ...(maxCompletionTokens === null ? {} : { maxCompletionTokens }),
@@ -215,7 +216,7 @@ async function streamAssistantReply({ conversationId, sessionId, model, effort, 
       usage = accumulateUsage(usage, result.usage);
 
       // 上限后的请求已用 tool_choice:none 要求收尾；异常供应商仍返回调用时也保留已有查询记录。
-      if (useMemoryTools && toolRounds >= MEMORY_MAX_TOOL_ROUNDS && result.toolCalls.length) {
+      if (useMemoryTools && toolRounds >= maxToolRounds && result.toolCalls.length) {
         full = "本轮记忆查询已达到上限，模型未能完成回答。查询记录已保留，可以缩小问题后重试。";
         break;
       }

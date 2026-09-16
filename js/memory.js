@@ -398,10 +398,36 @@ function syncMemoryStepsTrace(root, message) {
   else root.before(trace.root);
 }
 
-// ---- 开关 ----
+// ---- 开关与轮数（都是即时生效的设置项，不走「保存并返回」）----
 function setMemoryEnabled(value) {
   memoryEnabled = Boolean(value);
   localStorage.setItem(MEMORY_KEY, memoryEnabled ? "1" : "0");
   updateTopbar();
   updateToolSummaries();
+}
+
+// 输入框里的值合法就立刻存；不合法只显示提示、不改已存的值
+function applyMemoryMaxRoundsInput() {
+  const raw = memoryMaxRoundsInput.value.trim();
+  const message = raw ? boundedIntegerValidationMessage(raw, MEMORY_MAX_TOOL_ROUNDS_MIN, MEMORY_MAX_TOOL_ROUNDS_MAX) : "";
+  memoryMaxRoundsError.textContent = message ? `请输入 ${MEMORY_MAX_TOOL_ROUNDS_MIN} 到 ${MEMORY_MAX_TOOL_ROUNDS_MAX} 的整数。` : "";
+  memoryMaxRoundsInput.setAttribute("aria-invalid", String(Boolean(message)));
+  if (!raw || message) return;
+  memoryMaxToolRounds = Number(raw);
+  localStorage.setItem(MEMORY_MAX_ROUNDS_KEY, String(memoryMaxToolRounds));
+  updateToolSummaries();
+}
+
+// 失焦时空着或非法就回显当前有效值
+function restoreMemoryMaxRoundsInput() {
+  if (memoryMaxRoundsInput.value.trim() === String(memoryMaxToolRounds)) return;
+  memoryMaxRoundsInput.value = String(memoryMaxToolRounds);
+  memoryMaxRoundsError.textContent = "";
+  memoryMaxRoundsInput.setAttribute("aria-invalid", "false");
+}
+
+function stepMemoryMaxRounds(direction) {
+  const next = Math.min(MEMORY_MAX_TOOL_ROUNDS_MAX, Math.max(MEMORY_MAX_TOOL_ROUNDS_MIN, memoryMaxToolRounds + direction));
+  memoryMaxRoundsInput.value = String(next);
+  applyMemoryMaxRoundsInput();
 }

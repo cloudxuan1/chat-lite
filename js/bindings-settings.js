@@ -112,6 +112,15 @@ webToggle.addEventListener("click", () => {
 });
 memoryToggle.addEventListener("click", () => setMemoryEnabled(!memoryEnabled));
 memorySettingsToggle.addEventListener("click", () => setMemoryEnabled(!memoryEnabled));
+memoryMaxRoundsInput.addEventListener("input", applyMemoryMaxRoundsInput);
+memoryMaxRoundsInput.addEventListener("blur", restoreMemoryMaxRoundsInput);
+memoryMaxRoundsInput.addEventListener("keydown", (event) => {
+  if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+  event.preventDefault();
+  stepMemoryMaxRounds(event.key === "ArrowUp" ? 1 : -1);
+});
+memoryMaxRoundsDown.addEventListener("click", () => stepMemoryMaxRounds(-1));
+memoryMaxRoundsUp.addEventListener("click", () => stepMemoryMaxRounds(1));
 document.addEventListener("click", (event) => {
   if (!event.composedPath().includes(document.querySelector(".model-control"))) {
     closeQuickPanel();

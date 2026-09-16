@@ -455,6 +455,22 @@
             </button>
             <p class="settings-note">开着时：新会话第一句自动带一份「开场小抄」（最近的事、没做完的事）；之后模型需要才自己去搜记忆或取全文，每次最多 8 条。查了什么会显示在回复上方，可点开看。</p>
           </div>
+          <div class="tool-setting">
+            <div class="tool-setting-row">
+              <label class="settings-card-label" for="memory-max-rounds">每次回复最多查几轮</label>
+              <span class="setting-number-controls">
+                <input class="setting-number-input" id="memory-max-rounds" type="number" min="1" max="20" step="1" inputmode="numeric" aria-describedby="memory-max-rounds-note memory-max-rounds-error" />
+                <button class="token-step" id="memory-max-rounds-down" type="button" aria-label="减少一轮">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg>
+                </button>
+                <button class="token-step" id="memory-max-rounds-up" type="button" aria-label="增加一轮">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 14 5-5 5 5"/></svg>
+                </button>
+              </span>
+            </div>
+            <p class="settings-note" id="memory-max-rounds-note">模型每查一轮都要把整段对话重发一次给它，轮数越多越贵也越慢；到顶后会要求它用已有结果直接回答。默认 6，1–20。</p>
+            <output class="tool-setting-error" id="memory-max-rounds-error"></output>
+          </div>
         </div>
         <p class="settings-note">记忆库连不上或 15 秒没回应就不带记忆照常聊（刚重启过的记忆库第一次查会慢几秒）。小抄和查询结果会跟聊天记录一起存在本机，导出的 Markdown 不含它们。不需要记忆的会话，开始前先关掉这个开关。开关立即生效，不用保存。</p>
       </div>
