@@ -18,6 +18,7 @@
 <link rel="stylesheet" href="css/markdown.css" />
 <link rel="stylesheet" href="css/composer.css" />
 <link rel="stylesheet" href="css/settings.css" />
+<link rel="stylesheet" href="css/memory.css" />
 <link rel="stylesheet" href="css/gate.css" />
 </head>
 <body>
@@ -74,6 +75,10 @@
         <button class="quick-row" id="web-toggle" type="button" aria-pressed="true">
           <span>联网搜索</span>
           <span class="quick-state" id="web-state">开</span>
+        </button>
+        <button class="quick-row" id="memory-toggle" type="button" aria-pressed="false">
+          <span>记忆库</span>
+          <span class="quick-state" id="memory-state">关</span>
         </button>
         <button class="quick-row" id="quick-settings" type="button">
           <span>完整设置</span>
@@ -162,6 +167,16 @@
               <span class="settings-nav-copy">
                 <strong class="settings-nav-title">联网搜索</strong>
                 <span class="settings-nav-summary" id="settings-web-summary">开启 · 自动</span>
+              </span>
+              <svg class="settings-nav-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+            </button>
+            <button class="settings-nav-row" id="settings-memory-open" type="button">
+              <span class="settings-nav-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M6.5 3H19v18H6.5A2.5 2.5 0 0 1 4 18.5v-13A2.5 2.5 0 0 1 6.5 3Z"></path><path d="M4 17.5A2.5 2.5 0 0 1 6.5 15H19"></path><path d="M9 7.5h6M9 10.5h4"></path></svg>
+              </span>
+              <span class="settings-nav-copy">
+                <strong class="settings-nav-title">记忆库</strong>
+                <span class="settings-nav-summary" id="settings-memory-summary">关闭</span>
               </span>
               <svg class="settings-nav-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
             </button>
@@ -422,6 +437,46 @@
     </div>
   </section>
 
+  <section class="settings-screen settings-child-screen" id="memory-settings-screen" role="dialog" aria-modal="true" aria-hidden="true" aria-label="设置记忆库">
+    <header class="settings-header">
+      <button class="settings-back" id="memory-settings-back" type="button" aria-label="返回设置">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+      </button>
+      <h2>记忆库</h2>
+      <span aria-hidden="true"></span>
+    </header>
+    <div class="settings-scroll">
+      <div class="settings-content tool-page-content">
+        <div class="settings-card tool-settings-card">
+          <div class="tool-setting">
+            <button class="quick-row memory-settings-row" id="memory-settings-toggle" type="button" aria-pressed="false">
+              <span>接记忆库（ember）</span>
+              <span class="quick-state" id="memory-settings-state">关</span>
+            </button>
+            <p class="settings-note">开着时：新会话第一句自动带一份「开场小抄」（最近的事、没做完的事）；之后模型需要才自己去搜记忆或取全文，每次最多 8 条。查了什么会显示在回复上方，可点开看。</p>
+          </div>
+          <div class="tool-setting">
+            <div class="tool-setting-row">
+              <label class="settings-card-label" for="memory-max-rounds">每次回复最多查几轮</label>
+              <span class="setting-number-controls">
+                <input class="setting-number-input" id="memory-max-rounds" type="number" min="1" max="20" step="1" inputmode="numeric" aria-describedby="memory-max-rounds-note memory-max-rounds-error" />
+                <button class="token-step" id="memory-max-rounds-down" type="button" aria-label="减少一轮">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg>
+                </button>
+                <button class="token-step" id="memory-max-rounds-up" type="button" aria-label="增加一轮">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 14 5-5 5 5"/></svg>
+                </button>
+              </span>
+            </div>
+            <p class="settings-note" id="memory-max-rounds-note">模型每查一轮都要把整段对话重发一次给它，轮数越多越贵也越慢；到顶后会要求它用已有结果直接回答。默认 6，1–20。</p>
+            <output class="tool-setting-error" id="memory-max-rounds-error"></output>
+          </div>
+        </div>
+        <p class="settings-note">记忆库连不上或 15 秒没回应就不带记忆照常聊（刚重启过的记忆库第一次查会慢几秒）。小抄和查询结果会跟聊天记录一起存在本机，导出的 Markdown 不含它们。不需要记忆的会话，开始前先关掉这个开关。开关立即生效，不用保存。</p>
+      </div>
+    </div>
+  </section>
+
   <section class="settings-screen settings-child-screen" id="image-settings-screen" role="dialog" aria-modal="true" aria-hidden="true" aria-label="设置图片发送">
     <header class="settings-header">
       <button class="settings-back" id="image-settings-back" type="button" aria-label="返回设置">
@@ -507,6 +562,7 @@
 <script src="js/backup.js"></script>
 <script src="js/images.js"></script>
 <script src="js/stream.js"></script>
+<script src="js/memory.js"></script>
 <script src="js/send.js"></script>
 <script src="js/shared/store.js"></script>
 <script src="js/swipe.js"></script>

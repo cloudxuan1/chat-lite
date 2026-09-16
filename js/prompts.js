@@ -340,11 +340,23 @@ function normalizeStoredMessages(items) {
           variants.length - 1,
         )
       : 0;
+    // 记忆库（js/memory.js）：用户消息可带开场小抄 memoryContext；助手消息可带隐藏的工具调用步骤 steps，
+    // 有 reroll 版本时 variantSteps 与 variants 等长、steps 始终等于当前版本那份
+    const memoryContext = item.role === "user" ? normalizeMemoryContext(item.memoryContext) : "";
+    const variantSteps = item.role === "assistant" && hasVariants
+      ? normalizeVariantSteps(item.variantSteps, variants.length)
+      : null;
+    const steps = item.role === "assistant"
+      ? (variantSteps ? variantSteps[activeVariant] || [] : normalizeMemorySteps(item.steps))
+      : [];
     return {
       role: item.role,
       content: hasVariants ? variants[activeVariant] : item.content,
       ...(attachments.length ? { attachments } : {}),
+      ...(memoryContext ? { memoryContext } : {}),
       ...(hasVariants ? { variants, activeVariant } : {}),
+      ...(steps.length ? { steps } : {}),
+      ...(variantSteps ? { variantSteps } : {}),
     };
   });
 }
