@@ -5,6 +5,7 @@ let conversationStoreRecoveryRaw = "";
 let conversationStore = loadConversationStore();
 let pending = false;        // 是否正在等回复，防止重复发送
 let accessPw = localStorage.getItem(PW_KEY) || "";  // 访问密码，存在本设备浏览器
+let gateVerifying = false;  // 密码门禁正在向 Worker 验密码，防重复提交
 let currentModel = localStorage.getItem(MODEL_KEY) || DEFAULT_MODEL;
 let favoriteModels = loadFavorites();
 let fetchedModels = loadModelCatalog();
@@ -16,6 +17,8 @@ let userDisplayName = normalizeDisplayName(localStorage.getItem(USER_NAME_KEY), 
 let assistantDisplayName = normalizeDisplayName(localStorage.getItem(ASSISTANT_NAME_KEY), "助手");
 let exportFileName = normalizeExportFileName(localStorage.getItem(EXPORT_FILE_NAME_KEY));
 let webSearchEnabled = localStorage.getItem(WEB_KEY) !== "0";
+let memoryEnabled = localStorage.getItem(MEMORY_KEY) === "1";   // 记忆库：默认关
+let memoryMaxToolRounds = loadBoundedInteger(MEMORY_MAX_ROUNDS_KEY, MEMORY_MAX_TOOL_ROUNDS_MIN, MEMORY_MAX_TOOL_ROUNDS_MAX) ?? MEMORY_MAX_TOOL_ROUNDS;
 let webSearchMaxUses = loadBoundedInteger(WEB_MAX_USES_KEY, 1, 30);
 let webSearchMaxResults = loadBoundedInteger(WEB_MAX_RESULTS_KEY, 1, 25);
 let imageQuality = normalizeImageQuality(localStorage.getItem(IMAGE_QUALITY_KEY));

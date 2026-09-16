@@ -205,6 +205,10 @@ async function persistPendingImages(images) {
 }
 
 async function messageForOpenRouter(item) {
+  return withMemoryContext(await baseMessageForOpenRouter(item), item);
+}
+
+async function baseMessageForOpenRouter(item) {
   const attachments = item.attachments || [];
   if (!attachments.length) return { role: item.role, content: item.content };
   const records = await getImageRecords(attachments);
@@ -230,6 +234,11 @@ async function messageForOpenRouter(item) {
   };
 }
 
+// 助手消息里藏的记忆工具步骤（steps）展开成真实消息、排在最终回复之前，下一轮模型看到的历史和上一轮一致
 async function messagesForOpenRouter(messages) {
-  return Promise.all(messages.map(messageForOpenRouter));
+  const converted = await Promise.all(messages.map(messageForOpenRouter));
+  return messages.flatMap((item, index) => [
+    ...(item.role === "assistant" && item.steps?.length ? expandMemorySteps(item.steps) : []),
+    converted[index],
+  ]);
 }

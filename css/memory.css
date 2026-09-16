@@ -1,0 +1,67 @@
+/* 记忆库：回复上方的「查了记忆」和用户消息下方的「记忆小抄」，样式对齐引用来源（.citations） */
+.memory-trace {
+  align-self: flex-start;
+  max-width: 85%;
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.memory-trace.is-user {
+  align-self: flex-end;
+}
+.memory-trace-toggle {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  max-width: 100%;
+  padding: 0;
+  color: var(--text-muted);
+  background: none;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+}
+.memory-trace-summary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.memory-trace-chevron {
+  flex: none;
+  color: var(--text-muted);
+  transition: transform .18s ease;
+}
+.memory-trace.is-open .memory-trace-chevron {
+  transform: rotate(180deg);
+}
+.memory-trace-list {
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 100%;
+  margin-top: 8px;
+}
+.memory-trace.is-open .memory-trace-list {
+  display: flex;
+}
+.memory-trace-item-title {
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+.memory-trace-item-detail {
+  padding-left: 12px;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+/* 设置子页里的开关行：复用快捷层的 .quick-row，只把左右留白收到卡片内 */
+.memory-settings-row {
+  width: 100%;
+  min-height: 44px;
+  padding: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .memory-trace-chevron {
+    transition: none;
+  }
+}

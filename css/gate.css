@@ -47,6 +47,9 @@
   cursor: pointer;
 }
 .gate-err { font-size: 13px; color: #9a3412; min-height: 16px; }
+.gate-err.is-pending { color: var(--text-muted); }
+.gate-input:disabled,
+.gate-btn:disabled { opacity: .6; cursor: default; }
 
 @media (min-width: 700px) {
   .topbar-actions {

@@ -184,6 +184,17 @@ async function readStream(body, callbacks) {
   let full = "";
   const annotations = [];
   let usage = null;                             // OpenRouter 在最后一个数据块里附带 token 账单
+  const toolCallDeltas = [];                    // 模型要调记忆工具时，参数按 index 分片流过来
+  const reasoningDeltas = [];                   // 回放工具轮次需要把 reasoning_details 原样带回去
+  let finishReason = "";
+  const finish = () => ({
+    full,
+    annotations,
+    usage,
+    toolCalls: finalizeToolCalls(toolCallDeltas),
+    reasoningDetails: finalizeReasoningDetails(reasoningDeltas),
+    finishReason,
+  });
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
@@ -195,12 +206,15 @@ async function readStream(body, callbacks) {
       if (!t || t.startsWith(":")) continue;    // 跳过空行和注释（如 OpenRouter 的心跳）
       if (!t.startsWith("data:")) continue;
       const data = t.slice(5).trim();
-      if (data === "[DONE]") return { full, annotations, usage };
+      if (data === "[DONE]") return finish();
       try {
         const obj = JSON.parse(data);
         if (obj.usage) usage = obj.usage;
         const choice = obj.choices?.[0] || {};
         const delta = choice.delta || choice.message || {};
+        if (typeof choice.finish_reason === "string" && choice.finish_reason) finishReason = choice.finish_reason;
+        mergeToolCallDeltas(toolCallDeltas, delta.tool_calls);
+        mergeReasoningDetails(reasoningDeltas, delta.reasoning_details);
         const reasoning = textFromReasoningDelta(delta);
         if (reasoning) callbacks.onReasoning(reasoning);
         appendAnnotations(
@@ -218,7 +232,7 @@ async function readStream(body, callbacks) {
       } catch { /* 半截 JSON，忽略 */ }
     }
   }
-  return { full, annotations, usage };
+  return finish();
 }
 
 async function requestConversationTitle(conversationId, firstMessage) {

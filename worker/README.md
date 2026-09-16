@@ -8,7 +8,8 @@
 2. 用 Worker Secret 里的 API key 拉取 OpenRouter 模型目录，前端只负责搜索、收藏和选择。
 3. 用 `DEEPSEEK_API_KEY` 调 `deepseek-v4-flash` 为新会话生成自然短标题；中文通常 8–18 字，英文可更长并保留必要标点和空格；关闭 thinking，8 秒超时，失败不影响聊天。
 4. 转发聊天请求：非关闭档位会明确开启并要求返回 reasoning；联网使用 OpenRouter 的 `openrouter:web_search` server tool，并只在用户手动设置时传搜索次数/结果数；同时传递图片、模型、可选最大生成量和每会话独立的 `session_id`。
-5. 给 Claude 的 system、历史尾部和当前问题添加提示词缓存断点，再把流式回复与 usage 原样透传给前端。
+5. 给 Claude 的 system、历史尾部和当前问题添加提示词缓存断点（`role: tool` 消息和空正文不打），再把流式回复与 usage 原样透传给前端。
+6. 记忆库（ember，可选）：Secrets `EMBER_URL`（ember 根地址）+ `EMBER_TOKEN`（ember 的 `EMBER_READ_TOKEN`）。聊天请求带 `memoryTools: true` 时挂 `memory_search` / `memory_recall` 两个 function tool；`action: "memory-briefing"` 拿开场小抄、`action: "memory-tool"` 代执行模型的工具调用。15 秒超时（ember 冷启动会慢），未配置/超时/401 都软失败（小抄为空、工具返回 `ok:false` 说明），聊天照常。
 
 ---
 
@@ -52,8 +53,11 @@ npx wrangler secret put ACCESS_PASSWORD      # 按提示粘贴访问口令
 
 前端会向同一个地址发送三种 POST：
 
+- `{ action: "verify", password }`：只验密码，对了回 `{ ok: true }`，错了同其他请求一样 401；给密码门禁提交时用，不调上游。
 - `{ action: "models", password }`：返回精简后的模型目录。
 - `{ action: "title", password, text }`：只取首条消息前 500 个 Unicode 字符生成短标题；失败时前端保留本地标题。
+- `{ action: "memory-briefing", password, topic? }`：调 ember `/internal/memory/briefing`，返回 `{ items }`（精简字段）；未配置 503、失败 502，前端一律当没有小抄。
+- `{ action: "memory-tool", password, name, arguments }`：`name` 只认 `memory_search` / `memory_recall`，转到 ember `/internal/memory/search|recall`；参数错、未配置、超时、404 都回 200 + `{ ok:false, error }`，成功回 `{ ok:true, result }`。
 - `{ messages, model, password, reasoningEffort, session_id, webSearch, webSearchMaxUses?, webSearchMaxResults?, maxCompletionTokens? }`：发起流式聊天；图片作为 OpenRouter `image_url` 内容块放在 `messages` 中，可选生成上限会转成 `max_completion_tokens`。
 
 ---

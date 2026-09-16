@@ -20,7 +20,8 @@ function extract(pattern) {
 
 const functions = [
   "createSessionId", "createConversationId", "visibleCharacters", "normalizeConversationTitle",
-  "titleFromFirstMessage", "normalizeMessageAttachments", "normalizeStoredMessages", "validStoredDate",
+  "titleFromFirstMessage", "normalizeMessageAttachments", "normalizeStoredMessages",
+  "normalizeMemoryContext", "normalizeMemorySteps", "normalizeVariantSteps", "normalizeToolCalls", "normalizeReasoningDetailsList", "validStoredDate",
   "createConversation", "createFolderId", "normalizeFolderName", "normalizeFolders", "folderById",
   "isRecoverableConversationStore", "preserveCorruptConversationStore", "normalizeConversationStore",
   "loadConversationStore", "cloneConversationStore", "getActiveConversation", "conversationById",
@@ -31,7 +32,7 @@ const functions = [
 ].map((name) => extract(new RegExp(`^(?:async )?function ${name}\\([^]*?^}$`, "gm"))).join("\n");
 const constants = [
   "CONVERSATIONS_KEY", "CORRUPT_CONVERSATIONS_BACKUP_KEY", "CONVERSATION_TITLE_MAX_CHARACTERS",
-  "MAX_IMAGES_PER_MESSAGE", "SUPPORTED_IMAGE_TYPES", "FOLDER_COLORS", "FOLDER_ICONS",
+  "MAX_IMAGES_PER_MESSAGE", "SUPPORTED_IMAGE_TYPES", "MEMORY_CONTEXT_MAX_CHARS", "MEMORY_TOOL_NAMES", "FOLDER_COLORS", "FOLDER_ICONS",
 ].map((name) => extract(new RegExp(`^const ${name} = [^]*?;$`, "gm"))).join("\n");
 const clickListener = extract(/^conversationList\.addEventListener\("click", (?:async )?\(event\) => \{[^]*?^\}\);$/gm);
 const escapeListener = extract(/^document\.addEventListener\("keydown", \(event\) => \{[^]*?^\}\);$/gm);
@@ -151,7 +152,7 @@ function harness(store = fixture()) {
     desktopSidebarMedia: { matches: true }, input: new Element(),
   });
   for (const name of ["folderDetailScreen", "folderScreen", "modelScreen", "promptScreen", "identityScreen",
-    "webSettingsScreen", "imageSettingsScreen", "settingsScreen", "quickPanel"]) context[name] = new Element();
+    "webSettingsScreen", "memorySettingsScreen", "imageSettingsScreen", "settingsScreen", "quickPanel"]) context[name] = new Element();
   vm.runInContext(`${constants}\n${functions}\n${clickListener}\n${escapeListener}`, context);
   const key = vm.runInContext("CONVERSATIONS_KEY", context);
   storage.set(key, JSON.stringify(store));
