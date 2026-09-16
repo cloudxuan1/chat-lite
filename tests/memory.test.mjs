@@ -20,7 +20,7 @@ const functions = [
   "formatMemoryBriefing", "normalizeMemoryContext", "memoryBriefingEntries", "normalizeToolCalls",
   "normalizeReasoningDetailsList", "normalizeMemorySteps", "normalizeVariantSteps", "mergeToolCallDeltas",
   "finalizeToolCalls", "mergeReasoningDetails", "finalizeReasoningDetails", "parseToolArguments",
-  "withMemoryContext", "expandMemorySteps", "memoryStepEntries", "memoryStepsSummary",
+  "withMemoryContext", "expandMemorySteps", "memoryStepEntries", "memoryStepsSummary", "accumulateUsage",
   "normalizeMessageAttachments", "normalizeStoredMessages", "messageForOpenRouter", "baseMessageForOpenRouter",
   "messagesForOpenRouter", "textFromResponseValue", "textFromReasoningDelta", "appendAnnotations", "readStream",
 ].map((name) => extract(new RegExp(`^(?:async )?function ${name}\\([^]*?^}$`, "gm"))).join("\n");
@@ -53,6 +53,9 @@ test("开场小抄：格式固定、带使用说明、超长截断；空列表�
   assert.match(text, /不覆盖系统提示词/);
   assert.match(text, /\n- \[#7 · 2026-09-01 · 最近的事\] 在准备欧洲行\n- \[#8\] 没有日期也行$/);
   deepEq(h.memoryBriefingEntries(text), ["[#7 · 2026-09-01 · 最近的事] 在准备欧洲行", "[#8] 没有日期也行"]);
+  // 内容里的换行/多余空白压成一行，界面拆回条目时条数才对
+  const multiline = h.formatMemoryBriefing([{ id: 1, content: "欧洲行计划：\n- 巴黎 3 天\n- 罗马 2 天" }]);
+  deepEq(h.memoryBriefingEntries(multiline), ["[#1] 欧洲行计划： - 巴黎 3 天 - 罗马 2 天"]);
   const long = h.formatMemoryBriefing([{ id: 1, content: "字".repeat(10000) }]);
   assert.equal(Array.from(long).length, 6000);  // = MEMORY_CONTEXT_MAX_CHARS（VM 里的 const 拿不到）
   assert.equal(h.normalizeMemoryContext(`  ${long}  `), long);
@@ -129,6 +132,11 @@ test("步骤归一化：只认两个工具、必须成对、悬空调用整段�
     { role: "tool", tool_call_id: "c1", content: "x" },
   ]), []);
   deepEq(h.normalizeMemorySteps([good[0]]), [], "没有结果的调用不能回放");
+  deepEq(h.normalizeMemorySteps([
+    { role: "assistant", content: "", tool_calls: [call("c1", "memory_search", { query: "x" })] },
+    { role: "assistant", content: "", tool_calls: [call("c2", "memory_search", { query: "y" })] },
+    { role: "tool", tool_call_id: "c2", content: "{}" },
+  ]), [], "中间悬空的调用也让整段作废");
   deepEq(h.normalizeMemorySteps([good[1], ...good]), good, "先到的孤儿结果被丢掉");
   deepEq(h.normalizeMemorySteps("nope"), []);
 
@@ -175,6 +183,18 @@ test("请求组装：小抄作为第二个文本块跟在原话后，步骤展�
   );
   deepEq(withImages.content.map((block) => block.type), ["text", "text", "image_url"]);
   deepEq(h.expandMemorySteps(undefined), []);
+});
+
+test("账单累加：多轮工具请求的 prompt/cached/写入 token 求和，其它字段取最后一轮", () => {
+  const h = harness();
+  let total = null;
+  total = h.accumulateUsage(total, { prompt_tokens: 1000, completion_tokens: 20, prompt_tokens_details: { cached_tokens: 900, cache_write_tokens: 50 } });
+  total = h.accumulateUsage(total, { prompt_tokens: 1100, completion_tokens: 200, prompt_tokens_details: { cached_tokens: 1000 }, cost: 0.01 });
+  total = h.accumulateUsage(total, null);
+  deepEq(total, {
+    prompt_tokens: 2100, completion_tokens: 220, total_tokens: 0, cost: 0.01,
+    prompt_tokens_details: { cached_tokens: 1900, cache_write_tokens: 50 },
+  });
 });
 
 test("界面摘要：每次调用一行，命中条数 / 取全文 / 失败原因 / 查询中", () => {

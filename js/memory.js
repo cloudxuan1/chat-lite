@@ -11,7 +11,8 @@ function formatMemoryBriefing(items) {
     .filter((item) => item && typeof item === "object" && typeof item.content === "string" && item.content.trim())
     .map((item) => {
       const meta = [item.id !== undefined ? `#${item.id}` : "", item.date || "", item.reason || ""].filter(Boolean).join(" · ");
-      return `- ${meta ? `[${meta}] ` : ""}${item.content.trim()}`;
+      // 一条记忆压成一行：界面按行拆回条目，内容里的换行不能把一条变成好几条
+      return `- ${meta ? `[${meta}] ` : ""}${item.content.replace(/\s+/g, " ").trim()}`;
     });
   if (!lines.length) return "";
   const text = [
@@ -75,6 +76,7 @@ function normalizeMemorySteps(items) {
   for (const item of items) {
     if (!item || typeof item !== "object") continue;
     if (item.role === "assistant") {
+      if (openCalls.size) return [];   // 上一次调用还没结果就又来一轮：回放会被上游拒，整段不可信
       const toolCalls = normalizeToolCalls(item.tool_calls);
       if (!toolCalls.length) continue;
       const reasoning = normalizeReasoningDetailsList(item.reasoning_details);
@@ -355,10 +357,37 @@ function appendMemoryStepsTrace(steps) {
   return trace;
 }
 
+// 找助手气泡前面属于它的「查了记忆」块：中间可能隔着思考块（.reasoning），跳过去找；碰到别的就是没有
+function findMemoryStepsTrace(root) {
+  let node = root?.previousElementSibling;
+  while (node && node.classList.contains("reasoning")) node = node.previousElementSibling;
+  return node?.classList.contains("memory-trace") && !node.classList.contains("is-user") ? node : null;
+}
+
+// 一次回复可能分好几轮请求（每轮工具调用一次），账单要累加，缓存徽章才反映真实花费
+function accumulateUsage(total, usage) {
+  if (!usage || typeof usage !== "object") return total;
+  const sum = (a, b) => (Number(a) || 0) + (Number(b) || 0);
+  const details = usage.prompt_tokens_details || {};
+  const totalDetails = total?.prompt_tokens_details || {};
+  return {
+    ...(total || {}),
+    ...usage,
+    prompt_tokens: sum(total?.prompt_tokens, usage.prompt_tokens),
+    completion_tokens: sum(total?.completion_tokens, usage.completion_tokens),
+    total_tokens: sum(total?.total_tokens, usage.total_tokens),
+    prompt_tokens_details: {
+      ...totalDetails,
+      ...details,
+      cached_tokens: sum(totalDetails.cached_tokens, details.cached_tokens),
+      cache_write_tokens: sum(totalDetails.cache_write_tokens, details.cache_write_tokens),
+    },
+  };
+}
+
 // 切换 reroll 版本后，让气泡前面那条「查了记忆」跟着当前版本走
 function syncMemoryStepsTrace(root, message) {
-  const previous = root.previousElementSibling;
-  const existing = previous?.classList?.contains("memory-trace") && !previous.classList.contains("is-user") ? previous : null;
+  const existing = findMemoryStepsTrace(root);
   const steps = message?.steps || [];
   if (!steps.length) {
     existing?.remove();

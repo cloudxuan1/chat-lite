@@ -1003,6 +1003,7 @@ test("applyPromptCache：tool 结果消息和空正文的 tool_calls 消息不�
   ];
   const result = applyPromptCache(messages, "anthropic/claude-opus-4.6");
   assert.deepStrictEqual(cacheControlAt(result[0]), { type: "ephemeral" });
+  assert.deepStrictEqual(cacheControlAt(result[1]), { type: "ephemeral" });  // 尾部断点往前挪到用户那条
   assert.strictEqual(result[2].content, "");                 // 空正文不包成空文本块
   assert.strictEqual(result[2].tool_calls, messages[2].tool_calls);
   assert.strictEqual(result[3], messages[3]);                // tool 消息原样
@@ -1015,7 +1016,20 @@ test("applyPromptCache：tool 结果消息和空正文的 tool_calls 消息不�
   ];
   const tail = applyPromptCache(tailInput, "anthropic/claude-opus-4.6");
   assert.strictEqual(tail[2], tailInput[2]);                // tool 在 -2 位也不被包装
+  assert.strictEqual(tail[1], tailInput[1]);                // 空正文的 tool_calls 消息原样
   assert.deepStrictEqual(cacheControlAt(tail[3]), { type: "ephemeral" });
+  assert.deepStrictEqual(cacheControlAt(tail[0]), { type: "ephemeral" });  // 第二个尾部断点落到更前面能打的那条
+
+  // 多轮工具后：[system, user, a(空), tool, a(空), tool] → 断点只在 system 和 user，且不越界
+  const rounds = applyPromptCache([
+    { role: "system", content: "S" },
+    { role: "user", content: "问" },
+    { role: "assistant", content: "", tool_calls: [] },
+    { role: "tool", tool_call_id: "c1", content: "x" },
+    { role: "assistant", content: "", tool_calls: [] },
+    { role: "tool", tool_call_id: "c2", content: "y" },
+  ], "anthropic/claude-opus-4.6");
+  assert.deepStrictEqual(rounds.map((m) => Boolean(cacheControlAt(m))), [true, true, false, false, false, false]);
 });
 
 await testAsync("memory-briefing：未配置 Secret 回 503 且不调上游", async () => {
@@ -1137,6 +1151,9 @@ await testAsync("memory-tool：search 转发到 ember、limit 封顶 8、结果�
   try {
     let r = await (await call({ name: "memory_search", arguments: { query: "欧洲", limit: 50, space: "all" } })).json();
     assert.deepStrictEqual(calls[0], { url: "https://ember.example/internal/memory/search", body: { query: "欧洲", space: "all", limit: 8 } });
+    await call({ name: "memory_search", arguments: { query: "欧洲", limit: "5" } });
+    assert.deepStrictEqual(calls[1].body, { query: "欧洲", limit: 5 });   // 字符串数字也认
+    calls.splice(1, 1);
     assert.deepStrictEqual(r, { ok: true, result: { count: 1, results: [
       { id: 3, date: "2026-08-01", content: "目录条目", topic: "t", tier: "normal", space: "personal" },
     ] } });
@@ -1150,6 +1167,8 @@ await testAsync("memory-tool：search 转发到 ember、limit 封顶 8、结果�
     mode = "404";
     r = await (await call({ name: "memory_recall", arguments: { id: 9 } })).json();
     assert.deepStrictEqual(r, { ok: false, error: "记忆 9 不存在" });
+    r = await (await call({ name: "memory_search", arguments: { query: "x" } })).json();
+    assert.deepStrictEqual(r, { ok: false, error: "记忆库返回 404，这次查不了" });   // search 的 404 不冒充"记忆不存在"
 
     mode = "timeout";
     r = await (await call({ name: "memory_search", arguments: { query: "x" } })).json();

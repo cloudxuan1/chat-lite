@@ -119,6 +119,8 @@ async function streamAssistantReply({ conversationId, sessionId, model, effort, 
   const reasoningBox = effort !== "off" ? addReasoningBlock({ webSearch: webSearchEnabled }) : null;
   const bubble = existingBubble || addBubble("assistant", "", [], conversationId, assistantIndex);
   if (existingBubble) {
+    // 旧版本的「查了记忆」块先拆掉，新一轮有查询再重建，不然新旧块叠在一起
+    findMemoryStepsTrace(bubble.closest(".message-item"))?.remove();
     // 思考块从底部挪到被重掷气泡的上方
     if (reasoningBox) bubble.closest(".message-item")?.before(reasoningBox.root);
     bubble.classList.remove("error");
@@ -210,7 +212,7 @@ async function streamAssistantReply({ conversationId, sessionId, model, effort, 
       });
       full = result.full;
       annotations.push(...result.annotations);
-      usage = result.usage;
+      usage = accumulateUsage(usage, result.usage);
 
       // 上限后的请求已用 tool_choice:none 要求收尾；异常供应商仍返回调用时也保留已有查询记录。
       if (useMemoryTools && toolRounds >= MEMORY_MAX_TOOL_ROUNDS && result.toolCalls.length) {

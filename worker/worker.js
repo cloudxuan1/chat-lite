@@ -296,11 +296,13 @@ export async function memoryTool(payload, env) {
       }
       body.space = args.space;
     }
-    if (args.limit !== undefined && args.limit !== null) {
-      if (!Number.isSafeInteger(args.limit) || args.limit < 1) {
+    if (args.limit !== undefined && args.limit !== null && args.limit !== "") {
+      // 模型偶尔会把整数写成 "5"，和 recall 的 id 一样宽容
+      const limit = typeof args.limit === "string" && /^\d+$/.test(args.limit) ? Number(args.limit) : args.limit;
+      if (!Number.isSafeInteger(limit) || limit < 1) {
         return json({ ok: false, error: `参数错误：limit 必须是 1 到 ${MEMORY_LIMIT_MAX} 的整数` });
       }
-      body.limit = Math.min(args.limit, MEMORY_LIMIT_MAX);
+      body.limit = Math.min(limit, MEMORY_LIMIT_MAX);
     }
     path = "search";
   } else {
@@ -318,7 +320,7 @@ export async function memoryTool(payload, env) {
   } catch {
     return json({ ok: false, error: "记忆库连接失败或超时（15 秒），这次查不了" });
   }
-  if (upstream.status === 404) {
+  if (upstream.status === 404 && name === "memory_recall") {
     return json({ ok: false, error: `记忆 ${body.id} 不存在` });
   }
   if (upstream.status === 401 || upstream.status === 503) {
@@ -573,15 +575,19 @@ export function applyPromptCache(messages, model) {
   }
 
   const cacheIndexes = new Set();
-  const lastIndex = messages.length - 1;
   if (messages[0]?.role === "system") cacheIndexes.add(0);
-  if (lastIndex >= 1) cacheIndexes.add(lastIndex - 1);
-  if (lastIndex >= 0) cacheIndexes.add(lastIndex);
+  // 尾部两个断点打在最后两条「能打」的消息上：工具结果消息（role: tool）和只带 tool_calls 的空正文消息不行——
+  // 空文本块会被 Anthropic 拒绝，tool 结果块加 cache_control 经 OpenRouter 转译不保证被接受。
+  // 记忆工具轮次里尾巴正是 [assistant(空, tool_calls), tool]，往前找到用户那条打上，历史才能继续命中缓存。
+  let tailMarks = 0;
+  for (let i = messages.length - 1; i >= 0 && tailMarks < 2; i -= 1) {
+    if (cacheIndexes.has(i) || !canCarryCacheControl(messages[i])) continue;
+    cacheIndexes.add(i);
+    tailMarks += 1;
+  }
 
   return messages.map((msg, i) => {
-    // 工具结果消息（role: tool）和只带 tool_calls 的空正文消息不打断点：
-    // 空文本块会被 Anthropic 拒绝，tool 结果块加 cache_control 经 OpenRouter 转译不保证被接受。
-    if (!cacheIndexes.has(i) || msg.role === "tool") {
+    if (!cacheIndexes.has(i)) {
       return msg;
     }
     const content = addCacheControl(msg.content);
@@ -591,6 +597,12 @@ export function applyPromptCache(messages, model) {
       content,
     };
   });
+}
+
+function canCarryCacheControl(msg) {
+  if (!msg || msg.role === "tool") return false;
+  if (typeof msg.content === "string") return msg.content.length > 0;
+  return Array.isArray(msg.content) && msg.content.some((block) => block?.type === "text" && typeof block.text === "string" && block.text.length > 0);
 }
 
 function addCacheControl(content) {

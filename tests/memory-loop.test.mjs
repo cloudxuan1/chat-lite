@@ -18,6 +18,7 @@ async function runLoop({ memory = true, rounds = 6, ignoresStop = false } = {}) 
     addBubble: () => bubble, setBubbleText: (b, text) => { b.textContent = text; },
     conversationById: () => conversation, messagesForOpenRouter: async (x) => x,
     effectiveSystemPrompt: () => "", expandMemorySteps: (x) => x,
+    accumulateUsage: (total, usage) => usage, findMemoryStepsTrace: () => null,
     fetch: async (_, options) => {
       requests.push(JSON.parse(options.body));
       return { ok: true, status: 200, headers: { get: () => "text/event-stream" }, body: {} };
