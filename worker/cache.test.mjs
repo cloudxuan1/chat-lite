@@ -1211,3 +1211,36 @@ await testAsync("聊天请求：带 tool_calls / tool 消息的历史通过校�
     globalThis.fetch = originalFetch;
   }
 });
+
+await testAsync("verify：密码对回 ok:true 且不调上游，密码错 401", async () => {
+  const originalFetch = globalThis.fetch;
+  let upstreamCalled = false;
+  globalThis.fetch = async () => {
+    upstreamCalled = true;
+    throw new Error("不应调用");
+  };
+  try {
+    const env = { ACCESS_PASSWORD: "correct" };
+    const okResponse = await worker.fetch(
+      new Request("https://worker.example", {
+        method: "POST",
+        body: JSON.stringify({ action: "verify", password: "correct" }),
+      }),
+      env,
+    );
+    assert.strictEqual(okResponse.status, 200);
+    assert.deepStrictEqual(await okResponse.json(), { ok: true });
+
+    const badResponse = await worker.fetch(
+      new Request("https://worker.example", {
+        method: "POST",
+        body: JSON.stringify({ action: "verify", password: "wrong" }),
+      }),
+      env,
+    );
+    assert.strictEqual(badResponse.status, 401);
+    assert.strictEqual(upstreamCalled, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
