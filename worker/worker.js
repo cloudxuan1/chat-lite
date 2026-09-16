@@ -122,6 +122,10 @@ async function handleRequest(request, env) {
       return json({ error: "访问密码错误" }, 401);
     }
 
+    // 门禁只验密码：上面已经校验过，直接回 ok，不碰 OpenRouter。
+    if (payload.action === "verify") {
+      return json({ ok: true });
+    }
     if (payload.action === "models") {
       return fetchModels(env);
     }

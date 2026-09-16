@@ -53,6 +53,7 @@ npx wrangler secret put ACCESS_PASSWORD      # 按提示粘贴访问口令
 
 前端会向同一个地址发送三种 POST：
 
+- `{ action: "verify", password }`：只验密码，对了回 `{ ok: true }`，错了同其他请求一样 401；给密码门禁提交时用，不调上游。
 - `{ action: "models", password }`：返回精简后的模型目录。
 - `{ action: "title", password, text }`：只取首条消息前 500 个 Unicode 字符生成短标题；失败时前端保留本地标题。
 - `{ action: "memory-briefing", password, topic? }`：调 ember `/internal/memory/briefing`，返回 `{ items }`（精简字段）；未配置 503、失败 502，前端一律当没有小抄。

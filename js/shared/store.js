@@ -5,6 +5,7 @@ let conversationStoreRecoveryRaw = "";
 let conversationStore = loadConversationStore();
 let pending = false;        // 是否正在等回复，防止重复发送
 let accessPw = localStorage.getItem(PW_KEY) || "";  // 访问密码，存在本设备浏览器
+let gateVerifying = false;  // 密码门禁正在向 Worker 验密码，防重复提交
 let currentModel = localStorage.getItem(MODEL_KEY) || DEFAULT_MODEL;
 let favoriteModels = loadFavorites();
 let fetchedModels = loadModelCatalog();

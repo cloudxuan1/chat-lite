@@ -121,3 +121,4 @@ const gate = document.getElementById("gate");
 const gateForm = document.getElementById("gate-form");
 const gateInput = document.getElementById("gate-input");
 const gateErr = document.getElementById("gate-err");
+const gateBtn = document.getElementById("gate-btn");
