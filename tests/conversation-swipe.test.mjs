@@ -4,11 +4,14 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import vm from 'node:vm';
 // Production source = the js/ files index.html loads, in order (see tests/source.mjs).
-import { source } from './source.mjs';
+import { source, scripts } from './source.mjs';
 const statePattern = /^let (?:swipeGesture|swipeOpenRow|swipeSwallowClick) = .*$/gm;
 const swipeState = [...source.matchAll(statePattern)].map(match => match[0]).join('\n');
 assert.equal([...source.matchAll(statePattern)].length, 3);
-const swipe = swipeState + '\n' + source.match(/^const SWIPE_ACTION_META[^]*?^  runSwipeAction\(button\);\n\}\);/m)[0].replace(statePattern, '');
+// Read the actual file; the boundary pattern is only for pre-split history.
+const swipeSource = scripts.find(script => script.path === 'js/swipe.js')?.source
+  ?? source.match(/^const SWIPE_ACTION_META[^]*?^  runSwipeAction\(button\);\n\}\);/m)[0];
+const swipe = swipeState + '\n' + swipeSource.replace(statePattern, '');
 const outside = source.match(/^document\.addEventListener\("click", \(event\) => \{\n  if \(!event\.composedPath\(\)[\s\S]*?^\}\);/m)[0];
 class Element {
   constructor(className = '', parent = null) {
