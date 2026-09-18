@@ -1,4 +1,4 @@
-// 会话与文件夹的存档：归一化、读写 localStorage、损坏备份。
+// 会话与文件夹的存档：归一化、读写 IndexedDB（打不开时退回 localStorage）、损坏备份、首次迁移。
 // ===== 会话文件夹：存在会话 store 的 folders 里，会话用 folderId 指向所属文件夹（单层，不嵌套）=====
 function createFolderId() {
   return `f_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -161,40 +161,21 @@ function loadLegacySessionId() {
   return saved && saved.length <= 256 ? saved : createSessionId();
 }
 
-function loadConversationStore() {
-  const stored = localStorage.getItem(CONVERSATIONS_KEY);
-  let mayReplaceStoredValue = !stored;
+// 把一份原始存档（localStorage 里的字符串，或 IndexedDB 记录转成的字符串）解析成可用的 store，不碰存储。
+// corruptRaw 非空 = 原数据有损，覆盖前得先原样留一份；partial = 损了一部分但会话还能救；needsWrite = 解析结果和原数据不一致，该写回。
+function interpretConversationStoreRaw(stored) {
   if (stored) {
     try {
       const parsed = JSON.parse(stored);
       if (isRecoverableConversationStore(parsed)) {
         const normalized = normalizeConversationStore(parsed);
         const isCanonical = JSON.stringify(parsed) === JSON.stringify(normalized);
-        const mayReplaceNormalizedValue = isCanonical ||
-          preserveCorruptConversationStore(stored);
-        if (!isCanonical) {
-          conversationStoreLoadWarning = mayReplaceNormalizedValue
-            ? "检测到部分损坏的会话索引；可恢复会话已保留，原数据已留作本机备份。"
-            : "检测到部分损坏的会话索引；为避免覆盖原数据，本次更改暂不能保存。";
-        }
-        if (mayReplaceNormalizedValue) {
-          try {
-            localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(normalized));
-          } catch {
-            conversationStoreLoadWarning = "本地存储已满；刷新前请先下载或删除旧会话。";
-          }
-        }
-        return normalized;
+        return { store: normalized, corruptRaw: isCanonical ? "" : stored, partial: !isCanonical, needsWrite: !isCanonical };
       }
     } catch {
       // 继续走下方的旧版历史恢复。
     }
-    mayReplaceStoredValue = preserveCorruptConversationStore(stored);
-    conversationStoreLoadWarning = mayReplaceStoredValue
-      ? "检测到损坏的会话索引；旧历史已恢复，原数据已留作本机备份。"
-      : "检测到损坏的会话索引；为避免覆盖原数据，本次更改暂不能保存。";
   }
-
   const migrated = normalizeConversationStore({
     version: 1,
     conversations: [createConversation({
@@ -203,14 +184,107 @@ function loadConversationStore() {
     })],
   });
   migrated.activeId = migrated.conversations[0].id;
-  if (mayReplaceStoredValue) {
+  return { store: migrated, corruptRaw: stored || "", partial: false, needsWrite: true };
+}
+
+function corruptConversationStoreWarning(partial, backedUp) {
+  if (partial) {
+    return backedUp
+      ? "检测到部分损坏的会话索引；可恢复会话已保留，原数据已留作本机备份。"
+      : "检测到部分损坏的会话索引；为避免覆盖原数据，本次更改暂不能保存。";
+  }
+  return backedUp
+    ? "检测到损坏的会话索引；旧历史已恢复，原数据已留作本机备份。"
+    : "检测到损坏的会话索引；为避免覆盖原数据，本次更改暂不能保存。";
+}
+
+// localStorage 老路径（2026-09 之前唯一的路径）：IndexedDB 打不开时的后备，行为原样保留。
+function loadConversationStore() {
+  const stored = localStorage.getItem(CONVERSATIONS_KEY);
+  const result = interpretConversationStoreRaw(stored);
+  let mayWrite = true;
+  if (result.corruptRaw) {
+    mayWrite = preserveCorruptConversationStore(result.corruptRaw);
+    conversationStoreLoadWarning = corruptConversationStoreWarning(result.partial, mayWrite);
+  }
+  if (mayWrite && result.needsWrite) {
     try {
-      localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(migrated));
+      localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(result.store));
     } catch {
-      conversationStoreLoadWarning = "暂时无法保存会话索引；旧版历史仍保留在本机。";
+      conversationStoreLoadWarning = result.partial
+        ? "本地存储已满；刷新前请先下载或删除旧会话。"
+        : "暂时无法保存会话索引；旧版历史仍保留在本机。";
     }
   }
-  return migrated;
+  return result.store;
+}
+
+// ---- IndexedDB 主路径：会话存档存在和图片同一个库的 conversations 表里，一条记录 { id: "store", value: 整份存档 } ----
+async function readConversationStoreRecord() {
+  const db = await openImageDb();
+  try {
+    const transaction = db.transaction(CONVERSATIONS_DB_STORE, "readonly");
+    const done = transactionDone(transaction);
+    const request = transaction.objectStore(CONVERSATIONS_DB_STORE).get(CONVERSATION_STORE_RECORD_ID);
+    const record = await new Promise((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result || null);
+      request.onerror = () => reject(request.error || new Error("读取会话存档失败"));
+    });
+    await done;
+    return record && record.value !== undefined ? record.value : null;
+  } finally {
+    db.close();
+  }
+}
+
+async function writeConversationStoreRecord(id, value) {
+  const db = await openImageDb();
+  try {
+    const transaction = db.transaction(CONVERSATIONS_DB_STORE, "readwrite");
+    const done = transactionDone(transaction);
+    transaction.objectStore(CONVERSATIONS_DB_STORE).put({ id, value });
+    await done;
+  } finally {
+    db.close();
+  }
+}
+
+// 读 IndexedDB 里的存档；没有记录就从 localStorage 老存档（含更早的单会话历史）搬一次，老键留着不删当保险。
+// 打不开/读不了会抛，由 initializeConversationStore 退回 localStorage；写失败只提示，下次保存会再试。
+async function loadConversationStoreFromDb() {
+  const record = await readConversationStoreRecord();
+  const migrating = record === null;
+  const result = interpretConversationStoreRaw(migrating ? localStorage.getItem(CONVERSATIONS_KEY) : JSON.stringify(record));
+  let mayWrite = true;
+  if (result.corruptRaw) {
+    mayWrite = await writeConversationStoreRecord(CONVERSATION_STORE_BACKUP_RECORD_ID, result.corruptRaw).then(() => true, () => false);
+    conversationStoreReadOnly = !mayWrite;
+    conversationStoreLoadWarning = corruptConversationStoreWarning(result.partial, mayWrite);
+  }
+  if (mayWrite && (migrating || result.needsWrite)) {
+    try {
+      await writeConversationStoreRecord(CONVERSATION_STORE_RECORD_ID, result.store);
+    } catch {
+      conversationStoreLoadWarning = "会话存档暂时没能写进本地数据库；改动先留在内存里，刷新前请先下载备份。";
+    }
+  }
+  return result.store;
+}
+
+// 启动时由 init.js 调一次：读完存档才把 conversationStoreReady 置 true（之前聊天区是 inert 的）。
+// IndexedDB 打不开、或被别的标签页占住超时，就退回 localStorage 老路径。
+async function initializeConversationStore() {
+  const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("IndexedDB 打开超时")), CONVERSATION_STORE_OPEN_TIMEOUT_MS));
+  try {
+    conversationStore = await Promise.race([loadConversationStoreFromDb(), timeout]);
+    conversationStoreBackend = "indexeddb";
+  } catch {
+    conversationStoreBackend = "local";
+    conversationStore = loadConversationStore();
+    conversationStoreLoadWarning = conversationStoreLoadWarning || "本地数据库暂时打不开，这次改动只存在浏览器小仓库（5MB）；关掉其它标签页后刷新可恢复。";
+  }
+  conversationStoreReady = true;
+  if (conversationStorePendingWrite) drainConversationStoreWrites();
 }
 
 function cloneConversationStore() {
@@ -227,6 +301,16 @@ function conversationById(conversationId, store = conversationStore) {
 
 function persistConversationStore(nextStore, { keepInMemoryOnFailure = false } = {}) {
   const normalized = normalizeConversationStore(nextStore);
+  if (conversationStoreBackend !== "local") {
+    // IndexedDB 路径：内存先改、后台排队写盘（IndexedDB 写盘是异步的，做不到"先确认存好再改界面"），写失败弹提示不回滚
+    if (conversationStoreReadOnly) {
+      showAppStatus("检测到损坏的会话索引且没能备份；为避免覆盖，暂未保存这次更改。");
+      return false;
+    }
+    conversationStore = normalized;
+    scheduleConversationStoreWrite(normalized);
+    return true;
+  }
   if (
     conversationStoreRecoveryRaw &&
     !preserveCorruptConversationStore(conversationStoreRecoveryRaw)
@@ -245,4 +329,33 @@ function persistConversationStore(nextStore, { keepInMemoryOnFailure = false } =
     showAppStatus("本地存储已满，请先下载或删除旧会话。");
     return false;
   }
+}
+
+// 连着几次保存只写最后一份；存档还没读完时先排着，读完再写
+function scheduleConversationStoreWrite(store) {
+  conversationStorePendingWrite = store;
+  if (conversationStoreReady && !conversationStoreWriting) return drainConversationStoreWrites();
+  return null;
+}
+
+// 串行写盘：一次写一份，写完发现又有新的再写；写失败提示但不回滚（内存里是最新的，下次保存会再试）
+function drainConversationStoreWrites() {
+  conversationStoreWriting = true;
+  return (async () => {
+    while (conversationStorePendingWrite) {
+      const next = conversationStorePendingWrite;
+      conversationStorePendingWrite = null;
+      try {
+        await writeConversationStoreRecord(CONVERSATION_STORE_RECORD_ID, next);
+        if (conversationStoreWriteFailed) {
+          conversationStoreWriteFailed = false;
+          showAppStatus("");
+        }
+      } catch {
+        conversationStoreWriteFailed = true;
+        showAppStatus("会话没能写进本地数据库，改动先留在内存里；请下载备份后刷新重试。");
+      }
+    }
+    conversationStoreWriting = false;
+  })();
 }

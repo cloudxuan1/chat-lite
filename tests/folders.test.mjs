@@ -24,7 +24,7 @@ const functions = [
   "normalizeMemoryContext", "normalizeMemorySteps", "normalizeVariantSteps", "normalizeToolCalls", "normalizeReasoningDetailsList", "validStoredDate",
   "createConversation", "createFolderId", "normalizeFolderName", "normalizeFolders", "folderById",
   "isRecoverableConversationStore", "preserveCorruptConversationStore", "normalizeConversationStore",
-  "loadConversationStore", "cloneConversationStore", "getActiveConversation", "conversationById",
+  "interpretConversationStoreRaw", "corruptConversationStoreWarning", "loadConversationStore", "cloneConversationStore", "getActiveConversation", "conversationById",
   "persistConversationStore", "persistFolderDraft", "moveConversationToFolder", "createFolderInteractive",
   "editFolder", "toggleFolderPinned", "deleteFolder", "restoreFromBackup", "createNewConversation",
   "focusConversationMore", "conversationPreview", "formatConversationTime", "buildConversationItem",
@@ -101,7 +101,7 @@ function harness(store = fixture()) {
     addEventListener: (type, listener) => { document[type] = listener; },
   };
   context = vm.createContext({
-    conversationStore: plain(store), conversationStoreRecoveryRaw: "", conversationStoreLoadWarning: "",
+    conversationStore: plain(store), conversationStoreBackend: "local", conversationStoreReady: true, conversationStoreReadOnly: false, conversationStoreRecoveryRaw: "", conversationStoreLoadWarning: "",
     conversationMenuId: null, movePickerId: null, folderMenuId: null, renamingConversationId: null,
     folderDetailMenuOpen: false, folderDetailId: "f1", sidebarOpen: false, pending: false,
     folderScreenOpen: false, folderDetailOpen: false, failWrites: false, failOnWrite: 0, writeCount: 0, promptResult: null,

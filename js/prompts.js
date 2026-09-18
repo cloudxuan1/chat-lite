@@ -89,10 +89,14 @@ function openImageDb() {
       reject(new Error("这个浏览器不支持本地图片存储"));
       return;
     }
-    const request = indexedDB.open(IMAGE_DB_NAME, 1);
+    const request = indexedDB.open(IMAGE_DB_NAME, IMAGE_DB_VERSION);
     request.onupgradeneeded = () => {
-      if (!request.result.objectStoreNames.contains(IMAGE_DB_STORE)) {
-        request.result.createObjectStore(IMAGE_DB_STORE, { keyPath: "id" });
+      const db = request.result;
+      if (!db.objectStoreNames.contains(IMAGE_DB_STORE)) {
+        db.createObjectStore(IMAGE_DB_STORE, { keyPath: "id" });
+      }
+      if (!db.objectStoreNames.contains(CONVERSATIONS_DB_STORE)) {
+        db.createObjectStore(CONVERSATIONS_DB_STORE, { keyPath: "id" });
       }
     };
     request.onsuccess = () => resolve(request.result);
