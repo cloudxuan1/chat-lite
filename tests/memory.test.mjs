@@ -18,7 +18,7 @@ function extract(pattern) {
 
 const functions = [
   "formatMemoryBriefing", "normalizeMemoryContext", "memoryBriefingEntries", "normalizeToolCalls",
-  "normalizeReasoningDetailsList", "normalizeMemorySteps", "normalizeVariantSteps", "mergeToolCallDeltas",
+  "normalizeReasoningDetailsList", "normalizeMemorySteps", "normalizeVariantSteps", "normalizeVariantReasoning", "mergeToolCallDeltas",
   "finalizeToolCalls", "mergeReasoningDetails", "finalizeReasoningDetails", "parseToolArguments",
   "withMemoryContext", "expandMemorySteps", "memoryStepEntries", "memoryStepsSummary", "accumulateUsage",
   "normalizeMessageAttachments", "normalizeStoredMessages", "messageForOpenRouter", "baseMessageForOpenRouter",

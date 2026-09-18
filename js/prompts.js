@@ -319,6 +319,14 @@ function normalizeMessageAttachments(items) {
   return attachments;
 }
 
+// 思考链：助手消息可带 reasoning（当前版本的思考文字）；有 reroll 版本时 variantReasoning 与 variants 等长，
+// 没有任何版本有思考就不存这个键（老存档原样）
+function normalizeVariantReasoning(items, count) {
+  if (!Array.isArray(items) || count < 2) return null;
+  const list = Array.from({ length: count }, (_, i) => (typeof items[i] === "string" && items[i] ? items[i] : null));
+  return list.some(Boolean) ? list : null;
+}
+
 function normalizeStoredMessages(items) {
   if (!Array.isArray(items)) return [];
   return items.filter((item) =>
@@ -349,6 +357,12 @@ function normalizeStoredMessages(items) {
     const steps = item.role === "assistant"
       ? (variantSteps ? variantSteps[activeVariant] || [] : normalizeMemorySteps(item.steps))
       : [];
+    const variantReasoning = item.role === "assistant" && hasVariants
+      ? normalizeVariantReasoning(item.variantReasoning, variants.length)
+      : null;
+    const reasoning = item.role === "assistant"
+      ? (variantReasoning ? variantReasoning[activeVariant] || "" : (typeof item.reasoning === "string" ? item.reasoning : ""))
+      : "";
     return {
       role: item.role,
       content: hasVariants ? variants[activeVariant] : item.content,
@@ -357,6 +371,8 @@ function normalizeStoredMessages(items) {
       ...(hasVariants ? { variants, activeVariant } : {}),
       ...(steps.length ? { steps } : {}),
       ...(variantSteps ? { variantSteps } : {}),
+      ...(reasoning ? { reasoning } : {}),
+      ...(variantReasoning ? { variantReasoning } : {}),
     };
   });
 }

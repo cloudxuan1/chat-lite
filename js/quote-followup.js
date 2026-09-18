@@ -274,12 +274,15 @@ function switchVariant(root, direction) {
   draftMessage.content = draftMessage.variants[target];
   const targetSteps = Array.isArray(draftMessage.variantSteps) ? draftMessage.variantSteps[target] : null;
   if (targetSteps?.length) draftMessage.steps = targetSteps; else delete draftMessage.steps;
+  const targetReasoning = Array.isArray(draftMessage.variantReasoning) ? draftMessage.variantReasoning[target] : null;
+  if (targetReasoning) draftMessage.reasoning = targetReasoning; else delete draftMessage.reasoning;
   persistConversationStore(draft, { keepInMemoryOnFailure: true });
 
   const updated = getActiveConversation().messages[index];
   const bubble = root.querySelector(".msg");
   if (bubble) setBubbleText(bubble, updated.content);
   syncMemoryStepsTrace(root, updated);
+  syncReasoningTrace(root, updated);
   const copy = root.querySelector(".message-copy");
   if (copy) {
     copy.dataset.copyText = updated.content;

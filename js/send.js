@@ -119,16 +119,19 @@ async function streamAssistantReply({ conversationId, sessionId, model, effort, 
   const reasoningBox = effort !== "off" ? addReasoningBlock({ webSearch: webSearchEnabled }) : null;
   const bubble = existingBubble || addBubble("assistant", "", [], conversationId, assistantIndex);
   if (existingBubble) {
-    // 旧版本的「查了记忆」块先拆掉，新一轮有查询再重建，不然新旧块叠在一起
-    findMemoryStepsTrace(bubble.closest(".message-item"))?.remove();
+    const item = bubble.closest(".message-item");
+    // 旧版本的「查了记忆」块和思考块先拆掉（当前展示哪个版本就只留它的），新一轮有再重建，不然新旧块叠在一起
+    findMemoryStepsTrace(item)?.remove();
+    findReasoningTrace(item)?.remove();
     // 思考块从底部挪到被重掷气泡的上方
-    if (reasoningBox) bubble.closest(".message-item")?.before(reasoningBox.root);
+    if (reasoningBox) item?.before(reasoningBox.root);
     bubble.classList.remove("error");
     setBubbleText(bubble, "");
   }
   bubble.classList.add("typing");
-  // 流式输出：攒下全文，每帧最多重渲染一次 Markdown
+  // 流式输出：攒下全文，每帧最多重渲染一次 Markdown；思考文字也攒着，回复完成后随消息落盘
   let streamed = "";
+  let reasoningText = "";
   let renderQueued = false;
   const renderStreamed = () => {
     renderQueued = false;
@@ -199,6 +202,7 @@ async function streamAssistantReply({ conversationId, sessionId, model, effort, 
       const result = await readStream(res.body, {
         onReasoning(delta) {
           if (!reasoningBox) return;
+          reasoningText += delta;
           reasoningBox.append(delta);
           if (conversationStore.activeId === conversationId) scrollToBottom();
         },
@@ -261,16 +265,28 @@ async function streamAssistantReply({ conversationId, sessionId, model, effort, 
             const previousSteps = Array.isArray(target.variantSteps)
               ? [...target.variantSteps]
               : variants.map((_, i) => (i === (target.activeVariant ?? variants.length - 1) ? target.steps || null : null));
+            // 每个版本各自的思考链，规矩同上
+            const previousReasoning = Array.isArray(target.variantReasoning)
+              ? [...target.variantReasoning]
+              : variants.map((_, i) => (i === (target.activeVariant ?? variants.length - 1) ? target.reasoning || null : null));
             variants.push(full);
             previousSteps.push(steps.length ? steps : null);
+            previousReasoning.push(reasoningText || null);
             target.variants = variants;
             target.activeVariant = variants.length - 1;
             target.content = full;
             if (steps.length) target.steps = steps; else delete target.steps;
             if (previousSteps.some(Boolean)) target.variantSteps = previousSteps; else delete target.variantSteps;
+            if (reasoningText) target.reasoning = reasoningText; else delete target.reasoning;
+            if (previousReasoning.some(Boolean)) target.variantReasoning = previousReasoning; else delete target.variantReasoning;
           }
         } else {
-          completedConversation.messages.push({ role: "assistant", content: full, ...(steps.length ? { steps } : {}) });
+          completedConversation.messages.push({
+            role: "assistant",
+            content: full,
+            ...(steps.length ? { steps } : {}),
+            ...(reasoningText ? { reasoning: reasoningText } : {}),
+          });
         }
         completedConversation.updatedAt = new Date().toISOString();
         persistConversationStore(completedDraft, { keepInMemoryOnFailure: true });
