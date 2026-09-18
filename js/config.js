@@ -88,8 +88,17 @@ function folderColorByKey(key) {
 function folderIconByKey(key) {
   return FOLDER_ICONS.find((item) => item.key === key) || null;
 }
+// 本机 IndexedDB：一个库两张表——images 存图片 Blob，conversations 存会话存档（2026-09 从 localStorage 搬来，
+// 老键 ember_conversations_v1 留着不删）。加表要升 IMAGE_DB_VERSION，并在 openImageDb 的 onupgradeneeded 里建表。
 const IMAGE_DB_NAME = "ember_images_v1";
+const IMAGE_DB_VERSION = 2;
 const IMAGE_DB_STORE = "images";
+const CONVERSATIONS_DB_STORE = "conversations";
+// conversations 表里两条记录的 id：正式存档 / 发现存档损坏时原样留的一份
+const CONVERSATION_STORE_RECORD_ID = "store";
+const CONVERSATION_STORE_BACKUP_RECORD_ID = "corrupt-backup";
+// 打开/启动读取 IndexedDB 的等待上限（毫秒）；启动失败只读旧备份
+const CONVERSATION_STORE_OPEN_TIMEOUT_MS = 4000;
 const MAX_IMAGES_PER_MESSAGE = 8;
 const MAX_IMAGE_BYTES_PER_MESSAGE = 6 * 1024 * 1024;
 const AUTO_IMAGE_MAX_DIMENSION = 2200;

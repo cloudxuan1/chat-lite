@@ -89,14 +89,31 @@ function openImageDb() {
       reject(new Error("这个浏览器不支持本地图片存储"));
       return;
     }
-    const request = indexedDB.open(IMAGE_DB_NAME, 1);
+    let expired = false;
+    const timer = setTimeout(() => {
+      expired = true;
+      reject(new Error("打开本地数据库超时，请关闭其它标签页后重试"));
+    }, CONVERSATION_STORE_OPEN_TIMEOUT_MS);
+    const request = indexedDB.open(IMAGE_DB_NAME, IMAGE_DB_VERSION);
     request.onupgradeneeded = () => {
-      if (!request.result.objectStoreNames.contains(IMAGE_DB_STORE)) {
-        request.result.createObjectStore(IMAGE_DB_STORE, { keyPath: "id" });
+      const db = request.result;
+      if (!db.objectStoreNames.contains(IMAGE_DB_STORE)) {
+        db.createObjectStore(IMAGE_DB_STORE, { keyPath: "id" });
+      }
+      if (!db.objectStoreNames.contains(CONVERSATIONS_DB_STORE)) {
+        db.createObjectStore(CONVERSATIONS_DB_STORE, { keyPath: "id" });
       }
     };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error || new Error("打开图片存储失败"));
+    request.onsuccess = () => {
+      clearTimeout(timer);
+      if (expired) { request.result.close(); return; }
+      request.result.onversionchange = () => request.result.close();
+      resolve(request.result);
+    };
+    request.onerror = () => {
+      clearTimeout(timer);
+      reject(request.error || new Error("打开图片存储失败"));
+    };
   });
 }
 
@@ -142,14 +159,28 @@ async function getImageRecords(attachments) {
 }
 
 async function deleteImageRecords(attachments) {
+  if (!conversationStoreReady || conversationStoreReadOnly) return;
   const ids = attachments.map((attachment) => attachment?.id).filter(Boolean);
   if (!ids.length) return;
   const db = await openImageDb();
   try {
-    const transaction = db.transaction(IMAGE_DB_STORE, "readwrite");
+    // 与会话读写共享事务锁：删图时确认磁盘上的会话也已不再引用它。
+    const transaction = db.transaction([IMAGE_DB_STORE, CONVERSATIONS_DB_STORE], "readwrite");
     const done = transactionDone(transaction);
-    const store = transaction.objectStore(IMAGE_DB_STORE);
-    ids.forEach((id) => store.delete(id));
+    const request = transaction.objectStore(CONVERSATIONS_DB_STORE).get(CONVERSATION_STORE_RECORD_ID);
+    request.onsuccess = () => {
+      const saved = request.result?.value;
+      if (!saved || !isRecoverableConversationStore(saved)) return;
+      const liveIds = new Set([saved, conversationStore].flatMap((store) =>
+        store.conversations.flatMap((conversation) =>
+          (conversation?.messages || []).flatMap((message) =>
+            (message?.attachments || []).map((attachment) => attachment.id)
+          )
+        )
+      ));
+      const images = transaction.objectStore(IMAGE_DB_STORE);
+      ids.filter((id) => !liveIds.has(id)).forEach((id) => images.delete(id));
+    };
     await done;
   } finally {
     db.close();
@@ -174,6 +205,7 @@ async function listImageRecordIds() {
 }
 
 async function cleanupOrphanedImageRecords() {
+  if (!conversationStoreReady || conversationStoreReadOnly || conversationStoreBackend !== "indexeddb") return;
   const liveIds = new Set(
     conversationStore.conversations.flatMap((conversation) =>
       conversation.messages.flatMap((message) =>

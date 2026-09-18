@@ -94,11 +94,11 @@ function syncInteractionState() {
   const gateOpenNow = gateIsOpen();
   appShell.inert = folderEditorIsOpen();
   folderEditor.inert = !folderEditorIsOpen() || gateOpenNow;
-  chatShell.inert = mobileSidebarOpen || gateOpenNow;
+  chatShell.inert = mobileSidebarOpen || gateOpenNow || !conversationStoreReady;
   topbarEl.inert = settingsOpenNow;
   messagesEl.inert = settingsOpenNow;
   composer.inert = settingsOpenNow;
-  conversationSidebar.inert = !sidebarOpen || settingsOpenNow || gateOpenNow;
+  conversationSidebar.inert = !sidebarOpen || settingsOpenNow || gateOpenNow || !conversationStoreReady;
 }
 
 function syncSidebarLayout() {

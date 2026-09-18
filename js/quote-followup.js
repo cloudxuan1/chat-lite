@@ -187,7 +187,7 @@ function startEditMessage(root) {
         draftMessage.variants[draftMessage.activeVariant ?? draftMessage.variants.length - 1] = value;
       }
     }
-    persistConversationStore(draft, { keepInMemoryOnFailure: true });
+    if (!persistConversationStore(draft, { keepInMemoryOnFailure: true }) && conversationStoreReadOnly) return;
     // 就地更新，保留当前会话里已经显示的思考/来源/缓存徽章，不整段重渲染
     setBubbleText(bubble, value);
     exitEdit();
@@ -212,6 +212,10 @@ function startEditMessage(root) {
 // 重新生成一条助手回复：旧回复留在 variants 里可切回，新回复流式写进同一个气泡；
 // 这条回复后面的消息（如果有）是基于旧版本聊出来的，会先弹确认再删除
 function rerollMessage(root) {
+  if (!conversationStoreReady || conversationStoreReadOnly) {
+    showAppStatus(conversationStoreLoadWarning || "存档尚未就绪，暂不能重新生成。");
+    return;
+  }
   if (pending || !root || root.classList.contains("is-editing")) return;
   const index = Number(root.dataset.msgIndex);
   if (!Number.isInteger(index)) return;

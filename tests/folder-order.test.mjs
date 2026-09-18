@@ -85,7 +85,7 @@ function harness() {
   const list = new Element();
   const context = vm.createContext({
     document: { createElement: () => new Element() }, folderPageList: list, crypto: { randomUUID },
-    conversationStore: plain(store), conversationStoreRecoveryRaw: "", folderDrag: null, folderPageMenuId: null,
+    conversationStore: plain(store), conversationStoreBackend: "local", conversationStoreReady: true, conversationStoreReadOnly: false, conversationStoreRecoveryRaw: "", folderDrag: null, folderPageMenuId: null,
     pending: false, folderMenuId: null, conversationMenuId: null, movePickerId: null,
     CONVERSATIONS_KEY: "store", CORRUPT_CONVERSATIONS_BACKUP_KEY: "backup", CONVERSATION_TITLE_MAX_CHARACTERS: 48,
     MAX_IMAGES_PER_MESSAGE: 8, SUPPORTED_IMAGE_TYPES: new Set(["image/png"]),

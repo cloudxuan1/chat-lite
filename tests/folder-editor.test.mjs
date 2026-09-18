@@ -81,7 +81,7 @@ function harness({ mobile = false } = {}) {
     conversations: [{ id: 'c1', folderId: 'f1', sessionId: 'test-session', messages: [{ role: 'assistant', content: '保留消息' }] }] };
   let nextId = 0;
   const c = vm.createContext({ document, HTMLElement: Element, appShell, chatShell, conversationSidebar: sidebar,
-    conversationStore: plain(store), pending: false, failWrites: false, writes: 0, persisted: plain(store),
+    conversationStore: plain(store), conversationStoreBackend: "local", conversationStoreReady: true, conversationStoreReadOnly: false, pending: false, failWrites: false, writes: 0, persisted: plain(store),
     promptLibrary: { activeId: 'p1', items: [{ id: 'p1', name: '默认', content: '' }, { id: 'p2', name: '测试', content: 'test' }] },
     activePrompt: lib => lib.items.find(p => p.id === lib.activeId), createFolderId: () => `f_test_${++nextId}`,
     cloneConversationStore: () => plain(c.conversationStore),

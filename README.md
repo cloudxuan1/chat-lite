@@ -4,7 +4,7 @@
 
 - 网址：https://cloudxuan1.github.io/chat-lite/ （要输访问密码）
 - 链路：浏览器 → 密码门禁 → Cloudflare Worker（注入 key）→ OpenRouter → Claude
-- 数据：会话、设置存本机浏览器 localStorage，图片存 IndexedDB；可备份 / 恢复、可清空，不上传任何账号系统
+- 数据：会话和图片存本机浏览器 IndexedDB，设置存 localStorage；可备份 / 恢复、可清空，不上传任何账号系统
 - 可选：接 [ember](https://github.com/cloudxuan1/ember) 记忆库（开场小抄 + 模型按需查记忆），默认关
 
 ## 目录
