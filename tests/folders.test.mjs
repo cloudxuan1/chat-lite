@@ -21,7 +21,7 @@ function extract(pattern) {
 const functions = [
   "createSessionId", "createConversationId", "visibleCharacters", "normalizeConversationTitle",
   "titleFromFirstMessage", "normalizeMessageAttachments", "normalizeStoredMessages",
-  "normalizeMemoryContext", "normalizeMemorySteps", "normalizeVariantSteps", "normalizeToolCalls", "normalizeReasoningDetailsList", "validStoredDate",
+  "normalizeMemoryContext", "normalizeMemorySteps", "normalizeVariantSteps", "normalizeVariantReasoning", "normalizeToolCalls", "normalizeReasoningDetailsList", "validStoredDate",
   "createConversation", "createFolderId", "normalizeFolderName", "normalizeFolders", "folderById",
   "isRecoverableConversationStore", "preserveCorruptConversationStore", "normalizeConversationStore",
   "interpretConversationStoreRaw", "corruptConversationStoreWarning", "loadConversationStore", "cloneConversationStore", "getActiveConversation", "conversationById",

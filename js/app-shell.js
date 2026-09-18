@@ -63,6 +63,7 @@ function renderActiveConversation() {
     messagesEl.appendChild(hintEl);
   } else {
     conversation.messages.forEach((item, index) => {
+      if (item.role === "assistant" && item.reasoning) appendReasoningTrace(item.reasoning);
       if (item.role === "assistant" && item.steps?.length) appendMemoryStepsTrace(item.steps);
       addBubble(item.role, item.content, item.attachments || [], conversation.id, index);
       if (item.role === "user" && item.memoryContext) appendMemoryBriefingTrace(item.memoryContext);

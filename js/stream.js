@@ -1,5 +1,5 @@
 // 回复流：思考块、引用、缓存徽章、SSE 解析、自动起标题。
-function addReasoningBlock({ webSearch }) {
+function addReasoningBlock({ webSearch, attach = true }) {
   if (hintEl) hintEl.remove();
   const root = document.createElement("div");
   root.className = "reasoning is-open";
@@ -47,8 +47,10 @@ function addReasoningBlock({ webSearch }) {
     toggle.setAttribute("aria-expanded", String(open));
   });
 
-  messagesEl.appendChild(root);
-  scrollToBottom();
+  if (attach) {
+    messagesEl.appendChild(root);
+    scrollToBottom();
+  }
 
   let hasReasoning = false;
   return {
@@ -67,6 +69,36 @@ function addReasoningBlock({ webSearch }) {
       title.textContent = hasReasoning ? "思考完成" : "思考完成";
     },
   };
+}
+
+// 刷新或切换会话后，用存下来的思考文字重建一个已收起的思考块（挂在消息区末尾，调用方接着加气泡）
+function appendReasoningTrace(text) {
+  const box = addReasoningBlock({ webSearch: false });
+  box.append(text);
+  box.finish();
+  return box.root;
+}
+
+// 找助手气泡前面属于它的思考块：紧挨着气泡，或隔着「查了记忆」块；碰到别的就是没有
+function findReasoningTrace(root) {
+  let node = root?.previousElementSibling;
+  while (node && node.classList.contains("memory-trace") && !node.classList.contains("is-user")) node = node.previousElementSibling;
+  return node?.classList.contains("reasoning") ? node : null;
+}
+
+// 切换 reroll 版本后，让气泡前面的思考块跟着当前版本走（没有就拆掉）
+function syncReasoningTrace(root, message) {
+  const existing = findReasoningTrace(root);
+  const text = message?.reasoning || "";
+  if (!text) {
+    existing?.remove();
+    return;
+  }
+  const box = addReasoningBlock({ webSearch: false, attach: false });
+  box.append(text);
+  box.finish();
+  if (existing) existing.replaceWith(box.root);
+  else (findMemoryStepsTrace(root) || root).before(box.root);
 }
 
 function addCitations(annotations) {

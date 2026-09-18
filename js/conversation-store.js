@@ -226,11 +226,10 @@ async function readConversationStoreRecord() {
     const transaction = db.transaction(CONVERSATIONS_DB_STORE, "readonly");
     const done = transactionDone(transaction);
     const request = transaction.objectStore(CONVERSATIONS_DB_STORE).get(CONVERSATION_STORE_RECORD_ID);
-    const record = await new Promise((resolve, reject) => {
+    const [record] = await Promise.all([new Promise((resolve, reject) => {
       request.onsuccess = () => resolve(request.result || null);
       request.onerror = () => reject(request.error || new Error("读取会话存档失败"));
-    });
-    await done;
+    }), done]);
     return record && record.value !== undefined ? record.value : null;
   } finally {
     db.close();
@@ -250,9 +249,8 @@ async function writeConversationStoreRecord(id, value) {
 }
 
 // 读 IndexedDB 里的存档；没有记录就从 localStorage 老存档（含更早的单会话历史）搬一次，老键留着不删当保险。
-// 打不开/读不了会抛，由 initializeConversationStore 退回 localStorage；写失败只提示，下次保存会再试。
-async function loadConversationStoreFromDb() {
-  const record = await readConversationStoreRecord();
+// 读取完成后才开始迁移；写失败只提示，下次保存会再试。
+async function loadConversationStoreFromDb(record) {
   const migrating = record === null;
   const result = interpretConversationStoreRaw(migrating ? localStorage.getItem(CONVERSATIONS_KEY) : JSON.stringify(record));
   let mayWrite = true;
@@ -272,16 +270,26 @@ async function loadConversationStoreFromDb() {
 }
 
 // 启动时由 init.js 调一次：读完存档才把 conversationStoreReady 置 true（之前聊天区是 inert 的）。
-// IndexedDB 打不开、或被别的标签页占住超时，就退回 localStorage 老路径。
+// IndexedDB 读不了时只显示旧备份，不允许继续写旧副本。
 async function initializeConversationStore() {
-  const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("IndexedDB 打开超时")), CONVERSATION_STORE_OPEN_TIMEOUT_MS));
+  let timer;
   try {
-    conversationStore = await Promise.race([loadConversationStoreFromDb(), timeout]);
+    // 只对读取计时：超时的读取稍后返回也不能继续迁移、改状态或写盘。
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error("IndexedDB 打开超时")), CONVERSATION_STORE_OPEN_TIMEOUT_MS);
+    });
+    const record = await Promise.race([readConversationStoreRecord(), timeout]);
+    clearTimeout(timer);
+    conversationStore = await loadConversationStoreFromDb(record);
     conversationStoreBackend = "indexeddb";
   } catch {
+    // 老键可能是迁移当天的快照，不能当成最新存档继续写，也不能据此清图片。
     conversationStoreBackend = "local";
-    conversationStore = loadConversationStore();
-    conversationStoreLoadWarning = conversationStoreLoadWarning || "本地数据库暂时打不开，这次改动只存在浏览器小仓库（5MB）；关掉其它标签页后刷新可恢复。";
+    conversationStoreReadOnly = true;
+    conversationStore = interpretConversationStoreRaw(localStorage.getItem(CONVERSATIONS_KEY)).store;
+    conversationStoreLoadWarning = "本地数据库暂时打不开；当前仅显示旧备份，可能不含最新聊天，暂不能保存。请关闭其它标签页后刷新重试。";
+  } finally {
+    clearTimeout(timer);
   }
   conversationStoreReady = true;
   if (conversationStorePendingWrite) drainConversationStoreWrites();
@@ -300,13 +308,13 @@ function conversationById(conversationId, store = conversationStore) {
 }
 
 function persistConversationStore(nextStore, { keepInMemoryOnFailure = false } = {}) {
+  if (!conversationStoreReady || conversationStoreReadOnly) {
+    showAppStatus(conversationStoreLoadWarning || "存档尚未就绪或原数据没能备份；暂未保存这次更改。");
+    return false;
+  }
   const normalized = normalizeConversationStore(nextStore);
   if (conversationStoreBackend !== "local") {
     // IndexedDB 路径：内存先改、后台排队写盘（IndexedDB 写盘是异步的，做不到"先确认存好再改界面"），写失败弹提示不回滚
-    if (conversationStoreReadOnly) {
-      showAppStatus("检测到损坏的会话索引且没能备份；为避免覆盖，暂未保存这次更改。");
-      return false;
-    }
     conversationStore = normalized;
     scheduleConversationStoreWrite(normalized);
     return true;

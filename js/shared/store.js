@@ -2,9 +2,9 @@
 // 注意：这里在页面加载时会调用上面各文件定义的 loadXxx()，所以必须排在它们之后引入。
 let conversationStoreLoadWarning = "";
 let conversationStoreRecoveryRaw = "";      // localStorage 路径：损坏原文（每次保存前重试备份）
-let conversationStoreBackend = "";          // "indexeddb" | "local"（IndexedDB 打不开时退回），init 里定
+let conversationStoreBackend = "";          // "indexeddb" | "local"（打不开时只读旧备份），init 里定
 let conversationStoreReady = false;         // 存档读完才 true；之前聊天区和侧栏 inert
-let conversationStoreReadOnly = false;      // IndexedDB 路径：损坏存档没能备份时拒绝覆盖
+let conversationStoreReadOnly = false;      // 数据库不可读或损坏存档没能备份时拒绝覆盖
 let conversationStorePendingWrite = null;   // 排队等写进 IndexedDB 的最新一份存档
 let conversationStoreWriting = false;
 let conversationStoreWriteFailed = false;   // 上次写盘失败过（成功后要把提示清掉）

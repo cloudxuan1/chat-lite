@@ -18,16 +18,18 @@ function extract(pattern) {
 const functions = [
   "createSessionId", "createConversationId", "visibleCharacters", "normalizeConversationTitle",
   "titleFromFirstMessage", "normalizeMessageAttachments", "normalizeStoredMessages",
-  "normalizeMemoryContext", "normalizeMemorySteps", "normalizeVariantSteps", "normalizeToolCalls", "normalizeReasoningDetailsList", "validStoredDate",
+  "normalizeMemoryContext", "normalizeMemorySteps", "normalizeVariantSteps", "normalizeVariantReasoning", "normalizeToolCalls", "normalizeReasoningDetailsList", "validStoredDate",
   "createConversation", "createFolderId", "normalizeFolderName", "normalizeFolders", "folderColorByKey", "folderIconByKey",
   "isRecoverableConversationStore", "preserveCorruptConversationStore", "normalizeConversationStore",
   "loadLegacyMessages", "loadLegacySessionId", "interpretConversationStoreRaw", "corruptConversationStoreWarning",
   "loadConversationStore", "loadConversationStoreFromDb", "initializeConversationStore",
   "persistConversationStore", "scheduleConversationStoreWrite", "drainConversationStoreWrites",
+  "deleteImageRecords", "cleanupOrphanedImageRecords",
 ].map((name) => extract(new RegExp(`^(?:async )?function ${name}\\([^]*?^}$`, "gm"))).join("\n");
 const constants = [
   "CONVERSATIONS_KEY", "CORRUPT_CONVERSATIONS_BACKUP_KEY", "LEGACY_CHAT_KEY", "LEGACY_SESSION_KEY", "CONVERSATION_TITLE_MAX_CHARACTERS",
   "CONVERSATION_STORE_RECORD_ID", "CONVERSATION_STORE_BACKUP_RECORD_ID", "CONVERSATION_STORE_OPEN_TIMEOUT_MS",
+  "IMAGE_DB_STORE", "CONVERSATIONS_DB_STORE",
   "MAX_IMAGES_PER_MESSAGE", "SUPPORTED_IMAGE_TYPES", "MEMORY_CONTEXT_MAX_CHARS", "MEMORY_TOOL_NAMES", "FOLDER_COLORS", "FOLDER_ICONS",
 ].map((name) => extract(new RegExp(`^const ${name} = [^]*?;$`, "gm"))).join("\n");
 
@@ -57,6 +59,7 @@ function harness({ record = null, readThrows = false, readHangs = false, writeFa
       getItem: (key) => storage.get(key) ?? null,
       setItem: (key, value) => { context.localWrites = (context.localWrites || 0) + 1; storage.set(key, String(value)); },
     },
+    clearTimeout() {},
     timeouts: [], setTimeout: (fn) => { context.timeouts.push(fn); return context.timeouts.length; },
     readConversationStoreRecord: async () => {
       if (readThrows) throw new Error("打不开");
@@ -115,6 +118,10 @@ test("首次启动：IndexedDB 没记录就从 localStorage 搬一份，老键�
 
 test("有记录：直接用 IndexedDB 里的，不读 localStorage、不写盘", async () => {
   const stored = makeStore();
+  Object.assign(stored.conversations[0].messages[1], {
+    variants: ["旧回答", "答 1"], activeVariant: 1,
+    reasoning: "新思考", variantReasoning: ["旧思考", "新思考"],
+  });
   const { context: c, storage, writes } = harness({ record: stored });
   storage.set("ember_conversations_v1", JSON.stringify(makeStore(3)));
   await c.initializeConversationStore();
@@ -122,14 +129,17 @@ test("有记录：直接用 IndexedDB 里的，不读 localStorage、不写盘",
   assert.deepEqual(writes, []);
 });
 
-test("IndexedDB 打不开或超时：退回 localStorage 老路径并提示", async () => {
+test("IndexedDB 打不开或超时：只读旧备份，不写旧键或数据库", async () => {
   const throwing = harness({ readThrows: true });
   throwing.storage.set("ember_conversations_v1", JSON.stringify(makeStore()));
   await throwing.context.initializeConversationStore();
   assert.equal(throwing.context.conversationStoreBackend, "local");
   assert.equal(throwing.context.conversationStoreReady, true);
   assert.equal(throwing.context.conversationStore.conversations[0].id, "c1");
-  assert.match(throwing.context.conversationStoreLoadWarning, /本地数据库暂时打不开/);
+  assert.match(throwing.context.conversationStoreLoadWarning, /仅显示旧备份/);
+  assert.equal(throwing.context.persistConversationStore(makeStore(2)), false);
+  assert.equal(throwing.context.localWrites, undefined);
+  assert.deepEqual(throwing.writes, []);
 
   const hanging = harness({ readHangs: true });
   hanging.storage.set("ember_conversations_v1", JSON.stringify(makeStore()));
@@ -192,5 +202,66 @@ test("存档损坏：先把原文备份进 IndexedDB 再覆盖；备份失败就
   assert.equal(bad.context.conversationStoreReadOnly, true);
   assert.match(bad.context.conversationStoreLoadWarning, /暂不能保存/);
   assert.equal(bad.context.persistConversationStore(makeStore()), false);
-  assert.match(bad.context.status.at(-1), /暂未保存/);
+  assert.match(bad.context.status.at(-1), /暂未保存|暂不能保存/);
+});
+
+
+test("读取超时后迟到的结果不能迁移、写盘或修改只读状态", async () => {
+  const { context: c, storage, writes } = harness();
+  const raw = JSON.stringify(makeStore());
+  storage.set("ember_conversations_v1", raw);
+  let finishRead;
+  c.readConversationStoreRecord = () => new Promise(resolve => { finishRead = resolve; });
+  const init = c.initializeConversationStore();
+  c.timeouts[0]();
+  await init;
+  finishRead(null);
+  await tick();
+  assert.deepEqual(writes, []);
+  assert.equal(c.conversationStoreReadOnly, true);
+  assert.equal(storage.get("ember_conversations_v1"), raw);
+  assert.equal(c.persistConversationStore(makeStore(2)), false);
+});
+
+
+test("删图前检查已落盘和内存中的引用；只读后备不清图", async () => {
+  const { context: c } = harness({ record: makeStore() });
+  await c.initializeConversationStore();
+  const saved = makeStore();
+  saved.conversations[0].messages[0].attachments = [{ id: "disk-image" }];
+  c.conversationStore.conversations[0].messages[0].attachments = [{ id: "memory-image" }];
+  const deleted = [];
+  let opens = 0;
+  c.openImageDb = async () => {
+    opens += 1;
+    return {
+      close() {},
+      transaction() {
+        const tx = {
+          objectStore: () => ({
+            get() {
+              const request = { result: { value: saved } };
+              setImmediate(() => { request.onsuccess(); tx.finish(); });
+              return request;
+            },
+            delete: id => deleted.push(id),
+          }),
+        };
+        return tx;
+      },
+    };
+  };
+  c.transactionDone = tx => new Promise(resolve => { tx.finish = resolve; });
+  await c.deleteImageRecords([{ id: "disk-image" }, { id: "memory-image" }, { id: "orphan" }]);
+  assert.deepEqual(deleted, ["orphan"], "写盘失败时仍在磁盘中的附件不能删");
+  delete saved.conversations[0].messages[0].attachments;
+  await c.deleteImageRecords([{ id: "disk-image" }]);
+  assert.deepEqual(deleted, ["orphan", "disk-image"], "磁盘不再引用后可以删");
+  const before = opens;
+  c.conversationStoreReadOnly = true;
+  c.conversationStoreBackend = "local";
+  c.listImageRecordIds = () => { throw new Error("只读时不应扫描图片"); };
+  await c.deleteImageRecords([{ id: "memory-image" }]);
+  await c.cleanupOrphanedImageRecords();
+  assert.equal(opens, before);
 });

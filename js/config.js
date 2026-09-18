@@ -97,7 +97,7 @@ const CONVERSATIONS_DB_STORE = "conversations";
 // conversations 表里两条记录的 id：正式存档 / 发现存档损坏时原样留的一份
 const CONVERSATION_STORE_RECORD_ID = "store";
 const CONVERSATION_STORE_BACKUP_RECORD_ID = "corrupt-backup";
-// 启动时等 IndexedDB 最多这么久（毫秒），超时退回 localStorage
+// 打开/启动读取 IndexedDB 的等待上限（毫秒）；启动失败只读旧备份
 const CONVERSATION_STORE_OPEN_TIMEOUT_MS = 4000;
 const MAX_IMAGES_PER_MESSAGE = 8;
 const MAX_IMAGE_BYTES_PER_MESSAGE = 6 * 1024 * 1024;

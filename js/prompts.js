@@ -89,6 +89,11 @@ function openImageDb() {
       reject(new Error("这个浏览器不支持本地图片存储"));
       return;
     }
+    let expired = false;
+    const timer = setTimeout(() => {
+      expired = true;
+      reject(new Error("打开本地数据库超时，请关闭其它标签页后重试"));
+    }, CONVERSATION_STORE_OPEN_TIMEOUT_MS);
     const request = indexedDB.open(IMAGE_DB_NAME, IMAGE_DB_VERSION);
     request.onupgradeneeded = () => {
       const db = request.result;
@@ -99,8 +104,16 @@ function openImageDb() {
         db.createObjectStore(CONVERSATIONS_DB_STORE, { keyPath: "id" });
       }
     };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error || new Error("打开图片存储失败"));
+    request.onsuccess = () => {
+      clearTimeout(timer);
+      if (expired) { request.result.close(); return; }
+      request.result.onversionchange = () => request.result.close();
+      resolve(request.result);
+    };
+    request.onerror = () => {
+      clearTimeout(timer);
+      reject(request.error || new Error("打开图片存储失败"));
+    };
   });
 }
 
@@ -146,14 +159,28 @@ async function getImageRecords(attachments) {
 }
 
 async function deleteImageRecords(attachments) {
+  if (!conversationStoreReady || conversationStoreReadOnly) return;
   const ids = attachments.map((attachment) => attachment?.id).filter(Boolean);
   if (!ids.length) return;
   const db = await openImageDb();
   try {
-    const transaction = db.transaction(IMAGE_DB_STORE, "readwrite");
+    // 与会话读写共享事务锁：删图时确认磁盘上的会话也已不再引用它。
+    const transaction = db.transaction([IMAGE_DB_STORE, CONVERSATIONS_DB_STORE], "readwrite");
     const done = transactionDone(transaction);
-    const store = transaction.objectStore(IMAGE_DB_STORE);
-    ids.forEach((id) => store.delete(id));
+    const request = transaction.objectStore(CONVERSATIONS_DB_STORE).get(CONVERSATION_STORE_RECORD_ID);
+    request.onsuccess = () => {
+      const saved = request.result?.value;
+      if (!saved || !isRecoverableConversationStore(saved)) return;
+      const liveIds = new Set([saved, conversationStore].flatMap((store) =>
+        store.conversations.flatMap((conversation) =>
+          (conversation?.messages || []).flatMap((message) =>
+            (message?.attachments || []).map((attachment) => attachment.id)
+          )
+        )
+      ));
+      const images = transaction.objectStore(IMAGE_DB_STORE);
+      ids.filter((id) => !liveIds.has(id)).forEach((id) => images.delete(id));
+    };
     await done;
   } finally {
     db.close();
@@ -178,6 +205,7 @@ async function listImageRecordIds() {
 }
 
 async function cleanupOrphanedImageRecords() {
+  if (!conversationStoreReady || conversationStoreReadOnly || conversationStoreBackend !== "indexeddb") return;
   const liveIds = new Set(
     conversationStore.conversations.flatMap((conversation) =>
       conversation.messages.flatMap((message) =>
@@ -323,6 +351,14 @@ function normalizeMessageAttachments(items) {
   return attachments;
 }
 
+// 思考链：助手消息可带 reasoning（当前版本的思考文字）；有 reroll 版本时 variantReasoning 与 variants 等长，
+// 没有任何版本有思考就不存这个键（老存档原样）
+function normalizeVariantReasoning(items, count) {
+  if (!Array.isArray(items) || count < 2) return null;
+  const list = Array.from({ length: count }, (_, i) => (typeof items[i] === "string" && items[i] ? items[i] : null));
+  return list.some(Boolean) ? list : null;
+}
+
 function normalizeStoredMessages(items) {
   if (!Array.isArray(items)) return [];
   return items.filter((item) =>
@@ -353,6 +389,12 @@ function normalizeStoredMessages(items) {
     const steps = item.role === "assistant"
       ? (variantSteps ? variantSteps[activeVariant] || [] : normalizeMemorySteps(item.steps))
       : [];
+    const variantReasoning = item.role === "assistant" && hasVariants
+      ? normalizeVariantReasoning(item.variantReasoning, variants.length)
+      : null;
+    const reasoning = item.role === "assistant"
+      ? (variantReasoning ? variantReasoning[activeVariant] || "" : (typeof item.reasoning === "string" ? item.reasoning : ""))
+      : "";
     return {
       role: item.role,
       content: hasVariants ? variants[activeVariant] : item.content,
@@ -361,6 +403,8 @@ function normalizeStoredMessages(items) {
       ...(hasVariants ? { variants, activeVariant } : {}),
       ...(steps.length ? { steps } : {}),
       ...(variantSteps ? { variantSteps } : {}),
+      ...(reasoning ? { reasoning } : {}),
+      ...(variantReasoning ? { variantReasoning } : {}),
     };
   });
 }
