@@ -1,46 +1,79 @@
 // 回复流：思考块、引用、缓存徽章、SSE 解析、自动起标题。
-// 思考图标的形状：绕中心 16 个锚点、每段一条二次曲线，锚点/控制点半径按周期重复。
-// 所有形状结构相同，SVG <animate> 才能在它们之间平滑变形（iOS Safari 不支持 CSS 的 d 动画）。
-function sparkPath(anchors, controls) {
-  const point = (r, deg) => {
-    const a = (deg - 90) * Math.PI / 180;
-    return `${+(12 + r * Math.cos(a)).toFixed(2)} ${+(12 + r * Math.sin(a)).toFixed(2)}`;
+// 思考图标是一只麻薯团子：身体是绕中心 16 个锚点、每段一条二次曲线的软椭圆，
+// 所有帧结构相同，SVG <animate> 才能在它们之间平滑变形（iOS Safari 不支持 CSS 的 d 动画）。
+const round2 = (n) => +n.toFixed(2);
+function mochiPath({ rx, ry, bottom = 21.5, lean = 0 }) {
+  const cy = bottom - ry;
+  const point = (deg, k = 1) => {
+    const a = deg * Math.PI / 180;
+    const s = Math.sin(a);
+    const y = cy + ry * k * (s > 0 ? Math.pow(s, 0.6) : s); // 下半边压平：团子是坐在地上的
+    const x = 12 + rx * k * Math.cos(a) + lean * (bottom - y); // lean：越往上越歪，像果冻晃
+    return `${round2(x)} ${round2(y)}`;
   };
-  let d = `M${point(anchors[0], 0)}`;
-  for (let i = 0; i < 16; i++) {
-    d += `Q${point(controls[i % controls.length], i * 22.5 + 11.25)} ${point(anchors[(i + 1) % anchors.length], (i + 1) * 22.5)}`;
-  }
+  let d = `M${point(0)}`;
+  for (let i = 0; i < 16; i++) d += `Q${point(i * 22.5 + 11.25, 1.02)} ${point((i + 1) * 22.5)}`;
   return `${d}Z`;
 }
-const SPARK_SHAPES = {
-  sparkle: sparkPath([10.5, 4.6, 3.8, 4.6], [5.2, 4, 4, 5.2]),   // 四角星（静止/完成时的样子）
-  clover: sparkPath([9.6, 8.8, 3.2, 8.8], [10.2, 6.6, 6.6, 10.2]), // 四瓣花
-  star: sparkPath([10, 4.2], [6.4, 6.4]),                          // 八角星
-  blob: sparkPath([7.6], [7.75]),                                  // 圆团
-};
-// 四角星 → 花 → 八角星 → 圆团 → 四角星，一圈 6.4 秒，颜色在几种暖橙之间跟着变
-const SPARK_MORPH =
-  `<animate attributeName="d" dur="6.4s" repeatCount="indefinite" calcMode="spline" keyTimes="0;.25;.5;.75;1" keySplines=".65 0 .35 1;.65 0 .35 1;.65 0 .35 1;.65 0 .35 1" values="${SPARK_SHAPES.sparkle};${SPARK_SHAPES.clover};${SPARK_SHAPES.star};${SPARK_SHAPES.blob};${SPARK_SHAPES.sparkle}"></animate>` +
-  '<animate attributeName="fill" dur="6.4s" repeatCount="indefinite" values="#d97757;#e39a78;#cf6a47;#e08a63;#d97757"></animate>';
-const SPARK_SPIN = '<animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="8s" repeatCount="indefinite"></animateTransform>';
+// 眼睛跟着身体走：身体压扁眼睛也压扁
+function mochiEyes({ rx, ry, bottom = 21.5, lean = 0 }) {
+  const y = bottom - ry * 1.08;
+  const shift = lean * (bottom - y);
+  return {
+    left: round2(12 - rx * 0.36 + shift),
+    right: round2(12 + rx * 0.36 + shift),
+    y: round2(y),
+    rx: round2(1.1 * Math.min(1.15, rx / 9.2)),
+    ry: round2(1.4 * Math.min(1.15, ry / 8.2)),
+  };
+}
+const MOCHI_REST = { rx: 9.2, ry: 8.2 };
+// 一轮 2.4 秒：停一下 → 往下压蓄力 → 拉长弹起 → 最高点 → 落地压扁 → 左右晃 → 回原形
+const MOCHI_FRAMES = [
+  { t: 0, ...MOCHI_REST },
+  { t: 0.1, ...MOCHI_REST },
+  { t: 0.24, rx: 11, ry: 6.2 },
+  { t: 0.42, rx: 7.8, ry: 9.5, bottom: 18.8 },
+  { t: 0.56, rx: 8.6, ry: 8.6, bottom: 17 },
+  { t: 0.72, rx: 11.4, ry: 6 },
+  { t: 0.83, rx: 8.7, ry: 8.7, lean: 0.14 },
+  { t: 0.92, rx: 9.3, ry: 8.1, lean: -0.08 },
+  { t: 1, ...MOCHI_REST },
+];
+const MOCHI_SPLINES = ["0 0 1 1", ".45 0 .55 1", ".23 1 .32 1", ".25 .6 .5 1", ".5 0 .9 .5", ".23 1 .32 1", ".45 0 .55 1", ".45 0 .55 1"];
+function mochiAnimate(attr, values) {
+  return `<animate attributeName="${attr}" dur="2.4s" repeatCount="indefinite" calcMode="spline" keyTimes="${MOCHI_FRAMES.map((f) => f.t).join(";")}" keySplines="${MOCHI_SPLINES.join(";")}" values="${values.join(";")}"></animate>`;
+}
+function mochiMarkup(animated) {
+  const rest = mochiEyes(MOCHI_REST);
+  const frames = MOCHI_FRAMES.map(mochiEyes);
+  const eye = (side) => `<ellipse class="mochi-eye" cx="${rest[side]}" cy="${rest.y}" rx="${rest.rx}" ry="${rest.ry}">${animated
+    ? ["cx", "cy", "rx", "ry"].map((attr) => mochiAnimate(attr, frames.map((f) => (attr === "cx" ? f[side] : attr === "cy" ? f.y : f[attr])))).join("")
+    : ""}</ellipse>`;
+  const happy = (x) => `<path class="mochi-happy" d="M${round2(x - 1.5)} ${round2(rest.y + 0.7)}Q${round2(x)} ${round2(rest.y - 1.6)} ${round2(x + 1.5)} ${round2(rest.y + 0.7)}"></path>`;
+  return `<svg class="reasoning-mochi" viewBox="0 0 24 24">` +
+    `<path class="mochi-body" d="${mochiPath(MOCHI_REST)}">${animated ? mochiAnimate("d", MOCHI_FRAMES.map(mochiPath)) : ""}</path>` +
+    `<g class="mochi-open">${eye("left")}${eye("right")}</g>` +
+    `<g class="mochi-closed">${happy(rest.left)}${happy(rest.right)}</g></svg>`;
+}
 
 // open=false 用于从存档重建：一出生就是收起+完成态，不播放展开/收起和收尾动画
 function addReasoningBlock({ webSearch, attach = true, open = true }) {
   if (hintEl) hintEl.remove();
   const root = document.createElement("div");
-  root.className = open ? "reasoning is-open" : "reasoning is-done is-static";
+  root.className = open ? "reasoning is-open" : "reasoning is-done is-settled is-static";
 
   const toggle = document.createElement("button");
   toggle.className = "reasoning-toggle";
   toggle.type = "button";
   toggle.setAttribute("aria-expanded", String(open));
 
-  // 思考中：边转边变形的星星；完成：一缩一弹，定格成灰色四角星
+  // 思考中：团子一蹦一跳；完成：扁扁坐下再弹回，变灰、眼睛眯成 ^ ^
   const morph = open && !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
   const mark = document.createElement("span");
   mark.className = "reasoning-mark";
   mark.setAttribute("aria-hidden", "true");
-  mark.innerHTML = `<svg class="reasoning-spark" viewBox="0 0 24 24"><g>${morph ? SPARK_SPIN : ""}<path d="${SPARK_SHAPES.sparkle}">${morph ? SPARK_MORPH : ""}</path></g></svg>`;
+  mark.innerHTML = mochiMarkup(morph);
 
   const title = document.createElement("span");
   title.className = "reasoning-title";
@@ -99,9 +132,10 @@ function addReasoningBlock({ webSearch, attach = true, open = true }) {
       if (finished) return;
       finished = true;
       root.classList.add("is-done");
-      // 收尾动画缩到最小时（CSS spark-settle 的 40%）再停掉变形和旋转，跳回四角星的那一下藏在最小处
+      // 收尾压到最扁时（CSS mochi-settle 的 35%）再停掉变形、换成 ^ ^ 眼，跳回原形的那一下藏在最扁处
       setTimeout(() => {
-        mark.querySelectorAll("animate, animateTransform").forEach((node) => node.remove());
+        mark.querySelectorAll("animate").forEach((node) => node.remove());
+        root.classList.add("is-settled");
       }, 170);
       root.classList.remove("is-open");
       toggle.setAttribute("aria-expanded", "false");

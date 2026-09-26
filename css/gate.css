@@ -232,7 +232,7 @@ html[data-input="pointer"] [role="button"]:focus-visible { outline: none; }
   .msg.typing::after {
     animation: none;
   }
-  .reasoning .reasoning-spark { animation: none !important; }
+  .reasoning .reasoning-mochi { animation: none !important; }
   .reasoning:not(.is-done) .reasoning-title {
     animation: none;
     background: none;
