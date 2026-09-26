@@ -229,18 +229,15 @@ html[data-input="pointer"] [role="button"]:focus-visible { outline: none; }
   }
   .reasoning-panel { transition: opacity var(--motion-fast) ease, visibility 0s linear var(--motion-fast); }
   .reasoning.is-open .reasoning-panel { transition-delay: 0s; }
-  .reasoning-spark,
-  .reasoning-spark path,
   .msg.typing::after {
     animation: none;
   }
+  .reasoning .reasoning-spark { animation: none !important; }
   .reasoning:not(.is-done) .reasoning-title {
     animation: none;
     background: none;
     color: inherit;
   }
-  .reasoning-check circle,
-  .reasoning-check path { transition: none !important; }
   .settings-screen {
     transform: none;
     transition: opacity var(--motion-fast) ease, visibility 0s linear var(--motion-fast);

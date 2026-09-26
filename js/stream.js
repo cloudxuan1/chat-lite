@@ -1,5 +1,30 @@
 // 回复流：思考块、引用、缓存徽章、SSE 解析、自动起标题。
-// open=false 用于从存档重建：一出生就是收起+完成态，不播放展开/收起和打勾动画
+// 思考图标的形状：绕中心 16 个锚点、每段一条二次曲线，锚点/控制点半径按周期重复。
+// 所有形状结构相同，SVG <animate> 才能在它们之间平滑变形（iOS Safari 不支持 CSS 的 d 动画）。
+function sparkPath(anchors, controls) {
+  const point = (r, deg) => {
+    const a = (deg - 90) * Math.PI / 180;
+    return `${+(12 + r * Math.cos(a)).toFixed(2)} ${+(12 + r * Math.sin(a)).toFixed(2)}`;
+  };
+  let d = `M${point(anchors[0], 0)}`;
+  for (let i = 0; i < 16; i++) {
+    d += `Q${point(controls[i % controls.length], i * 22.5 + 11.25)} ${point(anchors[(i + 1) % anchors.length], (i + 1) * 22.5)}`;
+  }
+  return `${d}Z`;
+}
+const SPARK_SHAPES = {
+  sparkle: sparkPath([10.5, 4.6, 3.8, 4.6], [5.2, 4, 4, 5.2]),   // 四角星（静止/完成时的样子）
+  clover: sparkPath([9.6, 8.8, 3.2, 8.8], [10.2, 6.6, 6.6, 10.2]), // 四瓣花
+  star: sparkPath([10, 4.2], [6.4, 6.4]),                          // 八角星
+  blob: sparkPath([7.6], [7.75]),                                  // 圆团
+};
+// 四角星 → 花 → 八角星 → 圆团 → 四角星，一圈 6.4 秒，颜色在几种暖橙之间跟着变
+const SPARK_MORPH =
+  `<animate attributeName="d" dur="6.4s" repeatCount="indefinite" calcMode="spline" keyTimes="0;.25;.5;.75;1" keySplines=".65 0 .35 1;.65 0 .35 1;.65 0 .35 1;.65 0 .35 1" values="${SPARK_SHAPES.sparkle};${SPARK_SHAPES.clover};${SPARK_SHAPES.star};${SPARK_SHAPES.blob};${SPARK_SHAPES.sparkle}"></animate>` +
+  '<animate attributeName="fill" dur="6.4s" repeatCount="indefinite" values="#d97757;#e39a78;#cf6a47;#e08a63;#d97757"></animate>';
+const SPARK_SPIN = '<animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="8s" repeatCount="indefinite"></animateTransform>';
+
+// open=false 用于从存档重建：一出生就是收起+完成态，不播放展开/收起和收尾动画
 function addReasoningBlock({ webSearch, attach = true, open = true }) {
   if (hintEl) hintEl.remove();
   const root = document.createElement("div");
@@ -10,13 +35,12 @@ function addReasoningBlock({ webSearch, attach = true, open = true }) {
   toggle.type = "button";
   toggle.setAttribute("aria-expanded", String(open));
 
-  // 思考中：旋转呼吸的四角星；完成：星星收起，圆圈和勾一笔画出来
+  // 思考中：边转边变形的星星；完成：一缩一弹，定格成灰色四角星
+  const morph = open && !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
   const mark = document.createElement("span");
   mark.className = "reasoning-mark";
   mark.setAttribute("aria-hidden", "true");
-  mark.innerHTML =
-    '<svg class="reasoning-spark" viewBox="0 0 24 24"><path d="M12 2.5c.6 5.2 4.3 8.9 9.5 9.5-5.2.6-8.9 4.3-9.5 9.5-.6-5.2-4.3-8.9-9.5-9.5 5.2-.6 8.9-4.3 9.5-9.5Z"></path></svg>' +
-    '<svg class="reasoning-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" pathLength="1"></circle><path d="m7.8 12.3 2.9 2.9 5.5-5.8" pathLength="1"></path></svg>';
+  mark.innerHTML = `<svg class="reasoning-spark" viewBox="0 0 24 24"><g>${morph ? SPARK_SPIN : ""}<path d="${SPARK_SHAPES.sparkle}">${morph ? SPARK_MORPH : ""}</path></g></svg>`;
 
   const title = document.createElement("span");
   title.className = "reasoning-title";
@@ -61,6 +85,7 @@ function addReasoningBlock({ webSearch, attach = true, open = true }) {
   }
 
   let hasReasoning = false;
+  let finished = false;
   return {
     root,
     append(delta) {
@@ -71,7 +96,13 @@ function addReasoningBlock({ webSearch, attach = true, open = true }) {
       body.textContent += delta;
     },
     finish() {
+      if (finished) return;
+      finished = true;
       root.classList.add("is-done");
+      // 收尾动画缩到最小时（CSS spark-settle 的 40%）再停掉变形和旋转，跳回四角星的那一下藏在最小处
+      setTimeout(() => {
+        mark.querySelectorAll("animate, animateTransform").forEach((node) => node.remove());
+      }, 170);
       root.classList.remove("is-open");
       toggle.setAttribute("aria-expanded", "false");
       title.textContent = hasReasoning ? "思考完成" : "思考完成";
