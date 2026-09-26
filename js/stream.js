@@ -1,13 +1,14 @@
 // 回复流：思考块、引用、缓存徽章、SSE 解析、自动起标题。
-function addReasoningBlock({ webSearch, attach = true }) {
+// open=false 用于从存档重建：一出生就是收起的，不播放「展开→收起」的动画
+function addReasoningBlock({ webSearch, attach = true, open = true }) {
   if (hintEl) hintEl.remove();
   const root = document.createElement("div");
-  root.className = "reasoning is-open";
+  root.className = open ? "reasoning is-open" : "reasoning";
 
   const toggle = document.createElement("button");
   toggle.className = "reasoning-toggle";
   toggle.type = "button";
-  toggle.setAttribute("aria-expanded", "true");
+  toggle.setAttribute("aria-expanded", String(open));
 
   const mark = document.createElement("span");
   mark.className = "reasoning-mark";
@@ -17,20 +18,23 @@ function addReasoningBlock({ webSearch, attach = true }) {
   title.className = "reasoning-title";
   title.textContent = webSearch ? "策划并搜索相关资料。" : "正在思考。";
 
-  const done = document.createElement("span");
-  done.className = "reasoning-done";
-  done.textContent = "Done";
-
   const chevron = document.createElement("span");
   chevron.className = "reasoning-chevron";
   chevron.setAttribute("aria-hidden", "true");
-  chevron.textContent = "⌄";
+  chevron.innerHTML = '<svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"></path></svg>';
 
+  // panel 负责展开/收起的高度动画（grid 行 0fr↔1fr），inner 裁掉溢出
+  const panel = document.createElement("div");
+  panel.className = "reasoning-panel";
+  const inner = document.createElement("div");
+  inner.className = "reasoning-panel-inner";
   const body = document.createElement("div");
   body.className = "reasoning-body";
+  inner.appendChild(body);
+  panel.appendChild(inner);
 
-  toggle.append(mark, title, done, chevron);
-  root.append(toggle, body);
+  toggle.append(mark, title, chevron);
+  root.append(toggle, panel);
 
   if (webSearch) {
     const tools = document.createElement("div");
@@ -38,7 +42,7 @@ function addReasoningBlock({ webSearch, attach = true }) {
     const item = document.createElement("div");
     item.textContent = "联网搜索已开启";
     tools.appendChild(item);
-    root.appendChild(tools);
+    inner.appendChild(tools);
   }
 
   toggle.addEventListener("click", () => {
@@ -73,7 +77,7 @@ function addReasoningBlock({ webSearch, attach = true }) {
 
 // 刷新或切换会话后，用存下来的思考文字重建一个已收起的思考块（挂在消息区末尾，调用方接着加气泡）
 function appendReasoningTrace(text) {
-  const box = addReasoningBlock({ webSearch: false });
+  const box = addReasoningBlock({ webSearch: false, open: false });
   box.append(text);
   box.finish();
   return box.root;
@@ -94,7 +98,7 @@ function syncReasoningTrace(root, message) {
     existing?.remove();
     return;
   }
-  const box = addReasoningBlock({ webSearch: false, attach: false });
+  const box = addReasoningBlock({ webSearch: false, attach: false, open: false });
   box.append(text);
   box.finish();
   if (existing) existing.replaceWith(box.root);
