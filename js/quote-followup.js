@@ -198,6 +198,50 @@ function startEditMessage(root) {
     }
   };
 
+  // 重新发送（仅用户消息）：改完的这句成为最后一条，后面的回复/消息删掉，再按它重新请求回复
+  const resendEdit = () => {
+    if (!conversationStoreReady || conversationStoreReadOnly) {
+      showAppStatus(conversationStoreLoadWarning || "存档尚未就绪，暂不能重新发送。");
+      return;
+    }
+    if (pending) return;
+    const value = area.value.trim();
+    if (!value && !hasImages) return;
+    if (message.attachments?.length && modelImageCapability(modelById(currentModel)) === "unsupported") {
+      showComposerStatus("当前模型不能看图，请先换一个支持图片的模型。", { error: true, source: "capability" });
+      return;
+    }
+    const followingCount = getActiveConversation().messages.length - index - 1;
+    if (
+      followingCount > 0 &&
+      !window.confirm(`重新发送会删除它后面的 ${followingCount} 条消息，确定吗？`)
+    ) return;
+
+    const draft = cloneConversationStore();
+    const draftConversation = conversationById(convId, draft);
+    const draftMessage = draftConversation?.messages[index];
+    if (!draftMessage) return;
+    draftMessage.content = value;
+    const removedAttachments = draftConversation.messages
+      .slice(index + 1)
+      .flatMap((item) => item.attachments || []);
+    draftConversation.messages = draftConversation.messages.slice(0, index + 1);
+    draftConversation.updatedAt = new Date().toISOString();
+    if (!persistConversationStore(draft)) return;
+    void deleteImageRecords(removedAttachments).catch(() => {});
+    renderActiveConversation();
+    renderConversationList();
+
+    setPending(true);
+    void streamAssistantReply({
+      conversationId: convId,
+      sessionId: conversation.sessionId,
+      model: currentModel,
+      effort: normalizeEffortForModel(reasoningEffort, modelById(currentModel)),
+      assistantIndex: index + 1,
+    });
+  };
+
   cancelBtn.addEventListener("click", cancelEdit);
   saveBtn.addEventListener("click", saveEdit);
   area.addEventListener("keydown", (e) => {
@@ -205,6 +249,14 @@ function startEditMessage(root) {
   });
 
   actions.append(cancelBtn, saveBtn);
+  if (message.role === "user") {
+    const resendBtn = document.createElement("button");
+    resendBtn.type = "button";
+    resendBtn.className = "message-edit-action is-save";
+    resendBtn.textContent = "重新发送";
+    resendBtn.addEventListener("click", resendEdit);
+    actions.append(resendBtn);
+  }
   if (originalTools) originalTools.hidden = true;
   root.append(actions);
 }
