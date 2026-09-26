@@ -1,18 +1,22 @@
 // 回复流：思考块、引用、缓存徽章、SSE 解析、自动起标题。
-// open=false 用于从存档重建：一出生就是收起的，不播放「展开→收起」的动画
+// open=false 用于从存档重建：一出生就是收起+完成态，不播放展开/收起和打勾动画
 function addReasoningBlock({ webSearch, attach = true, open = true }) {
   if (hintEl) hintEl.remove();
   const root = document.createElement("div");
-  root.className = open ? "reasoning is-open" : "reasoning";
+  root.className = open ? "reasoning is-open" : "reasoning is-done is-static";
 
   const toggle = document.createElement("button");
   toggle.className = "reasoning-toggle";
   toggle.type = "button";
   toggle.setAttribute("aria-expanded", String(open));
 
+  // 思考中：旋转呼吸的四角星；完成：星星收起，圆圈和勾一笔画出来
   const mark = document.createElement("span");
   mark.className = "reasoning-mark";
   mark.setAttribute("aria-hidden", "true");
+  mark.innerHTML =
+    '<svg class="reasoning-spark" viewBox="0 0 24 24"><path d="M12 2.5c.6 5.2 4.3 8.9 9.5 9.5-5.2.6-8.9 4.3-9.5 9.5-.6-5.2-4.3-8.9-9.5-9.5 5.2-.6 8.9-4.3 9.5-9.5Z"></path></svg>' +
+    '<svg class="reasoning-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" pathLength="1"></circle><path d="m7.8 12.3 2.9 2.9 5.5-5.8" pathLength="1"></path></svg>';
 
   const title = document.createElement("span");
   title.className = "reasoning-title";

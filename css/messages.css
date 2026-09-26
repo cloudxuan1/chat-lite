@@ -225,38 +225,92 @@
   flex: none;
   width: 18px;
   height: 18px;
-  border-radius: 50%;
-  background:
-    conic-gradient(from 0deg, rgba(217,119,87,0), rgba(217,119,87,0.95), rgba(217,119,87,0));
-  animation: spin 1.4s linear infinite;
 }
-.reasoning-mark::after {
-  content: '';
+.reasoning-mark svg {
   position: absolute;
-  inset: 5px;
-  border-radius: 50%;
-  background: var(--bg-primary);
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
 }
-.reasoning.is-done .reasoning-mark {
-  border: 1.5px solid rgba(31,30,29,0.32);
-  background: transparent;
-  animation: none;
+/* 思考中：四角星慢转（外层 svg）+ 呼吸缩放（内层 path），两个 transform 分开放不打架 */
+.reasoning-spark {
+  color: var(--accent);
+  animation: spin 3.2s linear infinite;
+  transition:
+    opacity var(--motion-fast) var(--ease-out),
+    scale var(--motion-fast) var(--ease-out);
 }
-.reasoning.is-done .reasoning-mark::after {
-  inset: 4px;
-  width: 7px;
-  height: 4px;
-  border-left: 1.5px solid rgba(31,30,29,0.55);
-  border-bottom: 1.5px solid rgba(31,30,29,0.55);
-  border-radius: 0;
-  background: transparent;
-  transform: rotate(-45deg);
+.reasoning-spark path {
+  fill: currentColor;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: spark-breathe 1.6s ease-in-out infinite alternate;
+}
+/* 完成：星星停在当前角度（不跳回 0°）再缩小淡出 */
+.reasoning.is-done .reasoning-spark {
+  opacity: 0;
+  scale: 0.5;
+  animation-play-state: paused;
+}
+.reasoning.is-done .reasoning-spark path { animation-play-state: paused; }
+.reasoning-check {
+  fill: none;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.reasoning-check circle,
+.reasoning-check path {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+}
+.reasoning-check circle {
+  stroke: rgba(31,30,29,0.32);
+  transform: rotate(-90deg);
+  transform-origin: center;
+}
+.reasoning-check path { stroke: rgba(31,30,29,0.6); }
+/* 先画圈、紧接着画勾 */
+.reasoning.is-done .reasoning-check circle {
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset 420ms var(--ease-out) 60ms;
+}
+.reasoning.is-done .reasoning-check path {
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset 260ms var(--ease-out) 260ms;
+}
+/* 从存档重建的块直接是完成态，不播画勾 */
+.reasoning.is-static .reasoning-spark,
+.reasoning.is-static .reasoning-check circle,
+.reasoning.is-static .reasoning-check path {
+  transition: none;
 }
 .reasoning-title {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* 思考中：标题上一道光从左扫到右 */
+.reasoning:not(.is-done) .reasoning-title {
+  color: transparent;
+  background: linear-gradient(90deg,
+    var(--text-muted) 0%, var(--text-muted) 35%,
+    var(--text-secondary) 50%,
+    var(--text-muted) 65%, var(--text-muted) 100%);
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: title-shimmer 2s linear infinite;
+}
+@keyframes spark-breathe {
+  from { transform: scale(0.72); opacity: 0.75; }
+  to { transform: scale(1); opacity: 1; }
+}
+@keyframes title-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: 0% 0; }
 }
 /* 箭头紧跟标题，展开/收起都不挪位置；收起朝下、展开朝上 */
 .reasoning-chevron {
