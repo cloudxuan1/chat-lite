@@ -1,4 +1,4 @@
-// 思考彩蛋：思考时标题像单词卡一样换词——花窗一拧换一个英文词，下一扇窗翻出中文。
+// 思考彩蛋：思考时标题像单词卡一样换词——花窗拧的时候换一个英文词，过一会儿翻出中文（一轮 4.7s 翻 4 次）。
 // 做饭 / 胡言乱语 / 磨蹭三组取自 Claude Code 自带的 spinner 动词；魔法、老邓头是自编的。
 // 设置页在 js/thinking-settings.js；开关状态在 store.js。
 const THINKING_SERIES = [
@@ -48,7 +48,7 @@ const THINKING_SERIES = [
 const THINKING_PLAIN = { en: "Thinking…", zh: "正在思考中" };
 const THINKING_MARAUDER_OPEN = { en: "I solemnly swear that I am up to no good", zh: "我庄严宣誓我不干好事" };
 const THINKING_MARAUDER_DONE = { en: "Mischief managed", zh: "恶作剧完毕" };
-const THINKING_FLIP_MS = 130;
+const THINKING_FLIP_MS = 170;
 
 function loadThinkingSeriesOff() {
   try {

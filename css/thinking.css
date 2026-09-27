@@ -43,7 +43,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   vertical-align: bottom;
-  transition: transform 130ms var(--ease-in-out), opacity 130ms ease;
+  transition: transform 170ms var(--ease-in-out), opacity 170ms ease;
 }
 .reasoning-word.is-flipping {
   transform: perspective(200px) rotateX(80deg);

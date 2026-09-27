@@ -227,10 +227,11 @@ function reasoningIconMarkup({ done = false, animated = true } = {}) {
   return animated ? b.thinking : b.done.replace("huachuang is-done", "huachuang");
 }
 
-// 思考彩蛋换词的节拍（秒，相对图标自己的动画时钟）：拧的那三次换新词，各自的下一扇窗翻出中文
+// 思考彩蛋换词的节拍（秒，相对图标自己的动画时钟）：一轮翻 4 次、两个词，每面停约 1.2s。
+// 第 1、2 次拧换新词（英文），亚字→方窗和第 3 次拧翻出中文。
 function reasoningIconBeats() {
   const s = HUACHUANG.starts.map((t) => t * HC_TIME_SCALE);
-  return { cycle: HUACHUANG.T * HC_TIME_SCALE, fresh: [s[0], s[3], s[5]], flip: [s[1], s[4], s[6]] };
+  return { cycle: HUACHUANG.T * HC_TIME_SCALE, fresh: [s[0], s[3]], flip: [s[2], s[5]] };
 }
 
 // 开窗收尾：缩到最小（170ms）时停掉动画、窗芯先藏起来，窗洞里放两扇窗扇（剪在海棠内圈里）；
