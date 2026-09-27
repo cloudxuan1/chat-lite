@@ -2,14 +2,57 @@
 // 恢复默认 / 删除）。都是即时生效的设置项，不走「保存并返回」。词库和换词逻辑在 js/thinking-words.js。
 const THINKING_PEN_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 4.5c-6.4 0-11 4.6-12 11L6 20l4.5-1.5c6.4-1 11-5.6 11-12Z"></path><path d="M6 20l7.5-8.5"></path></svg>';
 
-function saveThinkingFlag(key, value) {
-  localStorage.setItem(key, value ? "1" : "0");
+function setThinkingSaveError(message = "") {
+  for (const status of [thinkingSettingsStatus, thinkingSeriesStatus]) {
+    status.textContent = message;
+    status.hidden = !message;
+  }
 }
 
-function saveThinkingSeries() {
-  localStorage.setItem(THINKING_SERIES_OFF_KEY, JSON.stringify([...thinkingSeriesOff]));
-  localStorage.setItem(THINKING_CUSTOM_KEY, JSON.stringify(thinkingCustomSeries));
-  localStorage.setItem(THINKING_OVERRIDES_KEY, JSON.stringify(thinkingSeriesOverrides));
+// 先落盘再更新运行时状态；多个键一起改时，失败就撤回本次已写入的键。
+function persistThinkingEntries(entries) {
+  const written = [];
+  try {
+    for (const [key, value] of entries) {
+      const previous = localStorage.getItem(key);
+      if (previous === value) continue;
+      localStorage.setItem(key, value);
+      written.push([key, previous]);
+    }
+    setThinkingSaveError();
+    return true;
+  } catch {
+    for (const [key, previous] of written.reverse()) {
+      try {
+        if (previous === null) localStorage.removeItem(key);
+        else localStorage.setItem(key, previous);
+      } catch { /* 保留错误提示，不宣称保存成功 */ }
+    }
+    setThinkingSaveError("没有保存成功，请检查浏览器存储空间后重试。编辑中的文字仍在此页，返回时会再次尝试保存。");
+    return false;
+  }
+}
+
+function saveThinkingFlag(key, value) {
+  return persistThinkingEntries([[key, value ? "1" : "0"]]);
+}
+
+function notifyThinkingSettingsChanged() {
+  document.dispatchEvent(new Event("thinking-settings-change"));
+}
+
+function saveThinkingSeries({ off = thinkingSeriesOff, custom = thinkingCustomSeries, overrides = thinkingSeriesOverrides } = {}) {
+  const entries = [
+    [THINKING_SERIES_OFF_KEY, JSON.stringify([...off]), JSON.stringify([...thinkingSeriesOff])],
+    [THINKING_CUSTOM_KEY, JSON.stringify(custom), JSON.stringify(thinkingCustomSeries)],
+    [THINKING_OVERRIDES_KEY, JSON.stringify(overrides), JSON.stringify(thinkingSeriesOverrides)],
+  ].filter(([, value, previous]) => value !== previous);
+  if (!persistThinkingEntries(entries)) return false;
+  thinkingSeriesOff = off;
+  thinkingCustomSeries = custom;
+  thinkingSeriesOverrides = overrides;
+  if (entries.length) notifyThinkingSettingsChanged();
+  return true;
 }
 
 function setThinkingSwitch(button, on) {
@@ -84,24 +127,27 @@ function renderThinkingSeriesScreen() {
 // 把详情页当前的内容写回：自定义系列直接改；内置系列写进 overrides（名字/词和原版一样就不记）
 function saveThinkingSeriesScreen() {
   const series = currentThinkingSeries();
-  if (!series) return;
+  if (!series) return true;
   const name = thinkingSeriesName.value.trim() || series.name;
   const words = [...thinkingWords.querySelectorAll(".thinking-word-row")]
     .map((row) => ({ en: row.querySelector(".thinking-word-en").value.trim(), zh: row.querySelector(".thinking-word-zh").value.trim() }))
     .filter((w) => w.en);
   if (series.custom) {
-    Object.assign(thinkingCustomSeries.find((s) => s.id === series.id), { name, words });
+    const custom = thinkingCustomSeries.map((s) => s.id === series.id ? { ...s, name, words } : s);
+    if (!saveThinkingSeries({ custom })) return false;
   } else {
     const original = THINKING_SERIES.find((s) => s.id === series.id);
     const same = JSON.stringify(words) === JSON.stringify(original.words.map(([en, zh]) => ({ en, zh })));
     const override = { ...(name !== original.name ? { name } : {}), ...(same ? {} : { words }) };
-    if (Object.keys(override).length) thinkingSeriesOverrides[series.id] = override;
-    else delete thinkingSeriesOverrides[series.id];
+    const overrides = { ...thinkingSeriesOverrides };
+    if (Object.keys(override).length) overrides[series.id] = override;
+    else delete overrides[series.id];
+    if (!saveThinkingSeries({ overrides })) return false;
   }
-  saveThinkingSeries();
   thinkingSeriesHeading.textContent = name;
   thinkingWordsTitle.textContent = `词 · ${words.length} 个`;
   thinkingSeriesReset.hidden = series.custom || !thinkingSeriesOverrides[series.id];
+  return true;
 }
 
 function openThinkingSeriesScreen(id) {
@@ -114,6 +160,7 @@ function openThinkingSeriesScreen(id) {
 }
 
 function closeThinkingSeriesScreen({ instant = false } = {}) {
+  if (!saveThinkingSeriesScreen()) return;
   if (instant) skipPanelMotionOnce(thinkingSeriesScreen);
   const id = thinkingEditingSeries;
   thinkingEditingSeries = null;
@@ -145,18 +192,21 @@ function closeThinkingSettingsScreen({ instant = false } = {}) {
 settingsThinkingOpen.addEventListener("click", openThinkingSettingsScreen);
 thinkingSettingsBack.addEventListener("click", () => closeThinkingSettingsScreen());
 thinkingEggToggle.addEventListener("click", () => {
+  if (!saveThinkingFlag(THINKING_EGG_KEY, !thinkingEggEnabled)) return;
   thinkingEggEnabled = !thinkingEggEnabled;
-  saveThinkingFlag(THINKING_EGG_KEY, thinkingEggEnabled);
+  notifyThinkingSettingsChanged();
   renderThinkingSettings();
 });
 thinkingTranslateToggle.addEventListener("click", () => {
+  if (!saveThinkingFlag(THINKING_TRANSLATE_KEY, !thinkingTranslate)) return;
   thinkingTranslate = !thinkingTranslate;
-  saveThinkingFlag(THINKING_TRANSLATE_KEY, thinkingTranslate);
+  notifyThinkingSettingsChanged();
   renderThinkingSettings();
 });
 thinkingMarauderToggle.addEventListener("click", () => {
+  if (!saveThinkingFlag(THINKING_MARAUDER_KEY, !thinkingMarauder)) return;
   thinkingMarauder = !thinkingMarauder;
-  saveThinkingFlag(THINKING_MARAUDER_KEY, thinkingMarauder);
+  notifyThinkingSettingsChanged();
   renderThinkingSettings();
 });
 thinkingSeriesList.addEventListener("click", (event) => {
@@ -165,16 +215,17 @@ thinkingSeriesList.addEventListener("click", (event) => {
   const toggle = event.target.closest(".thinking-switch-row");
   if (!toggle) return;
   const id = toggle.dataset.id;
-  if (thinkingSeriesOff.has(id)) thinkingSeriesOff.delete(id);
-  else thinkingSeriesOff.add(id);
-  saveThinkingSeries();
+  const off = new Set(thinkingSeriesOff);
+  if (off.has(id)) off.delete(id);
+  else off.add(id);
+  if (!saveThinkingSeries({ off })) return;
   setThinkingSwitch(toggle, !thinkingSeriesOff.has(id));
   updateThinkingSummary();
 });
 thinkingSeriesAdd.addEventListener("click", () => {
   const id = `custom-${Date.now().toString(36)}`;
-  thinkingCustomSeries.push({ id, name: "新系列", words: [] });
-  saveThinkingSeries();
+  const custom = [...thinkingCustomSeries, { id, name: "新系列", words: [] }];
+  if (!saveThinkingSeries({ custom })) return;
   renderThinkingSettings();
   openThinkingSeriesScreen(id);
   thinkingSeriesName.select();
@@ -184,9 +235,11 @@ thinkingSeriesBack.addEventListener("click", () => closeThinkingSeriesScreen());
 thinkingSeriesName.addEventListener("input", saveThinkingSeriesScreen);
 thinkingSeriesEnabled.addEventListener("click", () => {
   const id = thinkingEditingSeries;
-  if (thinkingSeriesOff.has(id)) thinkingSeriesOff.delete(id);
-  else thinkingSeriesOff.add(id);
-  saveThinkingSeries();
+  if (!saveThinkingSeriesScreen()) return;
+  const off = new Set(thinkingSeriesOff);
+  if (off.has(id)) off.delete(id);
+  else off.add(id);
+  if (!saveThinkingSeries({ off })) return;
   setThinkingSwitch(thinkingSeriesEnabled, !thinkingSeriesOff.has(id));
 });
 thinkingWords.addEventListener("input", saveThinkingSeriesScreen);
@@ -216,15 +269,17 @@ thinkingBulkAdd.addEventListener("click", () => {
 });
 thinkingSeriesReset.addEventListener("click", () => {
   if (!window.confirm("恢复成原版的名字和词？你改过的会丢掉。")) return;
-  delete thinkingSeriesOverrides[thinkingEditingSeries];
-  saveThinkingSeries();
+  const overrides = { ...thinkingSeriesOverrides };
+  delete overrides[thinkingEditingSeries];
+  if (!saveThinkingSeries({ overrides })) return;
   renderThinkingSeriesScreen();
 });
 thinkingSeriesDelete.addEventListener("click", () => {
   const series = currentThinkingSeries();
   if (!series?.custom || !window.confirm(`删除「${series.name}」系列？`)) return;
-  thinkingCustomSeries = thinkingCustomSeries.filter((s) => s.id !== series.id);
-  thinkingSeriesOff.delete(series.id);
-  saveThinkingSeries();
+  const custom = thinkingCustomSeries.filter((s) => s.id !== series.id);
+  const off = new Set(thinkingSeriesOff);
+  off.delete(series.id);
+  if (!saveThinkingSeries({ custom, off })) return;
   closeThinkingSeriesScreen();
 });
