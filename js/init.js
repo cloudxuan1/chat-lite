@@ -1,6 +1,7 @@
 // 启动：先弹密码/摆好壳，存档从 IndexedDB 异步读完再画首屏。必须最后引入。
 updateTopbar();
 syncSidebarLayout();
+updateThinkingSummary();
 
 // 没存过密码就先弹密码界面（密码不写在代码里，由你打开时手输一次）
 if (!accessPw) showGate();

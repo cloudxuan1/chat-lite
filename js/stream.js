@@ -1,83 +1,27 @@
 // 回复流：思考块、引用、缓存徽章、SSE 解析、自动起标题。
-// 思考图标是一只麻薯团子：身体是绕中心 16 个锚点、每段一条二次曲线的软椭圆，
-// 所有帧结构相同，SVG <animate> 才能在它们之间平滑变形（iOS Safari 不支持 CSS 的 d 动画）。
-const round2 = (n) => +n.toFixed(2);
-function mochiPath({ rx, ry, bottom = 21.5, lean = 0 }) {
-  const cy = bottom - ry;
-  const point = (deg, k = 1) => {
-    const a = deg * Math.PI / 180;
-    const s = Math.sin(a);
-    const y = cy + ry * k * (s > 0 ? Math.pow(s, 0.6) : s); // 下半边压平：团子是坐在地上的
-    const x = 12 + rx * k * Math.cos(a) + lean * (bottom - y); // lean：越往上越歪，像果冻晃
-    return `${round2(x)} ${round2(y)}`;
-  };
-  let d = `M${point(0)}`;
-  for (let i = 0; i < 16; i++) d += `Q${point(i * 22.5 + 11.25, 1.02)} ${point((i + 1) * 22.5)}`;
-  return `${d}Z`;
-}
-// 眼睛跟着身体走：身体压扁眼睛也压扁
-function mochiEyes({ rx, ry, bottom = 21.5, lean = 0 }) {
-  const y = bottom - ry * 1.08;
-  const shift = lean * (bottom - y);
-  return {
-    left: round2(12 - rx * 0.36 + shift),
-    right: round2(12 + rx * 0.36 + shift),
-    y: round2(y),
-    rx: round2(1.1 * Math.min(1.15, rx / 9.2)),
-    ry: round2(1.4 * Math.min(1.15, ry / 8.2)),
-  };
-}
-const MOCHI_REST = { rx: 9.2, ry: 8.2 };
-// 一轮 2.4 秒：停一下 → 往下压蓄力 → 拉长弹起 → 最高点 → 落地压扁 → 左右晃 → 回原形
-const MOCHI_FRAMES = [
-  { t: 0, ...MOCHI_REST },
-  { t: 0.1, ...MOCHI_REST },
-  { t: 0.24, rx: 11, ry: 6.2 },
-  { t: 0.42, rx: 7.8, ry: 9.5, bottom: 18.8 },
-  { t: 0.56, rx: 8.6, ry: 8.6, bottom: 17 },
-  { t: 0.72, rx: 11.4, ry: 6 },
-  { t: 0.83, rx: 8.7, ry: 8.7, lean: 0.14 },
-  { t: 0.92, rx: 9.3, ry: 8.1, lean: -0.08 },
-  { t: 1, ...MOCHI_REST },
-];
-const MOCHI_SPLINES = ["0 0 1 1", ".45 0 .55 1", ".23 1 .32 1", ".25 .6 .5 1", ".5 0 .9 .5", ".23 1 .32 1", ".45 0 .55 1", ".45 0 .55 1"];
-function mochiAnimate(attr, values) {
-  return `<animate attributeName="${attr}" dur="2.4s" repeatCount="indefinite" calcMode="spline" keyTimes="${MOCHI_FRAMES.map((f) => f.t).join(";")}" keySplines="${MOCHI_SPLINES.join(";")}" values="${values.join(";")}"></animate>`;
-}
-function mochiMarkup(animated) {
-  const rest = mochiEyes(MOCHI_REST);
-  const frames = MOCHI_FRAMES.map(mochiEyes);
-  const eye = (side) => `<ellipse class="mochi-eye" cx="${rest[side]}" cy="${rest.y}" rx="${rest.rx}" ry="${rest.ry}">${animated
-    ? ["cx", "cy", "rx", "ry"].map((attr) => mochiAnimate(attr, frames.map((f) => (attr === "cx" ? f[side] : attr === "cy" ? f.y : f[attr])))).join("")
-    : ""}</ellipse>`;
-  const happy = (x) => `<path class="mochi-happy" d="M${round2(x - 1.5)} ${round2(rest.y + 0.7)}Q${round2(x)} ${round2(rest.y - 1.6)} ${round2(x + 1.5)} ${round2(rest.y + 0.7)}"></path>`;
-  return `<svg class="reasoning-mochi" viewBox="0 0 24 24">` +
-    `<path class="mochi-body" d="${mochiPath(MOCHI_REST)}">${animated ? mochiAnimate("d", MOCHI_FRAMES.map(mochiPath)) : ""}</path>` +
-    `<g class="mochi-open">${eye("left")}${eye("right")}</g>` +
-    `<g class="mochi-closed">${happy(rest.left)}${happy(rest.right)}</g></svg>`;
-}
-
+// 思考图标（园林花窗）见 js/reasoning-icon.js，标题换词（思考彩蛋）见 js/thinking-words.js。
 // open=false 用于从存档重建：一出生就是收起+完成态，不播放展开/收起和收尾动画
 function addReasoningBlock({ webSearch, attach = true, open = true }) {
   if (hintEl) hintEl.remove();
   const root = document.createElement("div");
-  root.className = open ? "reasoning is-open" : "reasoning is-done is-settled is-static";
+  root.className = open ? "reasoning is-open" : "reasoning is-done is-static";
 
   const toggle = document.createElement("button");
   toggle.className = "reasoning-toggle";
   toggle.type = "button";
   toggle.setAttribute("aria-expanded", String(open));
 
-  // 思考中：团子一蹦一跳；完成：扁扁坐下再弹回，变灰、眼睛眯成 ^ ^
-  const morph = open && !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  // 思考中：花窗一扇扇变；完成：开窗，停成灰色海棠窗
+  const reduced = thinkingReducedMotion();
   const mark = document.createElement("span");
   mark.className = "reasoning-mark";
   mark.setAttribute("aria-hidden", "true");
-  mark.innerHTML = mochiMarkup(morph);
+  mark.innerHTML = reasoningIconMarkup({ done: !open, animated: !reduced });
+  const icon = mark.querySelector("svg");
 
   const title = document.createElement("span");
   title.className = "reasoning-title";
-  title.textContent = webSearch ? "策划并搜索相关资料。" : "正在思考。";
+  title.textContent = thinkingDoneTitle();
 
   const chevron = document.createElement("span");
   chevron.className = "reasoning-chevron";
@@ -116,30 +60,26 @@ function addReasoningBlock({ webSearch, attach = true, open = true }) {
     messagesEl.appendChild(root);
     scrollToBottom();
   }
+  // 每个思考块都从第一扇海棠窗开始（内嵌 SVG 的动画时钟从页面加载算起，不归零就会从半路开始）
+  if (open) {
+    try { icon?.setCurrentTime(0); } catch { /* 不支持就从当前相位开始 */ }
+  }
+  const words = open ? startThinkingTitle(title, icon, root) : null;
 
-  let hasReasoning = false;
-  let finished = false;
+  let finished = !open;
   return {
     root,
     append(delta) {
-      hasReasoning = true;
-      if (title.textContent === "正在思考。" || title.textContent === "策划并搜索相关资料。") {
-        title.textContent = webSearch ? "策划并搜索相关资料。" : "整理思路。";
-      }
       body.textContent += delta;
     },
     finish() {
       if (finished) return;
       finished = true;
       root.classList.add("is-done");
-      // 收尾压到最扁时（CSS mochi-settle 的 35%）再停掉变形、换成 ^ ^ 眼，跳回原形的那一下藏在最扁处
-      setTimeout(() => {
-        mark.querySelectorAll("animate").forEach((node) => node.remove());
-        root.classList.add("is-settled");
-      }, 170);
+      openReasoningWindow(icon, { reduced });
+      words?.finish();
       root.classList.remove("is-open");
       toggle.setAttribute("aria-expanded", "false");
-      title.textContent = hasReasoning ? "思考完成" : "思考完成";
     },
   };
 }

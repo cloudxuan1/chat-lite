@@ -226,61 +226,13 @@
   width: 20px;
   height: 20px;
 }
-/* 蹦跳和变形都是 SVG 自带的 <animate>（见 stream.js 的 mochiMarkup），这里只管颜色和收尾 */
-.reasoning-mochi {
-  display: block;
-  width: 100%;
-  height: 100%;
-  overflow: visible;
-  transform-origin: 50% 90%; /* 团子的“屁股”，压扁时贴着地 */
-}
-.mochi-body {
-  fill: var(--accent);
-  transition: fill var(--motion-panel) var(--ease-out);
-}
-.mochi-eye { fill: rgba(31,30,29,0.78); }
-.mochi-happy {
-  fill: none;
-  stroke: rgba(31,30,29,0.6);
-  stroke-width: 1.2;
-  stroke-linecap: round;
-}
-.mochi-closed { display: none; }
-.reasoning.is-settled .mochi-open { display: none; }
-.reasoning.is-settled .mochi-closed { display: inline; }
-/* 完成：扁扁坐下（这时 JS 停掉变形、换眼睛）再弹回，变灰 */
-.reasoning.is-done:not(.is-static) .reasoning-mochi {
-  animation: mochi-settle 480ms var(--ease-out);
-}
-.reasoning.is-done .mochi-body { fill: rgba(31,30,29,0.3); }
 .reasoning-title {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* 思考中：标题上一道光从左扫到右 */
-.reasoning:not(.is-done) .reasoning-title {
-  color: transparent;
-  background: linear-gradient(90deg,
-    var(--text-muted) 0%, var(--text-muted) 35%,
-    var(--text-secondary) 50%,
-    var(--text-muted) 65%, var(--text-muted) 100%);
-  background-size: 250% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  animation: title-shimmer 2s linear infinite;
-}
-@keyframes mochi-settle {
-  0% { scale: 1; }
-  35% { scale: 1.3 0.35; }
-  70% { scale: 0.92 1.1; }
-  100% { scale: 1; }
-}
-@keyframes title-shimmer {
-  from { background-position: 100% 0; }
-  to { background-position: 0% 0; }
-}
+/* 思考中的扫光、换词翻卡片、花窗图标的颜色和开窗收尾：css/thinking.css */
 /* 箭头紧跟标题，展开/收起都不挪位置；收起朝下、展开朝上 */
 .reasoning-chevron {
   flex: none;

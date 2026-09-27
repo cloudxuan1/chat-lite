@@ -232,12 +232,6 @@ html[data-input="pointer"] [role="button"]:focus-visible { outline: none; }
   .msg.typing::after {
     animation: none;
   }
-  .reasoning .reasoning-mochi { animation: none !important; }
-  .reasoning:not(.is-done) .reasoning-title {
-    animation: none;
-    background: none;
-    color: inherit;
-  }
   .settings-screen {
     transform: none;
     transition: opacity var(--motion-fast) ease, visibility 0s linear var(--motion-fast);

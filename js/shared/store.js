@@ -71,3 +71,10 @@ let folderEditorState = null;   // { resolve, commit, previewId, color, icon, pr
 let folderLongPress = null;
 let quoteText = "";
 let quoteTimer = 0;
+let reasoningClipSeq = 0;       // 开窗收尾用的 clipPath 编号
+let thinkingEggEnabled = localStorage.getItem(THINKING_EGG_KEY) !== "0";        // 思考彩蛋：默认开
+let thinkingTranslate = localStorage.getItem(THINKING_TRANSLATE_KEY) !== "0";   // 翻出中文：默认开
+let thinkingMarauder = localStorage.getItem(THINKING_MARAUDER_KEY) !== "0";     // 活点地图开场/收尾：默认开
+let thinkingSeriesOff = loadThinkingSeriesOff();       // 关掉的系列 id（Set）
+let thinkingCustomSeries = loadThinkingCustomSeries(); // 自定义系列
+let thinkingEditingSeries = null;                      // 设置页里正在编辑的系列 id；"new" = 新建

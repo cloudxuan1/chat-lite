@@ -1,0 +1,167 @@
+/* 思考块：花窗图标（js/reasoning-icon.js）的颜色与开窗收尾、标题换词的翻卡片（js/thinking-words.js）、
+   「思考彩蛋」设置子页（js/thinking-settings.js）。 */
+
+/* ---- 花窗图标 ---- */
+.huachuang {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  color: var(--accent);
+  transform-origin: 50% 50%;
+  transition: color 320ms ease;
+}
+.huachuang.is-done { color: #b1b0ab; } /* 不透明灰：窗棂和窗框交叠处不会叠深 */
+/* 收尾第一步：缩到最小（JS 在 170ms 停动画、换成关着的窗），再弹回 */
+.huachuang.is-finishing { animation: hc-dip 420ms var(--ease-in-out); }
+@keyframes hc-dip {
+  0% { scale: 1; }
+  40% { scale: 0.3; }
+  100% { scale: 1; }
+}
+/* 第二步：两扇窗扇贴着左右窗轴收起（开到一大半才淡掉） */
+.hc-leaf {
+  transform-box: fill-box;
+  transition: transform 520ms var(--ease-in-out), opacity 180ms ease 360ms;
+}
+.hc-leaf.is-left { transform-origin: 0% 50%; }
+.hc-leaf.is-right { transform-origin: 100% 50%; }
+.huachuang.is-open .hc-leaf { transform: scaleX(0.04); opacity: 0; }
+/* 第三步：花蕊弹出来 */
+.hc-core.hc-pop {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+  transition: transform 240ms var(--ease-out), opacity 160ms ease;
+}
+.hc-core.is-hidden { transform: scale(0); opacity: 0; }
+
+/* ---- 标题换词：单词卡上下翻 ---- */
+.reasoning-word {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+  transition: transform 130ms var(--ease-in-out), opacity 130ms ease;
+}
+.reasoning-word.is-flipping {
+  transform: perspective(200px) rotateX(80deg);
+  opacity: 0;
+}
+/* 思考中：字上一道光从左扫到右 */
+.reasoning:not(.is-done) .reasoning-word {
+  color: transparent;
+  background: linear-gradient(90deg,
+    var(--text-muted) 0%, var(--text-muted) 35%,
+    var(--text-secondary) 50%,
+    var(--text-muted) 65%, var(--text-muted) 100%);
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: title-shimmer 2s linear infinite;
+}
+@keyframes title-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: 0% 0; }
+}
+
+/* ---- 设置子页 ---- */
+.thinking-series-title { margin-top: 22px; }
+.thinking-series {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.thinking-series .thinking-series-toggle {
+  flex: 1;
+  min-width: 0;
+  margin-top: 0;
+  border-top: 0;
+}
+.thinking-series-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.thinking-series-copy strong {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.thinking-series-copy span {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.thinking-series-edit,
+.thinking-series-add,
+.thinking-editor-actions button {
+  min-height: 36px;
+  padding: 0 12px;
+  color: var(--text-secondary);
+  background: rgba(31,30,29,.045);
+  border: .5px solid rgba(31,30,29,.13);
+  border-radius: 10px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.thinking-series-edit { flex: none; }
+.thinking-series-add {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 10px;
+}
+.thinking-editor {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+.thinking-editor[hidden],
+.thinking-series-add[hidden],
+.thinking-editor-actions [hidden] { display: none; }
+.thinking-editor .settings-card-label { margin: 0; }
+.thinking-editor-name,
+.thinking-editor-words {
+  width: 100%;
+  padding: 9px 11px;
+  color: var(--text-primary);
+  background: rgba(31,30,29,.03);
+  border: .5px solid rgba(31,30,29,.16);
+  border-radius: 10px;
+  outline: none;
+  font: inherit;
+  font-size: 14px;
+}
+.thinking-editor-words {
+  resize: vertical;
+  line-height: 1.5;
+  font-family: 'SF Mono', 'Fira Code', Menlo, Consolas, monospace;
+  font-size: 13px;
+}
+.thinking-editor-name:focus,
+.thinking-editor-words:focus { border-color: var(--accent); }
+.thinking-editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.thinking-editor-actions span { flex: 1; }
+.thinking-editor-actions .thinking-editor-save {
+  color: #fff;
+  background: var(--btn-primary-bg);
+  border-color: var(--btn-primary-bg);
+}
+.thinking-editor-actions .thinking-editor-delete { color: #9a3412; }
+
+@media (prefers-reduced-motion: reduce) {
+  .huachuang.is-finishing { animation: none; }
+  .hc-leaf, .hc-core.hc-pop, .reasoning-word { transition: none; }
+  .reasoning:not(.is-done) .reasoning-word {
+    animation: none;
+    background: none;
+    color: inherit;
+  }
+}

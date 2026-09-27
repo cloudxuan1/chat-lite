@@ -19,6 +19,7 @@
 <link rel="stylesheet" href="css/composer.css" />
 <link rel="stylesheet" href="css/settings.css" />
 <link rel="stylesheet" href="css/memory.css" />
+<link rel="stylesheet" href="css/thinking.css" />
 <link rel="stylesheet" href="css/gate.css" />
 </head>
 <body>
@@ -187,6 +188,16 @@
               <span class="settings-nav-copy">
                 <strong class="settings-nav-title">图片发送</strong>
                 <span class="settings-nav-summary" id="settings-image-summary">最多 8 张 · 自动压缩</span>
+              </span>
+              <svg class="settings-nav-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+            </button>
+            <button class="settings-nav-row" id="settings-thinking-open" type="button">
+              <span class="settings-nav-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M12 3.5a4 4 0 0 1 4 4 4 4 0 0 1-4 4 4 4 0 0 1-4-4 4 4 0 0 1 4-4Z"></path><path d="M4 20.5c1.3-3.5 4.3-5.5 8-5.5s6.7 2 8 5.5"></path><path d="M18.5 3.5 20 2M5.5 3.5 4 2"></path></svg>
+              </span>
+              <span class="settings-nav-copy">
+                <strong class="settings-nav-title">思考彩蛋</strong>
+                <span class="settings-nav-summary" id="settings-thinking-summary">开启</span>
               </span>
               <svg class="settings-nav-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
             </button>
@@ -477,6 +488,60 @@
     </div>
   </section>
 
+  <section class="settings-screen settings-child-screen" id="thinking-settings-screen" role="dialog" aria-modal="true" aria-hidden="true" aria-label="设置思考彩蛋">
+    <header class="settings-header">
+      <button class="settings-back" id="thinking-settings-back" type="button" aria-label="返回设置">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+      </button>
+      <h2>思考彩蛋</h2>
+      <span aria-hidden="true"></span>
+    </header>
+    <div class="settings-scroll">
+      <div class="settings-content tool-page-content">
+        <div class="settings-card tool-settings-card">
+          <div class="tool-setting">
+            <button class="quick-row memory-settings-row" id="thinking-egg-toggle" type="button" aria-pressed="true">
+              <span>思考彩蛋</span>
+              <span class="quick-state" id="thinking-egg-state">开</span>
+            </button>
+            <p class="settings-note">开着时：思考那一行像单词卡一样换词，花窗一拧换一个英文词，下一扇窗翻出中文。关掉就只显示 Thinking… / 正在思考中。</p>
+          </div>
+          <div class="tool-setting">
+            <button class="quick-row memory-settings-row" id="thinking-translate-toggle" type="button" aria-pressed="true">
+              <span>翻出中文</span>
+              <span class="quick-state" id="thinking-translate-state">开</span>
+            </button>
+            <p class="settings-note">关掉就只显示英文，适合想先猜意思的时候。</p>
+          </div>
+          <div class="tool-setting">
+            <button class="quick-row memory-settings-row" id="thinking-marauder-toggle" type="button" aria-pressed="true">
+              <span>活点地图</span>
+              <span class="quick-state" id="thinking-marauder-state">开</span>
+            </button>
+            <p class="settings-note">开始思考先念「I solemnly swear that I am up to no good · 我庄严宣誓我不干好事」，开窗收尾时是「Mischief managed · 恶作剧完毕」。</p>
+          </div>
+        </div>
+        <p class="settings-section-title thinking-series-title">系列</p>
+        <div class="settings-card tool-settings-card" id="thinking-series-list"></div>
+        <div class="settings-card thinking-editor" id="thinking-series-editor" hidden>
+          <label class="settings-card-label" for="thinking-editor-name">系列名</label>
+          <input class="thinking-editor-name" id="thinking-editor-name" type="text" maxlength="20" placeholder="比如：猫猫系" />
+          <label class="settings-card-label" for="thinking-editor-words">词（每行一个：英文 | 中文，中文可以不写）</label>
+          <textarea class="thinking-editor-words" id="thinking-editor-words" rows="6" placeholder="Purring… | 呼噜呼噜中&#10;Kneading-the-Blanket… | 踩奶中"></textarea>
+          <output class="tool-setting-error" id="thinking-editor-error"></output>
+          <div class="thinking-editor-actions">
+            <button class="thinking-editor-delete" id="thinking-editor-delete" type="button">删除这个系列</button>
+            <span></span>
+            <button class="thinking-editor-cancel" id="thinking-editor-cancel" type="button">取消</button>
+            <button class="thinking-editor-save" id="thinking-editor-save" type="button">保存</button>
+          </div>
+        </div>
+        <button class="thinking-series-add" id="thinking-series-add" type="button">＋ 新建系列</button>
+        <p class="settings-note">每次思考从打开的系列里随机抽词，不重复抽完一轮再洗牌。开关和编辑都立即生效，不用保存。</p>
+      </div>
+    </div>
+  </section>
+
   <section class="settings-screen settings-child-screen" id="image-settings-screen" role="dialog" aria-modal="true" aria-hidden="true" aria-label="设置图片发送">
     <header class="settings-header">
       <button class="settings-back" id="image-settings-back" type="button" aria-label="返回设置">
@@ -561,6 +626,8 @@
 <script src="js/markdown.js"></script>
 <script src="js/backup.js"></script>
 <script src="js/images.js"></script>
+<script src="js/reasoning-icon.js"></script>
+<script src="js/thinking-words.js"></script>
 <script src="js/stream.js"></script>
 <script src="js/memory.js"></script>
 <script src="js/send.js"></script>
@@ -574,6 +641,7 @@
 <script src="js/bindings-sidebar.js"></script>
 <script src="js/bindings-folders.js"></script>
 <script src="js/bindings-settings.js"></script>
+<script src="js/thinking-settings.js"></script>
 <script src="js/init.js"></script>
 </body>
 </html>
