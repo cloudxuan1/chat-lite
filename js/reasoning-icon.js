@@ -246,7 +246,7 @@ function openReasoningWindow(svg, { reduced = false } = {}) {
     return;
   }
   svg.classList.add("is-finishing");
-  setTimeout(() => {
+  const prepare = () => {
     stopAnimations();
     const frame = svg.querySelector(".hc-frame");
     const core = svg.querySelector(".hc-core");
@@ -261,13 +261,27 @@ function openReasoningWindow(svg, { reduced = false } = {}) {
     leaves.innerHTML = '<rect class="hc-leaf is-left" x="0" y="0" width="11.6" height="24"/><rect class="hc-leaf is-right" x="12.4" y="0" width="11.6" height="24"/>';
     core.classList.add("hc-pop", "is-hidden");
     svg.append(defs, leaves);
-  }, 170);
-  svg.addEventListener("animationend", () => {
+  };
+  const prepareTimer = setTimeout(prepare, 170);
+  let opened = false;
+  const open = () => {
+    if (opened) return;
+    opened = true;
+    clearTimeout(prepareTimer);
+    clearTimeout(fallbackTimer);
+    svg.removeEventListener("animationend", open);
+    svg.removeEventListener("animationcancel", open);
+    // 后台节流可能让 animationend 先于 170ms 的回调到达。
+    if (!svg.querySelector(".hc-leaf")) prepare();
     svg.classList.remove("is-finishing");
     requestAnimationFrame(() => {
       svg.classList.add("is-open", "is-done");
       setTimeout(() => svg.querySelector(".hc-core")?.classList.remove("is-hidden"), 300);
       setTimeout(() => { svg.querySelector(".hc-leaf")?.parentNode.remove(); svg.querySelector("defs")?.remove(); }, 600);
     });
-  }, { once: true });
+  };
+  // 减少动态效果中途打开、节点被移走时，animationend 不一定会触发。
+  const fallbackTimer = setTimeout(open, 470);
+  svg.addEventListener("animationend", open);
+  svg.addEventListener("animationcancel", open);
 }

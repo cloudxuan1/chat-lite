@@ -166,3 +166,24 @@ test("翻面期间改设置/收尾，不会被旧翻面回调覆盖", () => {
   assert.equal(face.textContent, "Thinking…");
   assert.equal(face.classList.contains("is-flipping"), false);
 });
+
+test("开窗动画没有 animationend 时也会完成并清理临时节点", () => {
+  const { h, timers } = harness();
+  const svg = new Element(), frame = new Element(), core = new Element();
+  frame.setAttribute("d", "M0 0ZM1 1Z");
+  let leaf = null, defs = null;
+  svg.querySelector = (selector) => ({ ".hc-frame": frame, ".hc-core": core, ".hc-leaf": leaf, defs })[selector];
+  svg.append = (d) => {
+    defs = d;
+    defs.remove = () => { defs = null; };
+    leaf = { parentNode: { remove: () => { leaf = null; } } };
+  };
+  h.openReasoningWindow(svg);
+  h.tick(1200);
+  assert.equal(svg.classList.contains("is-done"), true);
+  assert.equal(svg.classList.contains("is-finishing"), false);
+  assert.equal(core.classList.contains("is-hidden"), false);
+  assert.equal(leaf, null);
+  assert.equal(defs, null);
+  assert.equal(timers.size, 0);
+});
