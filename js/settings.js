@@ -212,8 +212,7 @@ function updateToolSummaries() {
     ? `开启 · ${searchDetails.join(" · ") || "自动"}`
     : "关闭";
   settingsMemorySummary.textContent = memoryEnabled ? `开启 · 每次最多查 ${memoryMaxToolRounds} 轮` : "关闭";
-  memorySettingsToggle.setAttribute("aria-pressed", String(memoryEnabled));
-  memorySettingsState.textContent = memoryEnabled ? "开" : "关";
+  memorySettingsToggle.setAttribute("aria-checked", String(memoryEnabled));
   if (document.activeElement !== memoryMaxRoundsInput) memoryMaxRoundsInput.value = String(memoryMaxToolRounds);
   settingsImageSummary.textContent = `最多 8 张 · ${
     draftImageQuality === "original" ? "保留原图" : "自动压缩"

@@ -103,7 +103,6 @@ const webSearchMaxResultsUp = document.getElementById("web-search-max-results-up
 const memorySettingsScreen = document.getElementById("memory-settings-screen");
 const memorySettingsBack = document.getElementById("memory-settings-back");
 const memorySettingsToggle = document.getElementById("memory-settings-toggle");
-const memorySettingsState = document.getElementById("memory-settings-state");
 const settingsThinkingOpen = document.getElementById("settings-thinking-open");
 const settingsThinkingSummary = document.getElementById("settings-thinking-summary");
 const thinkingSettingsScreen = document.getElementById("thinking-settings-screen");

@@ -54,12 +54,6 @@
   color: var(--text-muted);
   overflow-wrap: anywhere;
 }
-/* 设置子页里的开关行：复用快捷层的 .quick-row，只把左右留白收到卡片内 */
-.memory-settings-row {
-  width: 100%;
-  min-height: 44px;
-  padding: 0;
-}
 @media (prefers-reduced-motion: reduce) {
   .memory-trace-chevron {
     transition: none;
