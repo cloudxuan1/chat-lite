@@ -60,7 +60,7 @@ function harness() {
     reasoningClipSeq: 0, skipPanelMotionOnce() {}, updateSettingsDirty() {},
   };
   h.requestAnimationFrame = (fn) => h.setTimeout(fn);
-  for (const key of ["EGG", "TRANSLATE", "MARAUDER", "SERIES_OFF", "CUSTOM", "OVERRIDES"]) {
+  for (const key of ["EGG", "TRANSLATE", "MARAUDER", "SERIES_OFF", "CUSTOM", "OVERRIDES", "SYNC_DIRTY"]) {
     h[`THINKING_${key}_KEY`] = key;
   }
   for (const match of scripts.find((s) => s.path === "js/shared/dom.js").source.matchAll(/^const (\w+) = document.getElementById/gm)) {
@@ -113,6 +113,11 @@ test("保存失败保留词库和输入，返回时重试；开关失败不改�
   h.failKey = "EGG";
   h.click("thinkingEggToggle");
   assert.equal(h.thinkingEggEnabled, true);
+  storage.set("SYNC_DIRTY", "0");
+  h.failKey = "SYNC_DIRTY";
+  h.click("thinkingEggToggle");
+  assert.equal(h.thinkingEggEnabled, true, "待上传标记存不下时，内容也不能半成功");
+  assert.equal(storage.get("SYNC_DIRTY"), "0");
 
   // 删除涉及两个键：第二个写失败时，第一个也必须回到删除前。
   h.thinkingEditingSeries = "custom-test";

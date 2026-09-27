@@ -17,8 +17,8 @@ const fn = (name) => extract(new RegExp(`^(?:async )?function ${name}\\([^]*?^}$
 const code = [
   extract(/^const THINKING_SERIES = \[[^]*?^\];$/gm),
   ...["normalizeThinkingWords", "thinkingAllSeries", "thinkingLibraryDoc", "thinkingSameWords", "thinkingLocalFromDoc",
-    "setThinkingSyncMark", "thinkingSyncedVersion", "applyThinkingLibraryDoc", "mergeThinkingFirstSync",
-    "thinkingSyncRequest", "setThinkingSyncState", "thinkingSyncFailure", "pushThinkingLibrary",
+    "thinkingSyncedVersion", "applyThinkingLibraryDoc", "mergeThinkingFirstSync",
+    "thinkingSyncRequest", "thinkingSyncExchange", "setThinkingSyncState", "thinkingSyncFailure", "pushThinkingLibrary",
     "pullThinkingLibrary", "resolveThinkingConflict"].map(fn),
 ].join("\n");
 
@@ -44,8 +44,10 @@ function harness({ custom = [], overrides = {}, off = [], synced = null, dirty =
     thinkingSeriesOff: new Set(off), thinkingCustomSeries: custom, thinkingSeriesOverrides: overrides,
     thinkingSyncEnabled: true, thinkingSyncState: "idle", thinkingSyncMessage: "", thinkingSyncConflict: null,
     thinkingSyncTimer: 0, thinkingSyncApplying: false, thinkingSyncLastPull: 0,
+    thinkingSyncBusy: false, thinkingSyncEpoch: 0,
     thinkingSettingsScreen: screen, thinkingSeriesScreen: seriesScreen,
     renderThinkingSeriesScreen: () => rendered.push("series"),
+    saveThinkingSeriesScreen: () => true,
     localStorage: {
       getItem: (k) => (storage.has(k) ? storage.get(k) : null),
       setItem: (k, v) => storage.set(k, String(v)),
@@ -124,6 +126,12 @@ test("第一次同步时内置系列两边改得不一样：进冲突，不写�
   assert.equal(requests.length, 1);
   assert.equal(h.thinkingSeriesOverrides.cooking.name, "本机厨房");
   assert.equal(storage.get("syncVersion"), undefined);
+  // 本机显式关闭的总开关和系列，同样不能在首次搬家时被默默打开。
+  const flags = harness({ off: ["cooking"] }).h;
+  assert.equal(flags.mergeThinkingFirstSync(cloud).conflict, true);
+  flags.thinkingSeriesOff.clear();
+  flags.thinkingEggEnabled = false;
+  assert.equal(flags.mergeThinkingFirstSync(cloud).conflict, true);
 });
 
 test("本机没改、云端更新了（别的设备或 MCP 改的）：写回本机，内置只记和原版不同的部分", async () => {
@@ -152,7 +160,7 @@ test("本机有没上传的修改、云端版本没变：直接上传", async ()
   await h.pullThinkingLibrary();
   assert.equal(requests[1].baseVersion, 4);
   assert.equal(storage.get("syncVersion"), "5");
-  assert.equal(storage.get("dirty"), undefined);
+  assert.equal(storage.get("dirty"), "0");
 });
 
 test("两边都改了：冲突；选「用云端的」写回本机，选「用这台的」带云端版本覆盖", async () => {
@@ -208,4 +216,92 @@ test("写回云端新版时系列详情页开着：重画详情页，免得返�
   await h.pullThinkingLibrary();
   assert.deepEqual(rendered, ["series"]);
   assert.equal(h.thinkingCustomSeries[0].words.length, 2);
+});
+
+test("首次合并上传失败：保留待上传标记，重试会真正上传", async () => {
+  const { h, storage, requests } = harness({ custom: [cat], responses: [
+    { status: 200, body: { version: 5, data: cloudDoc([]) } },
+    { status: 502, body: {} },
+    { status: 200, body: { version: 5, data: cloudDoc([]) } },
+    { status: 200, body: { version: 6 } },
+  ] });
+  await h.pullThinkingLibrary();
+  assert.equal(storage.get("dirty"), "1");
+  await h.pullThinkingLibrary();
+  assert.equal(requests.at(-1).action, "thinking-words-save");
+  assert.equal(storage.get("syncVersion"), "6");
+});
+
+test("首次同步同 id 自定义系列内容不同：保留本机并交给用户选", async () => {
+  const { h, requests } = harness({ custom: [cat], responses: [
+    { status: 200, body: { version: 3, data: cloudDoc([{ ...cat, name: "云端猫", builtin: false, enabled: true }]) } },
+  ] });
+  await h.pullThinkingLibrary();
+  assert.equal(h.thinkingSyncState, "conflict");
+  assert.equal(h.thinkingCustomSeries[0].name, cat.name);
+  assert.equal(requests.length, 1);
+});
+
+test("拉取中修改不会并发上传；返回旧云端时保留本机并报冲突", async () => {
+  const { h, storage } = harness({ synced: 1 });
+  let release;
+  let calls = 0;
+  h.fetch = () => { calls++; return new Promise((resolve) => { release = resolve; }); };
+  const pulling = h.pullThinkingLibrary();
+  h.thinkingCustomSeries = [cat];
+  storage.set("dirty", "1");
+  void h.pushThinkingLibrary();
+  assert.equal(calls, 1);
+  release({ status: 200, json: async () => ({ version: 2, data: cloudDoc([]) }) });
+  await pulling;
+  assert.equal(h.thinkingSyncState, "conflict");
+  assert.equal(h.thinkingCustomSeries[0].id, cat.id);
+});
+
+test("冲突待选择时不能由延迟上传绕过选择", async () => {
+  const { h, requests } = harness({ synced: 1, dirty: true });
+  h.thinkingSyncState = "conflict";
+  await h.pushThinkingLibrary();
+  assert.equal(requests.length, 0);
+});
+
+test("关闭同步后在途拉取返回：不能再覆盖本机", async () => {
+  const { h, storage } = harness({ synced: 1, custom: [cat] });
+  let release;
+  h.fetch = () => new Promise((resolve) => { release = resolve; });
+  const pulling = h.pullThinkingLibrary();
+  h.thinkingSyncEnabled = false;
+  release({ status: 200, json: async () => ({ version: 2, data: cloudDoc([]) }) });
+  await pulling;
+  assert.equal(h.thinkingCustomSeries[0].id, cat.id);
+  assert.equal(storage.get("syncVersion"), "1");
+});
+
+test("关开同步后旧响应失效，新拉取才更新本机", async () => {
+  const { h, storage } = harness({ synced: 1, custom: [cat] });
+  const pending = [];
+  h.fetch = () => new Promise((resolve) => pending.push(resolve));
+  const old = h.pullThinkingLibrary();
+  h.thinkingSyncEpoch += 2;
+  h.thinkingSyncState = "idle";
+  await h.pullThinkingLibrary(); // 原请求未结束时仍不能并发
+  assert.equal(pending.length, 1);
+  pending.shift()({ status: 200, json: async () => ({ version: 2, data: cloudDoc([]) }) });
+  await old;
+  assert.equal(storage.get("syncVersion"), "1");
+  assert.equal(pending.length, 1);
+  pending.shift()({ status: 200, json: async () => ({ version: 3, data: cloudDoc([{ ...cat, builtin: false, enabled: true }]) }) });
+  await new Promise((r) => setImmediate(r));
+  assert.equal(storage.get("syncVersion"), "3");
+});
+
+test("详情页草稿存不下：拉取不能擦除输入或确认新版本", async () => {
+  const { h, storage, rendered } = harness({ synced: 1, seriesOpen: true, responses: [
+    { status: 200, body: { version: 2, data: cloudDoc([]) } },
+  ] });
+  h.saveThinkingSeriesScreen = () => false;
+  await h.pullThinkingLibrary();
+  assert.equal(h.thinkingSyncState, "error");
+  assert.equal(storage.get("syncVersion"), "1");
+  assert.deepEqual(rendered, []);
 });

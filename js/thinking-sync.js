@@ -1,7 +1,7 @@
 // 思考彩蛋词库云同步：词库存在 ember（经 Worker 的 thinking-words-get / -save 转发），手机电脑共用，Claude 也能用 MCP 改。
 // 本机 localStorage 仍是离线缓存，所有界面照旧读本机；这里只负责「拉下来写回本机」和「本机改完推上去」。
 // 规矩：云端每次写入版本 +1，上传必须带「我基于哪个版本改的」；对不上 = 另一端改过 → 冲突，弹给轩选，选之前本机修改原样保留。
-// 第一次在这台设备同步：云端空 → 把本机词库搬上去；云端已有 → 把本机独有的自定义系列并进去（同 id 或同名同词算重复），
+// 第一次在这台设备同步：云端空 → 把本机词库搬上去；云端已有 → 把本机独有的自定义系列并进去（同 id 必须内容也相同），
 // 内置系列两边改得不一样才算冲突。任何情况下都不用空库覆盖旧内容。
 
 // 本机词库 → 云端文档（内置系列存当前生效的样子，原版留在 THINKING_SERIES 里当恢复默认的来源）
@@ -45,20 +45,13 @@ function thinkingLocalFromDoc(doc) {
   };
 }
 
-function setThinkingSyncMark(key, value) {
-  try {
-    if (value === null) localStorage.removeItem(key);
-    else localStorage.setItem(key, String(value));
-  } catch { /* 记不住只会导致下次多同步一次，不影响词库本身 */ }
-}
-
 function thinkingSyncedVersion() {
   const raw = localStorage.getItem(THINKING_SYNC_VERSION_KEY);
   return raw === null ? null : Number(raw);
 }
 
 // 把云端词库写回本机；本机没写成功就不认这个版本，下次再来
-function applyThinkingLibraryDoc(doc, version) {
+function applyThinkingLibraryDoc(doc, version, dirty = false) {
   const next = thinkingLocalFromDoc(doc);
   const ok = persistThinkingEntries([
     [THINKING_EGG_KEY, next.egg ? "1" : "0"],
@@ -67,6 +60,8 @@ function applyThinkingLibraryDoc(doc, version) {
     [THINKING_SERIES_OFF_KEY, JSON.stringify([...next.off])],
     [THINKING_CUSTOM_KEY, JSON.stringify(next.custom)],
     [THINKING_OVERRIDES_KEY, JSON.stringify(next.overrides)],
+    [THINKING_SYNC_VERSION_KEY, String(version)],
+    [THINKING_SYNC_DIRTY_KEY, dirty ? "1" : "0"],
   ]);
   if (!ok) return false;
   thinkingEggEnabled = next.egg;
@@ -75,8 +70,6 @@ function applyThinkingLibraryDoc(doc, version) {
   thinkingSeriesOff = next.off;
   thinkingCustomSeries = next.custom;
   thinkingSeriesOverrides = next.overrides;
-  setThinkingSyncMark(THINKING_SYNC_VERSION_KEY, version);
-  setThinkingSyncMark(THINKING_SYNC_DIRTY_KEY, null);
   thinkingSyncApplying = true;
   try { notifyThinkingSettingsChanged(); } finally { thinkingSyncApplying = false; }
   if (thinkingSettingsScreen.classList.contains("is-open")) renderThinkingSettings();
@@ -96,17 +89,25 @@ function mergeThinkingFirstSync(cloud) {
   const merged = JSON.parse(JSON.stringify(cloud));
   const cloudById = new Map(merged.series.map((s) => [s.id, s]));
   let added = 0;
-  let conflict = false;
+  // 默认开关都是 true；本机明确关掉的项不能在搬家时悄悄打开。
+  let conflict = Object.entries(local.settings).some(([key, value]) => value === false && cloud.settings?.[key] !== false);
   for (const s of local.series) {
     const theirs = cloudById.get(s.id);
+    if (!s.enabled && theirs?.enabled) conflict = true;
     if (s.builtin) {
       const edited = Boolean(thinkingSeriesOverrides[s.id]);
-      if (edited && theirs && (theirs.name !== s.name || !thinkingSameWords(theirs.words, s.words))) conflict = true;
+      if (edited && (!theirs || theirs.name !== s.name || !thinkingSameWords(theirs.words, s.words))) conflict = true;
       continue;
     }
-    if (theirs) continue; // 同 id：同一个系列之前已经上过云
+    if (theirs) {
+      if (theirs.builtin || theirs.name !== s.name || theirs.enabled !== s.enabled || !thinkingSameWords(theirs.words, s.words)) conflict = true;
+      continue;
+    }
     const twin = merged.series.find((c) => !c.builtin && c.name === s.name && thinkingSameWords(c.words, s.words));
-    if (twin) continue;
+    if (twin) {
+      if (twin.enabled !== s.enabled) conflict = true;
+      continue;
+    }
     merged.series.push(s);
     added += 1;
   }
@@ -124,6 +125,22 @@ async function thinkingSyncRequest(action, extra = {}) {
   return { status: response.status, data };
 }
 
+// 关掉再打开也算新一轮同步；旧响应只释放锁，不得覆盖新一轮的本机词库。
+async function thinkingSyncExchange(action, extra = {}) {
+  const epoch = thinkingSyncEpoch;
+  thinkingSyncBusy = true;
+  try {
+    const result = await thinkingSyncRequest(action, extra);
+    return thinkingSyncEnabled && epoch === thinkingSyncEpoch ? result : null;
+  } catch {
+    if (thinkingSyncEnabled && epoch === thinkingSyncEpoch) setThinkingSyncState("error", "连不上云端");
+    return null;
+  } finally {
+    thinkingSyncBusy = false;
+    if (thinkingSyncEnabled && epoch !== thinkingSyncEpoch) void pullThinkingLibrary();
+  }
+}
+
 function setThinkingSyncState(state, message = "") {
   thinkingSyncState = state;
   thinkingSyncMessage = message;
@@ -139,19 +156,18 @@ function thinkingSyncFailure(result) {
 
 async function pushThinkingLibrary(baseVersion = thinkingSyncedVersion() ?? 0, doc = thinkingLibraryDoc()) {
   clearTimeout(thinkingSyncTimer);
-  if (!thinkingSyncEnabled || !accessPw) return;
+  if (!thinkingSyncEnabled || !accessPw || thinkingSyncBusy || thinkingSyncState === "conflict") return;
   setThinkingSyncState("syncing");
-  let result;
-  try {
-    result = await thinkingSyncRequest("thinking-words-save", { baseVersion, data: doc });
-  } catch {
-    return setThinkingSyncState("error", "连不上云端");
-  }
+  const result = await thinkingSyncExchange("thinking-words-save", { baseVersion, data: doc });
+  if (!result) return;
   if (result.status === 200 && result.data) {
-    setThinkingSyncMark(THINKING_SYNC_VERSION_KEY, result.data.version);
     // 上传途中又改了词：dirty 继续留着，按新改动再排一次
-    if (JSON.stringify(doc) === JSON.stringify(thinkingLibraryDoc())) setThinkingSyncMark(THINKING_SYNC_DIRTY_KEY, null);
-    else scheduleThinkingPush();
+    const changed = JSON.stringify(doc) !== JSON.stringify(thinkingLibraryDoc());
+    if (!persistThinkingEntries([
+      [THINKING_SYNC_VERSION_KEY, String(result.data.version)],
+      [THINKING_SYNC_DIRTY_KEY, changed ? "1" : "0"],
+    ])) return setThinkingSyncState("error", "本机存不下同步记录");
+    if (changed) scheduleThinkingPush();
     return setThinkingSyncState("synced");
   }
   if (result.status === 409 && result.data?.current) {
@@ -162,16 +178,16 @@ async function pushThinkingLibrary(baseVersion = thinkingSyncedVersion() ?? 0, d
 }
 
 async function pullThinkingLibrary() {
-  if (!thinkingSyncEnabled || !accessPw || thinkingSyncState === "syncing" || thinkingSyncState === "conflict") return;
+  if (!thinkingSyncEnabled || !accessPw || thinkingSyncBusy || thinkingSyncState === "conflict") return;
   thinkingSyncLastPull = Date.now();
   setThinkingSyncState("syncing");
-  let result;
-  try {
-    result = await thinkingSyncRequest("thinking-words-get");
-  } catch {
-    return setThinkingSyncState("error", "连不上云端");
-  }
+  const result = await thinkingSyncExchange("thinking-words-get");
+  if (!result) return;
   if (result.status !== 200 || !result.data) return thinkingSyncFailure(result);
+  // 输入保存失败时仍留在详情页，不让云端重画把尚未落盘的草稿擦掉。
+  if (thinkingSeriesScreen.classList.contains("is-open") && !saveThinkingSeriesScreen()) {
+    return setThinkingSyncState("error", "本机编辑尚未保存");
+  }
   const { version, data } = result.data;
   const synced = thinkingSyncedVersion();
   const dirty = localStorage.getItem(THINKING_SYNC_DIRTY_KEY) === "1";
@@ -183,9 +199,9 @@ async function pullThinkingLibrary() {
       thinkingSyncConflict = { version, data };
       return setThinkingSyncState("conflict");
     }
-    if (!applyThinkingLibraryDoc(merged, version)) return setThinkingSyncState("error", "本机存不下");
+    if (!applyThinkingLibraryDoc(merged, version, added > 0)) return setThinkingSyncState("error", "本机存不下");
     if (added) {
-      showAppStatus(`已把这台设备的 ${added} 个自定义系列并进云端词库。`);
+      showAppStatus(`已合并这台设备的 ${added} 个自定义系列，正在上传。`);
       return pushThinkingLibrary(version, merged);
     }
     return setThinkingSyncState("synced");
@@ -215,6 +231,7 @@ function scheduleThinkingPush() {
 function resolveThinkingConflict(useCloud) {
   const cloud = thinkingSyncConflict;
   if (!cloud) return;
+  clearTimeout(thinkingSyncTimer);
   thinkingSyncConflict = null;
   thinkingSyncState = "idle";
   if (useCloud) {
@@ -246,6 +263,7 @@ function renderThinkingSync() {
 thinkingSyncToggle.addEventListener("click", () => {
   if (!persistThinkingEntries([[THINKING_SYNC_KEY, thinkingSyncEnabled ? "0" : "1"]])) return;
   thinkingSyncEnabled = !thinkingSyncEnabled;
+  thinkingSyncEpoch += 1;
   clearTimeout(thinkingSyncTimer);
   thinkingSyncConflict = null;
   thinkingSyncState = "idle";
@@ -265,7 +283,6 @@ settingsThinkingOpen.addEventListener("click", () => {
 // 本机改了词：记下「有没上传的修改」，稍后上传；云端写回本机时不算
 document.addEventListener("thinking-settings-change", () => {
   if (thinkingSyncApplying) return;
-  setThinkingSyncMark(THINKING_SYNC_DIRTY_KEY, "1");
   scheduleThinkingPush();
 });
 // 切回这个页面（可能在别的设备或 MCP 改过）：最多 30 秒拉一次

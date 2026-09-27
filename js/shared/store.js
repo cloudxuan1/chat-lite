@@ -86,3 +86,5 @@ let thinkingSyncConflict = null;    // 冲突时云端的样子 { version, data 
 let thinkingSyncTimer = 0;          // 改完词后延迟上传的计时器
 let thinkingSyncApplying = false;   // 正在把云端词库写回本机：这期间的设置变更事件不触发上传
 let thinkingSyncLastPull = 0;       // 上次拉取时间（切回页面时节流用）
+let thinkingSyncBusy = false;       // 一次只允许一个词库请求在途
+let thinkingSyncEpoch = 0;          // 开关切换后旧请求不得再写回
