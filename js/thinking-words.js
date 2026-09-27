@@ -134,13 +134,15 @@ function thinkingReducedMotion() {
 
 // 翻卡片：往上翻走一半，换字，再翻回来；减少动态效果时直接换字
 function setThinkingWord(face, text, { animate = true } = {}) {
+  clearTimeout(face.thinkingFlipTimer);
+  face.classList.remove("is-flipping");
   if (face.textContent === text) return;
   if (!animate || thinkingReducedMotion()) {
     face.textContent = text;
     return;
   }
   face.classList.add("is-flipping");
-  setTimeout(() => {
+  face.thinkingFlipTimer = setTimeout(() => {
     face.textContent = text;
     face.classList.remove("is-flipping");
   }, THINKING_FLIP_MS);
@@ -153,7 +155,7 @@ function startThinkingTitle(title, svg, root) {
   face.className = "reasoning-word";
   title.appendChild(face);
 
-  const pool = thinkingEggEnabled ? thinkingWordPool() : [];
+  let pool = thinkingEggEnabled ? thinkingWordPool() : [];
   let bag = [];
   const nextWord = () => {
     if (!pool.length) return THINKING_PLAIN;
@@ -179,13 +181,29 @@ function startThinkingTitle(title, svg, root) {
   let stopped = false;
   setThinkingWord(face, current.en, { animate: false });
 
+  // 设置页在回复期间也能打开：成功保存后丢掉旧词袋，下一拍只抽当前启用的词。
+  const settingsChanged = () => {
+    pool = thinkingEggEnabled ? thinkingWordPool() : [];
+    bag = [];
+    current = nextWord();
+    skipFresh = false;
+    setThinkingWord(face, current.en, { animate: false });
+  };
+  document.addEventListener("thinking-settings-change", settingsChanged);
+  const stop = () => {
+    stopped = true;
+    clearTimeout(timer);
+    clearTimeout(face.thinkingFlipTimer);
+    document.removeEventListener("thinking-settings-change", settingsChanged);
+  };
+
   const schedule = () => {
     const now = clock();
     const phase = now % beats.cycle;
     const next = events.find((e) => e.at > phase + 0.01) || { ...events[0], at: events[0].at + beats.cycle };
     timer = setTimeout(() => {
       if (stopped) return;
-      if (!root.isConnected) { stopped = true; return; }
+      if (!root.isConnected) { stop(); return; }
       if (next.type === "fresh") {
         if (skipFresh) skipFresh = false;
         else { current = nextWord(); setThinkingWord(face, current.en); }
@@ -201,8 +219,7 @@ function startThinkingTitle(title, svg, root) {
   return {
     finish() {
       if (stopped) return;
-      stopped = true;
-      clearTimeout(timer);
+      stop();
       const done = thinkingDoneWord();
       if (!done) { setThinkingWord(face, "思考完成"); return; }
       setThinkingWord(face, done.en);

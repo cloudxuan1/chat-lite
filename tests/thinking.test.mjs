@@ -125,3 +125,44 @@ test("保存失败保留词库和输入，返回时重试；开关失败不改�
   assert.equal(h.thinkingCustomSeries.length, 1);
   assert.equal(h.thinkingSeriesOff.has("custom-test"), true);
 });
+
+test("思考中改词、关闭系列/总开关立即生效；收尾后移除监听", () => {
+  const { h, timers } = harness();
+  const title = new Element(), root = new Element();
+  const controller = h.startThinkingTitle(title, null, root);
+  const face = title.children[0];
+  assert.equal(face.textContent, "Old");
+  h.thinkingEditingSeries = "custom-test";
+  h.thinkingSeriesName.value = "测试";
+  h.thinkingWords.appendChild(h.thinkingWordRow({ en: "New", zh: "新词" }));
+  h.saveThinkingSeriesScreen();
+  h.tick(2400);
+  assert.equal(face.textContent, "New");
+  h.click("thinkingSeriesEnabled");
+  h.tick(4000);
+  assert.equal(face.textContent, "Thinking…");
+  h.click("thinkingSeriesEnabled");
+  h.click("thinkingEggToggle");
+  h.tick(4000);
+  assert.equal(face.textContent, "Thinking…");
+  h.click("thinkingEggToggle");
+  h.tick(4000);
+  assert.equal(face.textContent, "New");
+  controller.finish();
+  h.click("thinkingEggToggle");
+  h.tick(4000);
+  assert.equal(face.textContent, "思考完成");
+  assert.equal(timers.size, 0);
+});
+
+test("翻面期间改设置/收尾，不会被旧翻面回调覆盖", () => {
+  const { h } = harness();
+  h.reduced = false;
+  const face = new Element();
+  face.textContent = "Thinking…";
+  h.setThinkingWord(face, "旧中文");
+  h.setThinkingWord(face, "Thinking…", { animate: false });
+  h.tick(200);
+  assert.equal(face.textContent, "Thinking…");
+  assert.equal(face.classList.contains("is-flipping"), false);
+});
