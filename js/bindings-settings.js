@@ -191,6 +191,8 @@ document.addEventListener("keydown", (event) => {
     closeWebSettingsScreen({ instant: true });
   } else if (memorySettingsScreen.classList.contains("is-open")) {
     closeMemorySettingsScreen({ instant: true });
+  } else if (thinkingSeriesScreen.classList.contains("is-open")) {
+    closeThinkingSeriesScreen({ instant: true });
   } else if (thinkingSettingsScreen.classList.contains("is-open")) {
     closeThinkingSettingsScreen({ instant: true });
   } else if (imageSettingsScreen.classList.contains("is-open")) {

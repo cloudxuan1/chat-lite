@@ -82,6 +82,7 @@ function anySettingsScreenOpen() {
     webSettingsScreen.classList.contains("is-open") ||
     memorySettingsScreen.classList.contains("is-open") ||
     thinkingSettingsScreen.classList.contains("is-open") ||
+    thinkingSeriesScreen.classList.contains("is-open") ||
     imageSettingsScreen.classList.contains("is-open");
 }
 

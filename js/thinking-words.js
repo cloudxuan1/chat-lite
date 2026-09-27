@@ -59,29 +59,57 @@ function loadThinkingSeriesOff() {
   }
 }
 
+function normalizeThinkingWords(words) {
+  return (Array.isArray(words) ? words : [])
+    .filter((w) => w && typeof w.en === "string" && w.en.trim())
+    .map((w) => ({ en: w.en.trim(), zh: typeof w.zh === "string" ? w.zh.trim() : "" }));
+}
+
 function loadThinkingCustomSeries() {
   try {
     const list = JSON.parse(localStorage.getItem(THINKING_CUSTOM_KEY) || "[]");
     if (!Array.isArray(list)) return [];
     return list
-      .filter((item) => item && typeof item.id === "string" && typeof item.name === "string" && Array.isArray(item.words))
-      .map((item) => ({
-        id: item.id,
-        name: item.name,
-        words: item.words
-          .filter((w) => w && typeof w.en === "string" && w.en.trim())
-          .map((w) => ({ en: w.en.trim(), zh: typeof w.zh === "string" ? w.zh.trim() : "" })),
-      }));
+      .filter((item) => item && typeof item.id === "string" && typeof item.name === "string")
+      .map((item) => ({ id: item.id, name: item.name, words: normalizeThinkingWords(item.words) }));
   } catch {
     return [];
   }
 }
 
-// 内置 + 自定义，统一成 { id, name, custom, words: [{ en, zh }] }
+// 内置系列改过的版本：{ [id]: { name?, words? } }；没改过的就用代码里的原版
+function loadThinkingOverrides() {
+  try {
+    const map = JSON.parse(localStorage.getItem(THINKING_OVERRIDES_KEY) || "{}");
+    if (!map || typeof map !== "object" || Array.isArray(map)) return {};
+    const out = {};
+    for (const [id, value] of Object.entries(map)) {
+      if (!THINKING_SERIES.some((s) => s.id === id) || !value || typeof value !== "object") continue;
+      out[id] = {
+        ...(typeof value.name === "string" && value.name.trim() ? { name: value.name.trim() } : {}),
+        ...(Array.isArray(value.words) ? { words: normalizeThinkingWords(value.words) } : {}),
+      };
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+// 内置 + 自定义，统一成 { id, name, custom, edited, words: [{ en, zh }] }
 function thinkingAllSeries() {
   return [
-    ...THINKING_SERIES.map((s) => ({ id: s.id, name: s.name, custom: false, words: s.words.map(([en, zh]) => ({ en, zh })) })),
-    ...thinkingCustomSeries.map((s) => ({ ...s, custom: true })),
+    ...THINKING_SERIES.map((s) => {
+      const o = thinkingSeriesOverrides[s.id] || {};
+      return {
+        id: s.id,
+        name: o.name || s.name,
+        custom: false,
+        edited: Boolean(o.name || o.words),
+        words: o.words || s.words.map(([en, zh]) => ({ en, zh })),
+      };
+    }),
+    ...thinkingCustomSeries.map((s) => ({ ...s, custom: true, edited: false })),
   ];
 }
 

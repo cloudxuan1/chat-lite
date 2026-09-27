@@ -1,5 +1,6 @@
-// 「思考彩蛋」设置子页：总开关、翻出中文、活点地图、系列勾选、自定义系列（新建 / 编辑 / 删除）。
-// 都是即时生效的设置项，不走「保存并返回」。词库和换词逻辑在 js/thinking-words.js。
+// 「思考彩蛋」设置：子页（总开关、翻出中文、活点地图、系列列表）+ 系列详情页（改名、开关、逐词增删改、批量粘贴、
+// 恢复默认 / 删除）。都是即时生效的设置项，不走「保存并返回」。词库和换词逻辑在 js/thinking-words.js。
+const THINKING_PEN_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 4.5c-6.4 0-11 4.6-12 11L6 20l4.5-1.5c6.4-1 11-5.6 11-12Z"></path><path d="M6 20l7.5-8.5"></path></svg>';
 
 function saveThinkingFlag(key, value) {
   localStorage.setItem(key, value ? "1" : "0");
@@ -8,6 +9,11 @@ function saveThinkingFlag(key, value) {
 function saveThinkingSeries() {
   localStorage.setItem(THINKING_SERIES_OFF_KEY, JSON.stringify([...thinkingSeriesOff]));
   localStorage.setItem(THINKING_CUSTOM_KEY, JSON.stringify(thinkingCustomSeries));
+  localStorage.setItem(THINKING_OVERRIDES_KEY, JSON.stringify(thinkingSeriesOverrides));
+}
+
+function setThinkingSwitch(button, on) {
+  button.setAttribute("aria-checked", String(on));
 }
 
 function updateThinkingSummary() {
@@ -19,95 +25,103 @@ function updateThinkingSummary() {
   settingsThinkingSummary.textContent = `开启 · ${on} 个系列${thinkingTranslate ? " · 翻中文" : ""}`;
 }
 
-function renderThinkingToggle(button, state, value) {
-  button.setAttribute("aria-pressed", String(value));
-  state.textContent = value ? "开" : "关";
-}
-
 function renderThinkingSeriesList() {
   thinkingSeriesList.replaceChildren(...thinkingAllSeries().map((series) => {
     const row = document.createElement("div");
-    row.className = "tool-setting thinking-series";
-    const on = !thinkingSeriesOff.has(series.id);
+    row.className = "tool-setting thinking-series-row";
     const sample = series.words.slice(0, 3).map((w) => w.zh || w.en).join("、");
-    const toggle = document.createElement("button");
-    toggle.type = "button";
-    toggle.className = "quick-row memory-settings-row thinking-series-toggle";
+    row.innerHTML = `<button class="thinking-series-open" type="button"><span class="thinking-series-copy"><span class="thinking-row-title"></span><span class="thinking-series-sub"></span></span><span class="thinking-pen">${THINKING_PEN_ICON}</span></button>` +
+      '<button class="thinking-switch-row is-bare" type="button" role="switch"><span class="thinking-switch" aria-hidden="true"></span></button>';
+    const open = row.querySelector(".thinking-series-open");
+    open.dataset.id = series.id;
+    open.setAttribute("aria-label", `编辑「${series.name}」`);
+    row.querySelector(".thinking-row-title").textContent = series.name;
+    row.querySelector(".thinking-series-sub").textContent = `${series.words.length} 个${series.edited ? " · 改过" : ""} · ${sample || "还没有词"}`;
+    const toggle = row.querySelector(".thinking-switch-row");
     toggle.dataset.id = series.id;
-    toggle.setAttribute("aria-pressed", String(on));
-    toggle.innerHTML = '<span class="thinking-series-copy"><strong></strong><span></span></span><span class="quick-state"></span>';
-    toggle.querySelector("strong").textContent = series.name;
-    toggle.querySelector(".thinking-series-copy span").textContent = `${series.words.length} 个 · ${sample || "还没有词"}`;
-    toggle.querySelector(".quick-state").textContent = on ? "开" : "关";
-    row.appendChild(toggle);
-    if (series.custom) {
-      const edit = document.createElement("button");
-      edit.type = "button";
-      edit.className = "thinking-series-edit";
-      edit.dataset.id = series.id;
-      edit.textContent = "编辑";
-      row.appendChild(edit);
-    }
+    toggle.setAttribute("aria-label", `使用「${series.name}」`);
+    setThinkingSwitch(toggle, !thinkingSeriesOff.has(series.id));
     return row;
   }));
 }
 
-function renderThinkingEditor() {
-  const editing = thinkingEditingSeries;
-  thinkingSeriesEditor.hidden = !editing;
-  thinkingSeriesAdd.hidden = Boolean(editing);
-  if (!editing) return;
-  const series = thinkingCustomSeries.find((s) => s.id === editing);
-  thinkingEditorName.value = series?.name || "";
-  thinkingEditorWords.value = series ? series.words.map((w) => (w.zh ? `${w.en} | ${w.zh}` : w.en)).join("\n") : "";
-  thinkingEditorDelete.hidden = !series;
-  thinkingEditorError.textContent = "";
-}
-
 function renderThinkingSettings() {
-  renderThinkingToggle(thinkingEggToggle, thinkingEggState, thinkingEggEnabled);
-  renderThinkingToggle(thinkingTranslateToggle, thinkingTranslateState, thinkingTranslate);
-  renderThinkingToggle(thinkingMarauderToggle, thinkingMarauderState, thinkingMarauder);
+  setThinkingSwitch(thinkingEggToggle, thinkingEggEnabled);
+  setThinkingSwitch(thinkingTranslateToggle, thinkingTranslate);
+  setThinkingSwitch(thinkingMarauderToggle, thinkingMarauder);
   renderThinkingSeriesList();
-  renderThinkingEditor();
   updateThinkingSummary();
 }
 
-// 「英文 | 中文」一行一个；竖线全角半角都认，中文可以不写
-function parseThinkingWords(text) {
-  return text.split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const [en, ...rest] = line.split(/[|｜]/);
-      return { en: en.trim(), zh: rest.join("|").trim() };
-    })
+// ---- 系列详情页 ----
+function currentThinkingSeries() {
+  return thinkingAllSeries().find((s) => s.id === thinkingEditingSeries) || null;
+}
+
+function thinkingWordRow(word = { en: "", zh: "" }) {
+  const row = document.createElement("div");
+  row.className = "thinking-word-row";
+  row.innerHTML = '<input class="thinking-input thinking-word-en" type="text" placeholder="English…" aria-label="英文" />' +
+    '<input class="thinking-input thinking-word-zh" type="text" placeholder="中文（可不写）" aria-label="中文" />' +
+    '<button class="thinking-word-delete" type="button" aria-label="删掉这个词"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7 7 17"></path></svg></button>';
+  row.querySelector(".thinking-word-en").value = word.en;
+  row.querySelector(".thinking-word-zh").value = word.zh;
+  return row;
+}
+
+function renderThinkingSeriesScreen() {
+  const series = currentThinkingSeries();
+  if (!series) return;
+  thinkingSeriesHeading.textContent = series.name;
+  thinkingSeriesName.value = series.name;
+  setThinkingSwitch(thinkingSeriesEnabled, !thinkingSeriesOff.has(series.id));
+  thinkingWords.replaceChildren(...series.words.map(thinkingWordRow));
+  thinkingWordsTitle.textContent = `词 · ${series.words.length} 个`;
+  thinkingSeriesReset.hidden = series.custom || !series.edited;
+  thinkingSeriesDelete.hidden = !series.custom;
+}
+
+// 把详情页当前的内容写回：自定义系列直接改；内置系列写进 overrides（名字/词和原版一样就不记）
+function saveThinkingSeriesScreen() {
+  const series = currentThinkingSeries();
+  if (!series) return;
+  const name = thinkingSeriesName.value.trim() || series.name;
+  const words = [...thinkingWords.querySelectorAll(".thinking-word-row")]
+    .map((row) => ({ en: row.querySelector(".thinking-word-en").value.trim(), zh: row.querySelector(".thinking-word-zh").value.trim() }))
     .filter((w) => w.en);
+  if (series.custom) {
+    Object.assign(thinkingCustomSeries.find((s) => s.id === series.id), { name, words });
+  } else {
+    const original = THINKING_SERIES.find((s) => s.id === series.id);
+    const same = JSON.stringify(words) === JSON.stringify(original.words.map(([en, zh]) => ({ en, zh })));
+    const override = { ...(name !== original.name ? { name } : {}), ...(same ? {} : { words }) };
+    if (Object.keys(override).length) thinkingSeriesOverrides[series.id] = override;
+    else delete thinkingSeriesOverrides[series.id];
+  }
+  saveThinkingSeries();
+  thinkingSeriesHeading.textContent = name;
+  thinkingWordsTitle.textContent = `词 · ${words.length} 个`;
+  thinkingSeriesReset.hidden = series.custom || !thinkingSeriesOverrides[series.id];
 }
 
-function saveThinkingEditor() {
-  const name = thinkingEditorName.value.trim();
-  const words = parseThinkingWords(thinkingEditorWords.value);
-  if (!name) { thinkingEditorError.textContent = "给这个系列起个名字。"; thinkingEditorName.focus(); return; }
-  if (!words.length) { thinkingEditorError.textContent = "至少写一个词。"; thinkingEditorWords.focus(); return; }
-  const existing = thinkingCustomSeries.find((s) => s.id === thinkingEditingSeries);
-  if (existing) Object.assign(existing, { name, words });
-  else thinkingCustomSeries.push({ id: `custom-${Date.now().toString(36)}`, name, words });
-  saveThinkingSeries();
-  thinkingEditingSeries = null;
-  renderThinkingSettings();
-  thinkingSeriesAdd.focus();
+function openThinkingSeriesScreen(id) {
+  thinkingEditingSeries = id;
+  renderThinkingSeriesScreen();
+  thinkingSettingsScreen.inert = true;
+  thinkingSeriesScreen.classList.add("is-open");
+  thinkingSeriesScreen.setAttribute("aria-hidden", "false");
+  thinkingSeriesBack.focus();
 }
 
-function deleteThinkingSeries() {
-  const series = thinkingCustomSeries.find((s) => s.id === thinkingEditingSeries);
-  if (!series || !window.confirm(`删除「${series.name}」系列？`)) return;
-  thinkingCustomSeries = thinkingCustomSeries.filter((s) => s.id !== series.id);
-  thinkingSeriesOff.delete(series.id);
-  saveThinkingSeries();
+function closeThinkingSeriesScreen({ instant = false } = {}) {
+  if (instant) skipPanelMotionOnce(thinkingSeriesScreen);
+  const id = thinkingEditingSeries;
   thinkingEditingSeries = null;
+  thinkingSeriesScreen.classList.remove("is-open");
+  thinkingSeriesScreen.setAttribute("aria-hidden", "true");
+  thinkingSettingsScreen.inert = false;
   renderThinkingSettings();
-  thinkingSeriesAdd.focus();
+  (thinkingSeriesList.querySelector(`.thinking-series-open[data-id="${id}"]`) || thinkingSeriesAdd).focus();
 }
 
 function openThinkingSettingsScreen() {
@@ -120,7 +134,6 @@ function openThinkingSettingsScreen() {
 
 function closeThinkingSettingsScreen({ instant = false } = {}) {
   if (instant) skipPanelMotionOnce(thinkingSettingsScreen);
-  thinkingEditingSeries = null;
   thinkingSettingsScreen.classList.remove("is-open");
   thinkingSettingsScreen.setAttribute("aria-hidden", "true");
   settingsScreen.inert = false;
@@ -147,31 +160,71 @@ thinkingMarauderToggle.addEventListener("click", () => {
   renderThinkingSettings();
 });
 thinkingSeriesList.addEventListener("click", (event) => {
-  const edit = event.target.closest(".thinking-series-edit");
-  if (edit) {
-    thinkingEditingSeries = edit.dataset.id;
-    renderThinkingEditor();
-    thinkingEditorName.focus();
-    return;
-  }
-  const toggle = event.target.closest(".thinking-series-toggle");
+  const open = event.target.closest(".thinking-series-open");
+  if (open) { openThinkingSeriesScreen(open.dataset.id); return; }
+  const toggle = event.target.closest(".thinking-switch-row");
   if (!toggle) return;
   const id = toggle.dataset.id;
   if (thinkingSeriesOff.has(id)) thinkingSeriesOff.delete(id);
   else thinkingSeriesOff.add(id);
   saveThinkingSeries();
-  renderThinkingSettings();
-  thinkingSeriesList.querySelector(`.thinking-series-toggle[data-id="${id}"]`)?.focus();
+  setThinkingSwitch(toggle, !thinkingSeriesOff.has(id));
+  updateThinkingSummary();
 });
 thinkingSeriesAdd.addEventListener("click", () => {
-  thinkingEditingSeries = "new";
-  renderThinkingEditor();
-  thinkingEditorName.focus();
+  const id = `custom-${Date.now().toString(36)}`;
+  thinkingCustomSeries.push({ id, name: "新系列", words: [] });
+  saveThinkingSeries();
+  renderThinkingSettings();
+  openThinkingSeriesScreen(id);
+  thinkingSeriesName.select();
 });
-thinkingEditorSave.addEventListener("click", saveThinkingEditor);
-thinkingEditorDelete.addEventListener("click", deleteThinkingSeries);
-thinkingEditorCancel.addEventListener("click", () => {
-  thinkingEditingSeries = null;
-  renderThinkingEditor();
-  thinkingSeriesAdd.focus();
+
+thinkingSeriesBack.addEventListener("click", () => closeThinkingSeriesScreen());
+thinkingSeriesName.addEventListener("input", saveThinkingSeriesScreen);
+thinkingSeriesEnabled.addEventListener("click", () => {
+  const id = thinkingEditingSeries;
+  if (thinkingSeriesOff.has(id)) thinkingSeriesOff.delete(id);
+  else thinkingSeriesOff.add(id);
+  saveThinkingSeries();
+  setThinkingSwitch(thinkingSeriesEnabled, !thinkingSeriesOff.has(id));
+});
+thinkingWords.addEventListener("input", saveThinkingSeriesScreen);
+thinkingWords.addEventListener("click", (event) => {
+  const del = event.target.closest(".thinking-word-delete");
+  if (!del) return;
+  const row = del.closest(".thinking-word-row");
+  (row.nextElementSibling || row.previousElementSibling)?.querySelector(".thinking-word-en")?.focus();
+  row.remove();
+  saveThinkingSeriesScreen();
+});
+thinkingWordAdd.addEventListener("click", () => {
+  const row = thinkingWordRow();
+  thinkingWords.appendChild(row);
+  row.querySelector(".thinking-word-en").focus();
+});
+// 「英文 | 中文」一行一个；竖线全角半角都认，中文可以不写
+thinkingBulkAdd.addEventListener("click", () => {
+  const words = thinkingBulkText.value.split("\n").map((line) => line.trim()).filter(Boolean).map((line) => {
+    const [en, ...rest] = line.split(/[|｜]/);
+    return { en: en.trim(), zh: rest.join("|").trim() };
+  }).filter((w) => w.en);
+  if (!words.length) return;
+  thinkingWords.append(...words.map(thinkingWordRow));
+  thinkingBulkText.value = "";
+  saveThinkingSeriesScreen();
+});
+thinkingSeriesReset.addEventListener("click", () => {
+  if (!window.confirm("恢复成原版的名字和词？你改过的会丢掉。")) return;
+  delete thinkingSeriesOverrides[thinkingEditingSeries];
+  saveThinkingSeries();
+  renderThinkingSeriesScreen();
+});
+thinkingSeriesDelete.addEventListener("click", () => {
+  const series = currentThinkingSeries();
+  if (!series?.custom || !window.confirm(`删除「${series.name}」系列？`)) return;
+  thinkingCustomSeries = thinkingCustomSeries.filter((s) => s.id !== series.id);
+  thinkingSeriesOff.delete(series.id);
+  saveThinkingSeries();
+  closeThinkingSeriesScreen();
 });

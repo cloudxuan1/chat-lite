@@ -36,12 +36,13 @@ const MEMORY_MAX_TOOL_ROUNDS_MAX = 20;
 const MEMORY_CONTEXT_MAX_CHARS = 6000;
 const MEMORY_TOOL_NAMES = new Set(["memory_search", "memory_recall"]);
 // 思考彩蛋（js/thinking-words.js、js/thinking-settings.js）：总开关 / 中文翻译 / 活点地图开场收尾，都是 "0" 关、默认开；
-// 关掉的系列 id 列表（新系列默认开）；自定义系列 [{ id, name, words: [{ en, zh }] }]
+// 关掉的系列 id 列表（新系列默认开）；自定义系列 [{ id, name, words: [{ en, zh }] }]；内置系列的改动
 const THINKING_EGG_KEY = "ember_thinking_egg";
 const THINKING_TRANSLATE_KEY = "ember_thinking_translate";
 const THINKING_MARAUDER_KEY = "ember_thinking_marauder";
 const THINKING_SERIES_OFF_KEY = "ember_thinking_series_off";
 const THINKING_CUSTOM_KEY = "ember_thinking_custom";
+const THINKING_OVERRIDES_KEY = "ember_thinking_overrides"; // 内置系列改过的名字/词 { [id]: { name?, words? } }
 const SWIPE_ACTIONS_KEY = "ember_swipe_actions";  // 会话行左滑/右滑绑定的动作 { left, right }
 const SWIPE_ACTION_OPTIONS = ["move", "delete", "pin", "rename", "none"];
 // 文件夹色块：马卡龙 10 色（淡底 + 同色系深一档的线条）；没选过的文件夹按 id 哈希取一个

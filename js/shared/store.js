@@ -77,4 +77,5 @@ let thinkingTranslate = localStorage.getItem(THINKING_TRANSLATE_KEY) !== "0";   
 let thinkingMarauder = localStorage.getItem(THINKING_MARAUDER_KEY) !== "0";     // 活点地图开场/收尾：默认开
 let thinkingSeriesOff = loadThinkingSeriesOff();       // 关掉的系列 id（Set）
 let thinkingCustomSeries = loadThinkingCustomSeries(); // 自定义系列
-let thinkingEditingSeries = null;                      // 设置页里正在编辑的系列 id；"new" = 新建
+let thinkingSeriesOverrides = loadThinkingOverrides(); // 内置系列改过的名字/词
+let thinkingEditingSeries = null;                      // 系列详情页正在看的系列 id
