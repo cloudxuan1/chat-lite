@@ -11,6 +11,12 @@ function setThinkingSaveError(message = "") {
 
 // 先落盘再更新运行时状态；多个键一起改时，失败就撤回本次已写入的键。
 function persistThinkingEntries(entries) {
+  // 本机内容与「待上传」一起落盘；不能出现词已保存、dirty 却没记住的半成功。
+  const contentKeys = [THINKING_EGG_KEY, THINKING_TRANSLATE_KEY, THINKING_MARAUDER_KEY,
+    THINKING_SERIES_OFF_KEY, THINKING_CUSTOM_KEY, THINKING_OVERRIDES_KEY];
+  if (entries.some(([key]) => contentKeys.includes(key)) && !entries.some(([key]) => key === THINKING_SYNC_DIRTY_KEY)) {
+    entries = [[THINKING_SYNC_DIRTY_KEY, "1"], ...entries];
+  }
   const written = [];
   try {
     for (const [key, value] of entries) {

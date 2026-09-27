@@ -81,6 +81,7 @@ async function submitGate() {
   localStorage.setItem(PW_KEY, v);
   gateInput.value = "";
   hideGate();
+  void pullThinkingLibrary(); // 有密码了才能拉云端词库
 }
 gateForm.addEventListener("submit", (event) => {
   event.preventDefault();

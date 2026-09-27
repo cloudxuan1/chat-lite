@@ -522,6 +522,27 @@
           </div>
         </div>
         <p class="settings-note" id="thinking-settings-status" role="alert" hidden></p>
+        <p class="settings-section-title thinking-series-title">同步</p>
+        <div class="settings-card tool-settings-card">
+          <div class="tool-setting">
+            <button class="thinking-switch-row" id="thinking-sync-toggle" type="button" role="switch" aria-checked="true">
+              <span class="thinking-row-title">云同步</span>
+              <span class="thinking-switch" aria-hidden="true"></span>
+            </button>
+            <p class="settings-note">开着时词库存在 ember，手机和电脑自动同步，也能让 Claude 通过 MCP 帮你改词。关掉就只用这台设备上的词库。</p>
+            <div class="thinking-sync-status" role="status">
+              <span id="thinking-sync-text"></span>
+              <button class="thinking-small-button" id="thinking-sync-retry" type="button" hidden>重试</button>
+            </div>
+            <div class="thinking-sync-conflict" id="thinking-sync-conflict" hidden>
+              <p>云端词库被另一台设备（或 Claude）改过了，这台设备也有没上传的修改。选一边：</p>
+              <div class="thinking-sync-choices">
+                <button class="thinking-small-button" id="thinking-sync-use-cloud" type="button">用云端的</button>
+                <button class="thinking-small-button" id="thinking-sync-use-local" type="button">用这台的覆盖云端</button>
+              </div>
+            </div>
+          </div>
+        </div>
         <p class="settings-section-title thinking-series-title">系列</p>
         <div class="settings-card tool-settings-card" id="thinking-series-list"></div>
         <button class="thinking-series-add" id="thinking-series-add" type="button">＋ 新建系列</button>
@@ -670,6 +691,7 @@
 <script src="js/bindings-folders.js"></script>
 <script src="js/bindings-settings.js"></script>
 <script src="js/thinking-settings.js"></script>
+<script src="js/thinking-sync.js"></script>
 <script src="js/init.js"></script>
 </body>
 </html>

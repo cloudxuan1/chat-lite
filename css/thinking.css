@@ -247,6 +247,35 @@
   margin-top: 18px;
 }
 
+/* 云同步状态与冲突选择 */
+.thinking-sync-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 8px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.thinking-sync-status:has(#thinking-sync-text:empty):has(#thinking-sync-retry[hidden]) { display: none; }
+#thinking-sync-text.is-error { color: #9a3412; }
+.thinking-sync-conflict {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 12px;
+  color: var(--text-secondary);
+  background: rgba(217,119,87,.08);
+  border: .5px solid rgba(217,119,87,.35);
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.thinking-sync-conflict[hidden] { display: none; }
+.thinking-sync-conflict p { margin: 0; }
+.thinking-sync-choices { display: flex; flex-wrap: wrap; gap: 8px; }
+.thinking-sync-choices .thinking-small-button { flex: 1; }
+
 @media (prefers-reduced-motion: reduce) {
   .huachuang.is-finishing { animation: none; }
   .hc-leaf, .hc-core.hc-pop, .reasoning-word, .thinking-switch, .thinking-switch::after { transition: none; }

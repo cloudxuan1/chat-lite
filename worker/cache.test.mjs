@@ -1244,3 +1244,63 @@ await testAsync("verify：密码对回 ok:true 且不调上游，密码错 401",
     globalThis.fetch = originalFetch;
   }
 });
+
+// ---- 思考彩蛋词库转发 ----
+async function wordsCall(body, env, fetchImpl) {
+  const originalFetch = globalThis.fetch;
+  const seen = [];
+  globalThis.fetch = async (url, options) => { seen.push({ url, options }); return fetchImpl(url, options); };
+  try {
+    const response = await worker.fetch(new Request("https://worker.example", { method: "POST", body: JSON.stringify(body) }), env);
+    return { response, data: await response.json(), seen };
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
+const wordsEnv = { ACCESS_PASSWORD: "correct", EMBER_URL: "https://ember.example/", EMBER_TOKEN: "read-tok" };
+
+await testAsync("thinking-words：错密码 401、未配置 503，都不调上游", async () => {
+  const never = () => { throw new Error("不应调用"); };
+  const bad = await wordsCall({ action: "thinking-words-get", password: "wrong" }, wordsEnv, never);
+  assert.strictEqual(bad.response.status, 401);
+  const off = await wordsCall({ action: "thinking-words-get", password: "correct" }, { ACCESS_PASSWORD: "correct" }, never);
+  assert.strictEqual(off.response.status, 503);
+  assert.strictEqual(bad.seen.length + off.seen.length, 0);
+});
+
+await testAsync("thinking-words：get/save 转发到 /internal/words，409/422 原样透传", async () => {
+  const got = await wordsCall({ action: "thinking-words-get", password: "correct" }, wordsEnv,
+    async () => new Response(JSON.stringify({ version: 3, data: { series: [] } }), { status: 200 }));
+  assert.strictEqual(got.seen[0].url, "https://ember.example/internal/words/get");
+  assert.strictEqual(got.seen[0].options.headers.Authorization, "Bearer read-tok");
+  assert.deepStrictEqual(got.data, { version: 3, data: { series: [] } });
+
+  const data = { settings: { egg: true }, series: [] };
+  const saved = await wordsCall({ action: "thinking-words-save", password: "correct", baseVersion: 3, data }, wordsEnv,
+    async () => new Response(JSON.stringify({ detail: "词库已被另一端修改", current: { version: 4 } }), { status: 409 }));
+  assert.strictEqual(saved.seen[0].url, "https://ember.example/internal/words/save");
+  assert.deepStrictEqual(JSON.parse(saved.seen[0].options.body), { base_version: 3, data });
+  assert.strictEqual(saved.response.status, 409);
+  assert.strictEqual(saved.data.current.version, 4);
+
+  const invalid = await wordsCall({ action: "thinking-words-save", password: "correct", baseVersion: 1, data }, wordsEnv,
+    async () => new Response(JSON.stringify({ detail: "series 必须是数组" }), { status: 422 }));
+  assert.strictEqual(invalid.response.status, 422);
+});
+
+await testAsync("thinking-words：参数不合法 400，ember 出错/断网 502", async () => {
+  const never = () => { throw new Error("不应调用"); };
+  for (const body of [
+    { action: "thinking-words-save", password: "correct", baseVersion: -1, data: {} },
+    { action: "thinking-words-save", password: "correct", baseVersion: 1, data: [] },
+  ]) {
+    const r = await wordsCall(body, wordsEnv, never);
+    assert.strictEqual(r.response.status, 400);
+  }
+  const down = await wordsCall({ action: "thinking-words-get", password: "correct" }, wordsEnv,
+    async () => new Response("oops", { status: 500 }));
+  assert.strictEqual(down.response.status, 502);
+  const offline = await wordsCall({ action: "thinking-words-get", password: "correct" }, wordsEnv,
+    async () => { throw new Error("network"); });
+  assert.strictEqual(offline.response.status, 502);
+});
