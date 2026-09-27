@@ -1,36 +1,45 @@
 // 回复流：思考块、引用、缓存徽章、SSE 解析、自动起标题。
-function addReasoningBlock({ webSearch, attach = true }) {
+// 思考图标（园林花窗）见 js/reasoning-icon.js，标题换词（思考彩蛋）见 js/thinking-words.js。
+// open=false 用于从存档重建：一出生就是收起+完成态，不播放展开/收起和收尾动画
+function addReasoningBlock({ webSearch, attach = true, open = true }) {
   if (hintEl) hintEl.remove();
   const root = document.createElement("div");
-  root.className = "reasoning is-open";
+  root.className = open ? "reasoning is-open" : "reasoning is-done is-static";
 
   const toggle = document.createElement("button");
   toggle.className = "reasoning-toggle";
   toggle.type = "button";
-  toggle.setAttribute("aria-expanded", "true");
+  toggle.setAttribute("aria-expanded", String(open));
 
+  // 思考中：花窗一扇扇变；完成：开窗，停成灰色海棠窗
+  const reduced = thinkingReducedMotion();
   const mark = document.createElement("span");
   mark.className = "reasoning-mark";
   mark.setAttribute("aria-hidden", "true");
+  mark.innerHTML = reasoningIconMarkup({ done: !open, animated: !reduced });
+  const icon = mark.querySelector("svg");
 
   const title = document.createElement("span");
   title.className = "reasoning-title";
-  title.textContent = webSearch ? "策划并搜索相关资料。" : "正在思考。";
-
-  const done = document.createElement("span");
-  done.className = "reasoning-done";
-  done.textContent = "Done";
+  title.textContent = thinkingDoneTitle();
 
   const chevron = document.createElement("span");
   chevron.className = "reasoning-chevron";
   chevron.setAttribute("aria-hidden", "true");
-  chevron.textContent = "⌄";
+  chevron.innerHTML = '<svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"></path></svg>';
 
+  // panel 负责展开/收起的高度动画（grid 行 0fr↔1fr），inner 裁掉溢出
+  const panel = document.createElement("div");
+  panel.className = "reasoning-panel";
+  const inner = document.createElement("div");
+  inner.className = "reasoning-panel-inner";
   const body = document.createElement("div");
   body.className = "reasoning-body";
+  inner.appendChild(body);
+  panel.appendChild(inner);
 
-  toggle.append(mark, title, done, chevron);
-  root.append(toggle, body);
+  toggle.append(mark, title, chevron);
+  root.append(toggle, panel);
 
   if (webSearch) {
     const tools = document.createElement("div");
@@ -38,7 +47,7 @@ function addReasoningBlock({ webSearch, attach = true }) {
     const item = document.createElement("div");
     item.textContent = "联网搜索已开启";
     tools.appendChild(item);
-    root.appendChild(tools);
+    inner.appendChild(tools);
   }
 
   toggle.addEventListener("click", () => {
@@ -51,29 +60,33 @@ function addReasoningBlock({ webSearch, attach = true }) {
     messagesEl.appendChild(root);
     scrollToBottom();
   }
+  // 每个思考块都从第一扇海棠窗开始（内嵌 SVG 的动画时钟从页面加载算起，不归零就会从半路开始）
+  if (open) {
+    try { icon?.setCurrentTime(0); } catch { /* 不支持就从当前相位开始 */ }
+  }
+  const words = open ? startThinkingTitle(title, icon, root) : null;
 
-  let hasReasoning = false;
+  let finished = !open;
   return {
     root,
     append(delta) {
-      hasReasoning = true;
-      if (title.textContent === "正在思考。" || title.textContent === "策划并搜索相关资料。") {
-        title.textContent = webSearch ? "策划并搜索相关资料。" : "整理思路。";
-      }
       body.textContent += delta;
     },
     finish() {
+      if (finished) return;
+      finished = true;
       root.classList.add("is-done");
+      openReasoningWindow(icon, { reduced });
+      words?.finish();
       root.classList.remove("is-open");
       toggle.setAttribute("aria-expanded", "false");
-      title.textContent = hasReasoning ? "思考完成" : "思考完成";
     },
   };
 }
 
 // 刷新或切换会话后，用存下来的思考文字重建一个已收起的思考块（挂在消息区末尾，调用方接着加气泡）
 function appendReasoningTrace(text) {
-  const box = addReasoningBlock({ webSearch: false });
+  const box = addReasoningBlock({ webSearch: false, open: false });
   box.append(text);
   box.finish();
   return box.root;
@@ -94,7 +107,7 @@ function syncReasoningTrace(root, message) {
     existing?.remove();
     return;
   }
-  const box = addReasoningBlock({ webSearch: false, attach: false });
+  const box = addReasoningBlock({ webSearch: false, attach: false, open: false });
   box.append(text);
   box.finish();
   if (existing) existing.replaceWith(box.root);

@@ -1,0 +1,258 @@
+/* 思考块：花窗图标（js/reasoning-icon.js）的颜色与开窗收尾、标题换词的翻卡片（js/thinking-words.js）、
+   「思考彩蛋」设置子页（js/thinking-settings.js）。 */
+
+/* ---- 花窗图标 ---- */
+.huachuang {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  color: var(--accent);
+  transform-origin: 50% 50%;
+  transition: color 320ms ease;
+}
+.huachuang.is-done { color: #b1b0ab; } /* 不透明灰：窗棂和窗框交叠处不会叠深 */
+/* 收尾第一步：缩到最小（JS 在 170ms 停动画、换成关着的窗），再弹回 */
+.huachuang.is-finishing { animation: hc-dip 420ms var(--ease-in-out); }
+@keyframes hc-dip {
+  0% { scale: 1; }
+  40% { scale: 0.3; }
+  100% { scale: 1; }
+}
+/* 第二步：两扇窗扇贴着左右窗轴收起（开到一大半才淡掉） */
+.hc-leaf {
+  transform-box: fill-box;
+  transition: transform 520ms var(--ease-in-out), opacity 180ms ease 360ms;
+}
+.hc-leaf.is-left { transform-origin: 0% 50%; }
+.hc-leaf.is-right { transform-origin: 100% 50%; }
+.huachuang.is-open .hc-leaf { transform: scaleX(0.04); opacity: 0; }
+/* 第三步：花蕊弹出来 */
+.hc-core.hc-pop {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+  transition: transform 240ms var(--ease-out), opacity 160ms ease;
+}
+.hc-core.is-hidden { transform: scale(0); opacity: 0; }
+
+/* ---- 标题换词：单词卡上下翻 ---- */
+.reasoning-word {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+  transition: transform 170ms var(--ease-in-out), opacity 170ms ease;
+}
+.reasoning-word.is-flipping {
+  transform: perspective(200px) rotateX(80deg);
+  opacity: 0;
+}
+/* 思考中：字上一道光从左扫到右 */
+.reasoning:not(.is-done) .reasoning-word {
+  color: transparent;
+  background: linear-gradient(90deg,
+    var(--text-muted) 0%, var(--text-muted) 35%,
+    var(--text-secondary) 50%,
+    var(--text-muted) 65%, var(--text-muted) 100%);
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: title-shimmer 2s linear infinite;
+}
+@keyframes title-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: 0% 0; }
+}
+
+/* ---- 设置子页 ---- */
+.thinking-series-title { margin-top: 22px; }
+.thinking-row-title {
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 500;
+}
+/* 一整行都能点的开关行；右边是左右滑的开关 */
+.thinking-switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 32px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.thinking-switch-row.is-bare { width: auto; flex: none; }
+.thinking-switch {
+  position: relative;
+  flex: none;
+  width: 46px;
+  height: 28px;
+  background: rgba(31,30,29,.14);
+  border-radius: 999px;
+  transition: background-color 200ms ease;
+}
+.thinking-switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 24px;
+  height: 24px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0,0,0,.18), 0 0 0 .5px rgba(0,0,0,.04);
+  transition: transform 220ms var(--ease-out);
+}
+[aria-checked="true"] > .thinking-switch { background: var(--accent); }
+[aria-checked="true"] > .thinking-switch::after { transform: translateX(18px); }
+.thinking-switch-row:focus-visible > .thinking-switch { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* 系列列表：左边点进去改词（带羽毛笔），右边开关 */
+.thinking-series-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.thinking-series-open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.thinking-series-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.thinking-series-sub {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.thinking-pen {
+  flex: none;
+  display: flex;
+  width: 18px;
+  height: 18px;
+  margin-left: auto;
+  color: var(--text-muted);
+}
+.thinking-pen svg,
+.thinking-word-delete svg {
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.thinking-series-add,
+.thinking-small-button {
+  min-height: 40px;
+  padding: 0 14px;
+  color: var(--text-secondary);
+  background: rgba(31,30,29,.045);
+  border: .5px solid rgba(31,30,29,.13);
+  border-radius: 11px;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.thinking-series-add { width: 100%; min-height: 44px; margin-top: 10px; }
+.thinking-small-button.is-danger { color: #9a3412; }
+.thinking-series-add[hidden],
+.thinking-small-button[hidden] { display: none; }
+
+/* 系列详情页 */
+.thinking-input {
+  width: 100%;
+  min-width: 0;
+  padding: 9px 11px;
+  color: var(--text-primary);
+  background: rgba(31,30,29,.03);
+  border: .5px solid rgba(31,30,29,.16);
+  border-radius: 10px;
+  outline: none;
+  font: inherit;
+  font-size: 15px;
+}
+.thinking-input:focus { border-color: var(--accent); }
+#thinking-series-name { margin-top: 8px; }
+.thinking-words {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+}
+.thinking-words:empty::before {
+  content: "还没有词，点下面加一个";
+  color: var(--text-muted);
+  font-size: 13px;
+  text-align: center;
+  padding: 8px 0;
+}
+.thinking-word-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) 32px;
+  gap: 6px;
+  align-items: center;
+}
+.thinking-word-row .thinking-input { padding: 8px 9px; font-size: 14px; }
+.thinking-word-delete {
+  width: 32px;
+  height: 32px;
+  padding: 7px;
+  color: var(--text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.thinking-bulk {
+  margin-top: 14px;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+.thinking-bulk summary { cursor: pointer; padding: 6px 2px; }
+.thinking-bulk[open] { display: grid; gap: 8px; }
+.thinking-bulk-text {
+  resize: vertical;
+  line-height: 1.5;
+  font-family: 'SF Mono', 'Fira Code', Menlo, Consolas, monospace;
+  font-size: 13px;
+}
+.thinking-bulk .thinking-small-button { justify-self: end; }
+.thinking-series-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .huachuang.is-finishing { animation: none; }
+  .hc-leaf, .hc-core.hc-pop, .reasoning-word, .thinking-switch, .thinking-switch::after { transition: none; }
+  .reasoning:not(.is-done) .reasoning-word {
+    animation: none;
+    background: none;
+    color: inherit;
+  }
+}

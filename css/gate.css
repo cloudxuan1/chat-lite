@@ -227,7 +227,8 @@ html[data-input="pointer"] [role="button"]:focus-visible { outline: none; }
   .citations-chevron {
     transition: none;
   }
-  .reasoning-mark,
+  .reasoning-panel { transition: opacity var(--motion-fast) ease, visibility 0s linear var(--motion-fast); }
+  .reasoning.is-open .reasoning-panel { transition-delay: 0s; }
   .msg.typing::after {
     animation: none;
   }

@@ -152,7 +152,7 @@ function harness(store = fixture()) {
     desktopSidebarMedia: { matches: true }, input: new Element(),
   });
   for (const name of ["folderDetailScreen", "folderScreen", "modelScreen", "promptScreen", "identityScreen",
-    "webSettingsScreen", "memorySettingsScreen", "imageSettingsScreen", "settingsScreen", "quickPanel"]) context[name] = new Element();
+    "webSettingsScreen", "memorySettingsScreen", "thinkingSettingsScreen", "thinkingSeriesScreen", "imageSettingsScreen", "settingsScreen", "quickPanel"]) context[name] = new Element();
   vm.runInContext(`${constants}\n${functions}\n${clickListener}\n${escapeListener}`, context);
   const key = vm.runInContext("CONVERSATIONS_KEY", context);
   storage.set(key, JSON.stringify(store));
