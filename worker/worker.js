@@ -138,6 +138,9 @@ async function handleRequest(request, env) {
     if (payload.action === "memory-tool") {
       return memoryTool(payload, env);
     }
+    if (payload.action === "thinking-words-get" || payload.action === "thinking-words-save") {
+      return thinkingWords(payload, env);
+    }
 
     if (!Array.isArray(payload.messages) || payload.messages.length === 0) {
       return json({ error: "messages 必须是非空数组" }, 400);
@@ -217,8 +220,8 @@ function emberConfigured(env) {
     && typeof env.EMBER_TOKEN === "string" && env.EMBER_TOKEN !== "";
 }
 
-// 调 ember 的只读接口；返回 { status, data } 或抛错（超时/断网）。
-async function emberPost(env, path, body) {
+// 调 ember 的接口（默认 /internal/memory/*）；返回 { status, data } 或抛错（超时/断网）。
+async function emberPost(env, path, body, prefix = "memory") {
   const base = env.EMBER_URL.trim().replace(/\/+$/, "");
   const requestOptions = {
     method: "POST",
@@ -231,7 +234,7 @@ async function emberPost(env, path, body) {
   if (typeof globalThis.AbortSignal?.timeout === "function") {
     requestOptions.signal = globalThis.AbortSignal.timeout(EMBER_TIMEOUT_MS);
   }
-  const upstream = await fetch(`${base}/internal/memory/${path}`, requestOptions);
+  const upstream = await fetch(`${base}/internal/${prefix}/${path}`, requestOptions);
   let data = null;
   try {
     data = await upstream.json();
@@ -239,6 +242,40 @@ async function emberPost(env, path, body) {
     data = null;
   }
   return { status: upstream.status, data };
+}
+
+// 思考彩蛋词库（ember /internal/words/*，钥匙同 EMBER_TOKEN）：网页多端同步用。
+// 200 / 409（带云端现状）/ 422（校验失败）原样透传，其余当作 ember 暂时不可用。
+const THINKING_WORDS_MAX_BYTES = 200_000;
+export async function thinkingWords(payload, env) {
+  if (!emberConfigured(env)) {
+    return json({ error: "记忆库未配置" }, 503);
+  }
+  let path = "get";
+  let body = {};
+  if (payload.action === "thinking-words-save") {
+    if (!Number.isSafeInteger(payload.baseVersion) || payload.baseVersion < 0) {
+      return json({ error: "baseVersion 必须是非负整数" }, 400);
+    }
+    if (!payload.data || typeof payload.data !== "object" || Array.isArray(payload.data)) {
+      return json({ error: "data 必须是对象" }, 400);
+    }
+    if (JSON.stringify(payload.data).length > THINKING_WORDS_MAX_BYTES) {
+      return json({ error: "词库太大" }, 413);
+    }
+    path = "save";
+    body = { base_version: payload.baseVersion, data: payload.data };
+  }
+  let result;
+  try {
+    result = await emberPost(env, path, body, "words");
+  } catch {
+    return json({ error: "连接记忆库失败" }, 502);
+  }
+  if ([200, 409, 422].includes(result.status) && result.data) {
+    return json(result.data, result.status);
+  }
+  return json({ error: "记忆库暂时不可用" }, 502);
 }
 
 // 只把模型需要的字段带回来，控制体积（目录条目本来就短）。

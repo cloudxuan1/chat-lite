@@ -79,3 +79,10 @@ let thinkingSeriesOff = loadThinkingSeriesOff();       // 关掉的系列 id（S
 let thinkingCustomSeries = loadThinkingCustomSeries(); // 自定义系列
 let thinkingSeriesOverrides = loadThinkingOverrides(); // 内置系列改过的名字/词
 let thinkingEditingSeries = null;                      // 系列详情页正在看的系列 id
+let thinkingSyncEnabled = localStorage.getItem(THINKING_SYNC_KEY) !== "0";   // 词库云同步：默认开
+let thinkingSyncState = "idle";     // idle / syncing / synced / error / conflict / off / unavailable
+let thinkingSyncMessage = "";       // error 时给人看的原因
+let thinkingSyncConflict = null;    // 冲突时云端的样子 { version, data }
+let thinkingSyncTimer = 0;          // 改完词后延迟上传的计时器
+let thinkingSyncApplying = false;   // 正在把云端词库写回本机：这期间的设置变更事件不触发上传
+let thinkingSyncLastPull = 0;       // 上次拉取时间（切回页面时节流用）

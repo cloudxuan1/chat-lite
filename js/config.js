@@ -43,6 +43,11 @@ const THINKING_MARAUDER_KEY = "ember_thinking_marauder";
 const THINKING_SERIES_OFF_KEY = "ember_thinking_series_off";
 const THINKING_CUSTOM_KEY = "ember_thinking_custom";
 const THINKING_OVERRIDES_KEY = "ember_thinking_overrides"; // 内置系列改过的名字/词 { [id]: { name?, words? } }
+// 词库云同步（js/thinking-sync.js，存在 ember）：开关（"0" 关，默认开）/ 这台设备上次同步到的云端版本（没有 = 从没同步过）/
+// 本机有没上传的修改（"1"）
+const THINKING_SYNC_KEY = "ember_thinking_sync";
+const THINKING_SYNC_VERSION_KEY = "ember_thinking_sync_version";
+const THINKING_SYNC_DIRTY_KEY = "ember_thinking_sync_dirty";
 const SWIPE_ACTIONS_KEY = "ember_swipe_actions";  // 会话行左滑/右滑绑定的动作 { left, right }
 const SWIPE_ACTION_OPTIONS = ["move", "delete", "pin", "rename", "none"];
 // 文件夹色块：马卡龙 10 色（淡底 + 同色系深一档的线条）；没选过的文件夹按 id 哈希取一个

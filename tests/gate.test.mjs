@@ -28,7 +28,7 @@ function harness(fetchImpl) {
     accessPw: "", gateVerifying: false, imageCapabilityLookupAttempted: true, sidebarOpen: false,
     gate: element(), gateForm: element(), gateInput: element(), gateErr: element(), gateBtn: element(),
     input: element(), localStorage: { setItem: (k, v) => { stored[k] = v; } },
-    syncInteractionState() {}, folderEditorIsOpen: () => false,
+    syncInteractionState() {}, pullThinkingLibrary() {}, folderEditorIsOpen: () => false,
     folderDetailScreen: closedScreen, folderScreen: closedScreen, modelScreen: closedScreen,
     promptScreen: closedScreen, identityScreen: closedScreen, webSettingsScreen: closedScreen,
     imageSettingsScreen: closedScreen, settingsScreen: closedScreen,

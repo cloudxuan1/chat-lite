@@ -2,6 +2,7 @@
 updateTopbar();
 syncSidebarLayout();
 updateThinkingSummary();
+void pullThinkingLibrary(); // 词库云同步：打开就拉云端最新（没密码或关了同步会直接跳过）
 
 // 没存过密码就先弹密码界面（密码不写在代码里，由你打开时手输一次）
 if (!accessPw) showGate();
