@@ -30,9 +30,8 @@ async function backupAllData(button) {
     const store = normalizeConversationStore(conversationStore);
     const ids = [];
     for (const conv of store.conversations)
-      for (const m of conv.messages)
-        for (const a of (m.attachments || []))
-          if (a?.id) ids.push(a.id);
+      for (const a of collectMessageAttachments(conv.messages))
+        if (a?.id) ids.push(a.id);
     const uniqueIds = [...new Set(ids)];
     const images = {};
     if (uniqueIds.length) {

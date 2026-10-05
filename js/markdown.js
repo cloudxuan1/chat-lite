@@ -175,7 +175,7 @@ function makeMessageTools(role, bubble, visible, copyText = "") {
 
   tools.append(author, copy, edit);
 
-  // 只有助手消息有「重新生成」：删掉这条回复（和它后面的消息）后按同样上下文重新请求
+  // 只有助手消息有「重新生成」：按同样上下文开一条新分支，旧回复和它的后续仍可切回
   if (role === "assistant") {
     const reroll = document.createElement("button");
     reroll.type = "button";

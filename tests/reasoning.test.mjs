@@ -65,6 +65,7 @@ test("存档归一化：有 reroll 版本时 reasoning 跟着 activeVariant 走�
 
 // ---- send.js：回复完成后落盘 ----
 const sendSource = readFileSync(new URL("../js/send.js", import.meta.url), "utf8");
+const branchSource = readFileSync(new URL("../js/conversation-branches.js", import.meta.url), "utf8");
 
 async function runReply({ existing = false, reasoning = "先想想", effort = "high" } = {}) {
   const conversation = { messages: [{ role: "user", content: "测试问题" }] };
@@ -74,7 +75,7 @@ async function runReply({ existing = false, reasoning = "先想想", effort = "h
     memoryMaxToolRounds: 6, memoryEnabled: false, WORKER_URL: "https://mock.invalid",
     accessPw: "mock", webSearchEnabled: false, webSearchMaxUses: null,
     webSearchMaxResults: null, maxCompletionTokens: null,
-    conversationStore: { activeId: "other" },
+    conversationStore: { activeId: "other" }, conversationStoreReadOnly: false,
     addBubble: () => bubble, setBubbleText: (b, text) => { b.textContent = text; },
     addReasoningBlock: () => ({ root: {}, append() {}, finish() {} }),
     findMemoryStepsTrace: () => null, findReasoningTrace: () => null,
@@ -92,7 +93,7 @@ async function runReply({ existing = false, reasoning = "先想想", effort = "h
     setPending() {}, scrollToBottom() {},
   };
   vm.createContext(context);
-  vm.runInContext(sendSource, context);
+  vm.runInContext(`${branchSource}\n${sendSource}`, context);
   await context.streamAssistantReply({
     conversationId: "test", sessionId: "test", model: "mock", effort, assistantIndex: 1,
     existingBubble: existing ? bubble : undefined,
