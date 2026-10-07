@@ -24,7 +24,7 @@ const functions = [
   "loadLegacyMessages", "loadLegacySessionId", "interpretConversationStoreRaw", "corruptConversationStoreWarning",
   "loadConversationStore", "loadConversationStoreFromDb", "initializeConversationStore",
   "persistConversationStore", "scheduleConversationStoreWrite", "drainConversationStoreWrites",
-  "deleteImageRecords", "cleanupOrphanedImageRecords",
+  "collectMessageAttachments", "deleteImageRecords", "cleanupOrphanedImageRecords",
 ].map((name) => extract(new RegExp(`^(?:async )?function ${name}\\([^]*?^}$`, "gm"))).join("\n");
 const constants = [
   "CONVERSATIONS_KEY", "CORRUPT_CONVERSATIONS_BACKUP_KEY", "LEGACY_CHAT_KEY", "LEGACY_SESSION_KEY", "CONVERSATION_TITLE_MAX_CHARACTERS",
@@ -229,6 +229,10 @@ test("删图前检查已落盘和内存中的引用；只读后备不清图", as
   await c.initializeConversationStore();
   const saved = makeStore();
   saved.conversations[0].messages[0].attachments = [{ id: "disk-image" }];
+  saved.conversations[0].messages[1] = {
+    role: "assistant", content: "新", variants: ["旧", "新"], activeVariant: 1,
+    variantBranches: [[{ role: "user", content: "旧分支", attachments: [{ id: "hidden-image" }] }], null],
+  };
   c.conversationStore.conversations[0].messages[0].attachments = [{ id: "memory-image" }];
   const deleted = [];
   let opens = 0;
@@ -252,11 +256,12 @@ test("删图前检查已落盘和内存中的引用；只读后备不清图", as
     };
   };
   c.transactionDone = tx => new Promise(resolve => { tx.finish = resolve; });
-  await c.deleteImageRecords([{ id: "disk-image" }, { id: "memory-image" }, { id: "orphan" }]);
+  await c.deleteImageRecords([{ id: "disk-image" }, { id: "memory-image" }, { id: "hidden-image" }, { id: "orphan" }]);
   assert.deepEqual(deleted, ["orphan"], "写盘失败时仍在磁盘中的附件不能删");
   delete saved.conversations[0].messages[0].attachments;
-  await c.deleteImageRecords([{ id: "disk-image" }]);
-  assert.deepEqual(deleted, ["orphan", "disk-image"], "磁盘不再引用后可以删");
+  saved.conversations[0].messages[1].variantBranches = [null, null];
+  await c.deleteImageRecords([{ id: "disk-image" }, { id: "hidden-image" }]);
+  assert.deepEqual(deleted, ["orphan", "disk-image", "hidden-image"], "分支和磁盘都不再引用后才可以删");
   const before = opens;
   c.conversationStoreReadOnly = true;
   c.conversationStoreBackend = "local";

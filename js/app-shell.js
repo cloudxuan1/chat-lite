@@ -62,13 +62,27 @@ function renderActiveConversation() {
   if (!conversation.messages.length) {
     messagesEl.appendChild(hintEl);
   } else {
-    conversation.messages.forEach((item, index) => {
-      if (item.role === "assistant" && item.reasoning) appendReasoningTrace(item.reasoning);
-      if (item.role === "assistant" && item.steps?.length) appendMemoryStepsTrace(item.steps);
-      addBubble(item.role, item.content, item.attachments || [], conversation.id, index);
-      if (item.role === "user" && item.memoryContext) appendMemoryBriefingTrace(item.memoryContext);
-    });
+    conversation.messages.forEach((item, index) => appendStoredMessage(conversation, item, index));
   }
+  updateConversationActionState();
+}
+
+// 把存档里的一条消息（连同它的思考块/记忆块/开场小抄）接到消息区末尾。
+function appendStoredMessage(conversation, item, index, keepScroll = false) {
+  if (item.role === "assistant" && item.reasoning) appendReasoningTrace(item.reasoning);
+  if (item.role === "assistant" && item.steps?.length) appendMemoryStepsTrace(item.steps);
+  addBubble(item.role, item.content, item.attachments || [], conversation.id, index, keepScroll);
+  if (item.role === "user" && item.memoryContext) appendMemoryBriefingTrace(item.memoryContext);
+}
+
+// 只重画某条消息之后的部分（切换回复版本时用）：它和它上面的节点原样留着，
+// 滚动位置和已加载的图片才不会跟着跳；新接上的图片加载完也不滚到底（keepScroll），位置由调用方定。
+// 被撤掉节点里的图片地址留到下次整段重画时一起回收。
+function renderMessagesAfter(anchorItem, startIndex) {
+  while (anchorItem.nextSibling) anchorItem.nextSibling.remove();
+  const conversation = getActiveConversation();
+  conversation.messages.slice(startIndex).forEach((item, offset) =>
+    appendStoredMessage(conversation, item, startIndex + offset, true));
   updateConversationActionState();
 }
 

@@ -114,7 +114,7 @@ async function send() {
 
 // send() 和 rerollMessage() 共用的请求流程：建气泡、请求 Worker、流式渲染、落盘助手回复。
 // 调用前由调用方 setPending(true)，这里负责收尾 setPending(false)。
-// 传 existingBubble 时是 reroll：流进已有气泡，完成后旧正文进 variants、新正文成为当前版本。
+// 传 existingBubble 时是 reroll：先只改屏幕；成功后旧回复连同后续收进旧分支，新回复成为当前分支。
 async function streamAssistantReply({ conversationId, sessionId, model, effort, assistantIndex, existingBubble, onUnauthorized }) {
   const reasoningBox = effort !== "off" ? addReasoningBlock({ webSearch: webSearchEnabled }) : null;
   const bubble = existingBubble || addBubble("assistant", "", [], conversationId, assistantIndex);
@@ -127,6 +127,11 @@ async function streamAssistantReply({ conversationId, sessionId, model, effort, 
     if (reasoningBox) item?.before(reasoningBox.root);
     bubble.classList.remove("error");
     setBubbleText(bubble, "");
+    // 中段 reroll：后面的旧消息只从屏幕上收起（存档不动），让这条气泡成为最后一条可见内容，
+    // 否则流式期间 scrollToBottom 会把视野拉到旧后续的末尾。成功/失败都会整段重画，收起状态随之消失。
+    for (let next = item?.nextElementSibling; next; next = next.nextElementSibling) {
+      next.classList.add("is-reroll-stale");
+    }
   }
   bubble.classList.add("typing");
   // 流式输出：攒下全文，每帧最多重渲染一次 Markdown；思考文字也攒着，回复完成后随消息落盘
@@ -256,45 +261,31 @@ async function streamAssistantReply({ conversationId, sessionId, model, effort, 
       renderStreamed();
       const completedDraft = cloneConversationStore();
       const completedConversation = conversationById(conversationId, completedDraft);
-      if (completedConversation) {
-        if (existingBubble) {
-          const target = completedConversation.messages[assistantIndex];
-          if (target?.role === "assistant") {
-            const variants = target.variants?.length ? [...target.variants] : [target.content];
-            // 每个版本各自的记忆步骤：老版本沿用已存的（没有 variantSteps 时只有当前版本可能有 steps）
-            const previousSteps = Array.isArray(target.variantSteps)
-              ? [...target.variantSteps]
-              : variants.map((_, i) => (i === (target.activeVariant ?? variants.length - 1) ? target.steps || null : null));
-            // 每个版本各自的思考链，规矩同上
-            const previousReasoning = Array.isArray(target.variantReasoning)
-              ? [...target.variantReasoning]
-              : variants.map((_, i) => (i === (target.activeVariant ?? variants.length - 1) ? target.reasoning || null : null));
-            variants.push(full);
-            previousSteps.push(steps.length ? steps : null);
-            previousReasoning.push(reasoningText || null);
-            target.variants = variants;
-            target.activeVariant = variants.length - 1;
-            target.content = full;
-            if (steps.length) target.steps = steps; else delete target.steps;
-            if (previousSteps.some(Boolean)) target.variantSteps = previousSteps; else delete target.variantSteps;
-            if (reasoningText) target.reasoning = reasoningText; else delete target.reasoning;
-            if (previousReasoning.some(Boolean)) target.variantReasoning = previousReasoning; else delete target.variantReasoning;
-          }
-        } else {
-          completedConversation.messages.push({
-            role: "assistant",
-            content: full,
-            ...(steps.length ? { steps } : {}),
-            ...(reasoningText ? { reasoning: reasoningText } : {}),
-          });
+      if (!completedConversation) throw new Error("当前会话已不存在");
+      if (existingBubble) {
+        if (!appendRerolledVariant(completedConversation, assistantIndex, full, steps, reasoningText)) {
+          throw new Error("要重新生成的回复已不存在");
         }
-        completedConversation.updatedAt = new Date().toISOString();
-        persistConversationStore(completedDraft, { keepInMemoryOnFailure: true });
-        renderConversationList();
+      } else {
+        completedConversation.messages.push({
+          role: "assistant",
+          content: full,
+          ...(steps.length ? { steps } : {}),
+          ...(reasoningText ? { reasoning: reasoningText } : {}),
+        });
       }
+      completedConversation.updatedAt = new Date().toISOString();
+      const persisted = persistConversationStore(completedDraft, { keepInMemoryOnFailure: true });
+      if (!persisted && conversationStoreReadOnly) throw new Error("存档已变为只读，新分支没有保存");
+      renderConversationList();
       if (conversationStore.activeId === conversationId) {
-        revealMessageTools(bubble);
-        const item = bubble.closest(".message-item");
+        // reroll 会换掉完整后续分支，成功后整段重画；普通新回复沿用正在流式写的气泡。
+        if (existingBubble) renderActiveConversation();
+        const visibleBubble = existingBubble
+          ? messagesEl.querySelector(`.message-item[data-msg-index="${assistantIndex}"] .msg`)
+          : bubble;
+        revealMessageTools(visibleBubble);
+        const item = visibleBubble?.closest(".message-item");
         // 刚流式生成的气泡建时没有正文，这里补上复制按钮的内容
         const copy = item?.querySelector(".message-copy");
         if (copy) {
@@ -307,16 +298,26 @@ async function streamAssistantReply({ conversationId, sessionId, model, effort, 
         addCacheBadge(usage, model);
       }
     } else {
-      bubble.classList.add("error");
-      bubble.classList.remove("md");
-      bubble.textContent = "⚠️ 没有收到回复内容";
+      if (existingBubble) {
+        renderActiveConversation();
+        showAppStatus("重新生成失败：没有收到回复内容，原分支已保留。");
+      } else {
+        bubble.classList.add("error");
+        bubble.classList.remove("md");
+        bubble.textContent = "⚠️ 没有收到回复内容";
+      }
     }
   } catch (err) {
     reasoningBox?.finish();
-    bubble.classList.remove("typing");
-    bubble.classList.add("error");
-    bubble.classList.remove("md");
-    bubble.textContent = "⚠️ " + err.message;
+    if (existingBubble) {
+      renderActiveConversation();
+      showAppStatus(`重新生成失败：${err.message}。原分支已保留。`);
+    } else {
+      bubble.classList.remove("typing");
+      bubble.classList.add("error");
+      bubble.classList.remove("md");
+      bubble.textContent = "⚠️ " + err.message;
+    }
     if (err.code === 401) {
       localStorage.removeItem(PW_KEY);
       accessPw = "";

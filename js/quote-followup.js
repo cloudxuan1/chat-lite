@@ -211,10 +211,13 @@ function startEditMessage(root) {
       showComposerStatus("当前模型不能看图，请先换一个支持图片的模型。", { error: true, source: "capability" });
       return;
     }
-    const followingCount = getActiveConversation().messages.length - index - 1;
+    const following = getActiveConversation().messages.slice(index + 1);
+    const followingCount = following.length;
+    // 后面的回复若还有别的版本，那些版本各自的后续也会一起删，数字里看不出来，得说明白
+    const hiddenNote = hasHiddenBranchMessages(following) ? "，以及这些回复其他版本下的全部后续" : "";
     if (
       followingCount > 0 &&
-      !window.confirm(`重新发送会删除它后面的 ${followingCount} 条消息，确定吗？`)
+      !window.confirm(`重新发送会删除它后面的 ${followingCount} 条消息${hiddenNote}，确定吗？`)
     ) return;
 
     const draft = cloneConversationStore();
@@ -222,9 +225,9 @@ function startEditMessage(root) {
     const draftMessage = draftConversation?.messages[index];
     if (!draftMessage) return;
     draftMessage.content = value;
-    const removedAttachments = draftConversation.messages
-      .slice(index + 1)
-      .flatMap((item) => item.attachments || []);
+    const removedAttachments = collectMessageAttachments(
+      draftConversation.messages.slice(index + 1),
+    );
     draftConversation.messages = draftConversation.messages.slice(0, index + 1);
     draftConversation.updatedAt = new Date().toISOString();
     if (!persistConversationStore(draft)) return;
@@ -261,8 +264,8 @@ function startEditMessage(root) {
   root.append(actions);
 }
 
-// 重新生成一条助手回复：旧回复留在 variants 里可切回，新回复流式写进同一个气泡；
-// 这条回复后面的消息（如果有）是基于旧版本聊出来的，会先弹确认再删除
+// 重新生成一条助手回复：旧回复和它后面的完整消息链一起留在分支里；
+// 新回复成功后才原子切到新分支，失败则原分支完全不动。
 function rerollMessage(root) {
   if (!conversationStoreReady || conversationStoreReadOnly) {
     showAppStatus(conversationStoreLoadWarning || "存档尚未就绪，暂不能重新生成。");
@@ -275,27 +278,6 @@ function rerollMessage(root) {
   const convId = conversation.id;
   const message = conversation.messages[index];
   if (!message || message.role !== "assistant") return;
-
-  const followingCount = conversation.messages.length - index - 1;
-  if (
-    followingCount > 0 &&
-    !window.confirm(`重新生成会删除它后面的 ${followingCount} 条消息（这条回复的旧版本会保留，可用箭头切回），确定吗？`)
-  ) return;
-
-  if (followingCount > 0) {
-    const draft = cloneConversationStore();
-    const draftConversation = conversationById(convId, draft);
-    if (!draftConversation) return;
-    const removedAttachments = draftConversation.messages
-      .slice(index + 1)
-      .flatMap((item) => item.attachments || []);
-    draftConversation.messages = draftConversation.messages.slice(0, index + 1);
-    draftConversation.updatedAt = new Date().toISOString();
-    if (!persistConversationStore(draft)) return;
-    void deleteImageRecords(removedAttachments).catch(() => {});
-    renderActiveConversation();
-    renderConversationList();
-  }
 
   const bubble = messagesEl.querySelector(`.message-item[data-msg-index="${index}"] .msg`);
   if (!bubble) return;
@@ -310,7 +292,7 @@ function rerollMessage(root) {
   });
 }
 
-// 在一条助手回复的多个 reroll 版本之间切换：就地换正文、复制内容和计数，并落盘
+// 在一条助手回复的多个 reroll 版本之间切换：连同该版本后面的整条对话一起切换。
 function switchVariant(root, direction) {
   if (pending || !root || root.classList.contains("is-editing")) return;
   const index = Number(root.dataset.msgIndex);
@@ -324,16 +306,14 @@ function switchVariant(root, direction) {
   if (target === current) return;
 
   const draft = cloneConversationStore();
-  const draftMessage = conversationById(conversation.id, draft)?.messages[index];
-  if (!draftMessage?.variants) return;
-  draftMessage.activeVariant = target;
-  draftMessage.content = draftMessage.variants[target];
-  const targetSteps = Array.isArray(draftMessage.variantSteps) ? draftMessage.variantSteps[target] : null;
-  if (targetSteps?.length) draftMessage.steps = targetSteps; else delete draftMessage.steps;
-  const targetReasoning = Array.isArray(draftMessage.variantReasoning) ? draftMessage.variantReasoning[target] : null;
-  if (targetReasoning) draftMessage.reasoning = targetReasoning; else delete draftMessage.reasoning;
+  const draftConversation = conversationById(conversation.id, draft);
+  if (!switchConversationVariantBranch(draftConversation, index, target)) return;
   persistConversationStore(draft, { keepInMemoryOnFailure: true });
 
+  // 不整段重画（那样每次都会先滚到底再滚回来，图片也会重新加载）：
+  // 这条回复就地换成目标版本，它上面的节点一个不动，后面的撤掉换成目标分支的后续。
+  const tools = root.querySelector(".message-tools") || root;
+  const anchorTop = tools.getBoundingClientRect().top;
   const updated = getActiveConversation().messages[index];
   const bubble = root.querySelector(".msg");
   if (bubble) setBubbleText(bubble, updated.content);
@@ -345,13 +325,9 @@ function switchVariant(root, direction) {
     copy.hidden = !updated.content;
   }
   updateVariantSwitcher(root, updated);
-  // 两个版本长短不一，切换后视野会停在半空：最后一条就滚到底，中间的保证这条消息还在视野里
-  if (index === getActiveConversation().messages.length - 1) {
-    scrollToBottom();
-  } else {
-    // 长版本会把工具栏顶出视野，让箭头所在那行留在原地附近
-    (root.querySelector(".message-tools") || root).scrollIntoView({ block: "nearest" });
-  }
+  renderMessagesAfter(root, index + 1);
+  // 两个版本长短不一：把箭头那一行钉回点击前的屏幕位置，连着点箭头比较时手指不用追着它跑
+  messagesEl.scrollTop += tools.getBoundingClientRect().top - anchorTop;
 }
 
 // 根据消息的 variants 状态显示/隐藏「‹ 2/3 ›」切换器并更新禁用态

@@ -173,9 +173,7 @@ async function deleteImageRecords(attachments) {
       if (!saved || !isRecoverableConversationStore(saved)) return;
       const liveIds = new Set([saved, conversationStore].flatMap((store) =>
         store.conversations.flatMap((conversation) =>
-          (conversation?.messages || []).flatMap((message) =>
-            (message?.attachments || []).map((attachment) => attachment.id)
-          )
+          collectMessageAttachments(conversation?.messages).map((attachment) => attachment.id)
         )
       ));
       const images = transaction.objectStore(IMAGE_DB_STORE);
@@ -208,9 +206,7 @@ async function cleanupOrphanedImageRecords() {
   if (!conversationStoreReady || conversationStoreReadOnly || conversationStoreBackend !== "indexeddb") return;
   const liveIds = new Set(
     conversationStore.conversations.flatMap((conversation) =>
-      conversation.messages.flatMap((message) =>
-        (message.attachments || []).map((attachment) => attachment.id)
-      )
+      collectMessageAttachments(conversation.messages).map((attachment) => attachment.id)
     )
   );
   const storedIds = await listImageRecordIds();
@@ -359,8 +355,9 @@ function normalizeVariantReasoning(items, count) {
   return list.some(Boolean) ? list : null;
 }
 
-function normalizeStoredMessages(items) {
-  if (!Array.isArray(items)) return [];
+function normalizeStoredMessages(items, depth = 0) {
+  // 存档来自 JSON，不会有环；限深只防异常导入制造极深分支拖垮页面。
+  if (!Array.isArray(items) || depth > 40) return [];
   return items.filter((item) =>
     (item?.role === "user" || item?.role === "assistant") &&
     typeof item.content === "string"
@@ -395,6 +392,14 @@ function normalizeStoredMessages(items) {
     const reasoning = item.role === "assistant"
       ? (variantReasoning ? variantReasoning[activeVariant] || "" : (typeof item.reasoning === "string" ? item.reasoning : ""))
       : "";
+    const variantBranches = item.role === "assistant" && hasVariants && Array.isArray(item.variantBranches)
+      ? Array.from({ length: variants.length }, (_, index) => {
+          const branch = item.variantBranches[index];
+          if (!Array.isArray(branch)) return null;
+          const normalized = normalizeStoredMessages(branch, depth + 1);
+          return normalized.length ? normalized : null;
+        })
+      : null;
     return {
       role: item.role,
       content: hasVariants ? variants[activeVariant] : item.content,
@@ -405,6 +410,7 @@ function normalizeStoredMessages(items) {
       ...(variantSteps ? { variantSteps } : {}),
       ...(reasoning ? { reasoning } : {}),
       ...(variantReasoning ? { variantReasoning } : {}),
+      ...(variantBranches?.some(Boolean) ? { variantBranches } : {}),
     };
   });
 }

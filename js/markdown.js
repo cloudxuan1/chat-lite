@@ -175,7 +175,7 @@ function makeMessageTools(role, bubble, visible, copyText = "") {
 
   tools.append(author, copy, edit);
 
-  // 只有助手消息有「重新生成」：删掉这条回复（和它后面的消息）后按同样上下文重新请求
+  // 只有助手消息有「重新生成」：按同样上下文开一条新分支，旧回复和它的后续仍可切回
   if (role === "assistant") {
     const reroll = document.createElement("button");
     reroll.type = "button";
@@ -254,7 +254,8 @@ function appendMessageImage(grid, record, attachment) {
   grid.appendChild(image);
 }
 
-async function hydrateMessageImages(grid, attachments, conversationId) {
+// keepScroll：切换回复版本时只重画后半段，图片加载完不能再把画面拉到底
+async function hydrateMessageImages(grid, attachments, conversationId, keepScroll = false) {
   let records;
   try {
     records = await getImageRecords(attachments);
@@ -269,10 +270,10 @@ async function hydrateMessageImages(grid, attachments, conversationId) {
   records.forEach((record, index) =>
     appendMessageImage(grid, record, attachments[index])
   );
-  scrollToBottom();
+  if (!keepScroll) scrollToBottom();
 }
 
-function addBubble(role, text, attachments = [], conversationId = "", messageIndex = null) {
+function addBubble(role, text, attachments = [], conversationId = "", messageIndex = null, keepScroll = false) {
   if (hintEl) hintEl.remove();
   const root = document.createElement("div");
   root.className = `message-item ${role}`;
@@ -294,7 +295,7 @@ function addBubble(role, text, attachments = [], conversationId = "", messageInd
     });
     el.append(textElement, grid);
     setBubbleText(el, text);
-    void hydrateMessageImages(grid, attachments, conversationId || getActiveConversation().id);
+    void hydrateMessageImages(grid, attachments, conversationId || getActiveConversation().id, keepScroll);
   } else {
     setBubbleText(el, text);
   }
@@ -305,7 +306,7 @@ function addBubble(role, text, attachments = [], conversationId = "", messageInd
     if (stored) updateVariantSwitcher(root, stored);
   }
   messagesEl.appendChild(root);
-  scrollToBottom();
+  if (!keepScroll) scrollToBottom();
   return el;
 }
 

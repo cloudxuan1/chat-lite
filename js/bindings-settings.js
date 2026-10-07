@@ -240,7 +240,7 @@ clearChatBtn.addEventListener("click", () => {
   if (pending || !window.confirm("清空当前会话？其他会话不会受影响，此操作不能撤销。")) return;
   const draft = cloneConversationStore();
   const active = getActiveConversation(draft);
-  const clearedAttachments = active.messages.flatMap((item) => item.attachments || []);
+  const clearedAttachments = collectMessageAttachments(active.messages);
   active.messages = [];
   active.title = "新对话";
   active.titleSource = "default";

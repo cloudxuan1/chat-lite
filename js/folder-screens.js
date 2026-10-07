@@ -695,7 +695,7 @@ function deleteConversation(conversationId) {
   }
   const target = conversationById(conversationId);
   if (!target || !window.confirm(`删除“${target.title}”？此操作不能撤销。`)) return;
-  const deletedAttachments = target.messages.flatMap((item) => item.attachments || []);
+  const deletedAttachments = collectMessageAttachments(target.messages);
   const deletingActiveConversation = conversationStore.activeId === conversationId;
   const orderedBeforeDelete = sortedConversations();
   const deletedIndex = orderedBeforeDelete.findIndex((item) => item.id === conversationId);
