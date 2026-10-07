@@ -137,3 +137,52 @@ test("reroll 请求失败时恢复原气泡，存档和整条后续完全不变"
   assert.equal(renders, 1);
   assert.match(status, /原分支已保留/);
 });
+
+test("中段 reroll 生成期间只从屏幕收起后续节点，存档不动，结束后靠整段重画恢复", async () => {
+  const conversation = {
+    messages: [
+      { role: "user", content: "问题" },
+      { role: "assistant", content: "旧回答" },
+      { role: "user", content: "后续" },
+      { role: "assistant", content: "后续回答" },
+    ],
+  };
+  const before = plain(conversation);
+  const sibling = (next = null) => {
+    const classes = [];
+    return { classes, classList: { add: (name) => classes.push(name) }, nextElementSibling: next };
+  };
+  const badge = sibling();
+  const laterReply = sibling(badge);
+  const laterQuestion = sibling(laterReply);
+  const earlier = sibling();
+  const item = { nextElementSibling: laterQuestion, previousElementSibling: earlier, before() {} };
+  const bubble = { classList: { add() {}, remove() {} }, closest: () => item };
+  let renders = 0;
+  let hiddenWhenRequested = null;
+  const context = {
+    memoryMaxToolRounds: 6, memoryEnabled: false, WORKER_URL: "https://mock.invalid",
+    accessPw: "mock", webSearchEnabled: false, webSearchMaxUses: null,
+    webSearchMaxResults: null, maxCompletionTokens: null,
+    conversationStore: { activeId: "test" },
+    setBubbleText() {}, findMemoryStepsTrace: () => null, findReasoningTrace: () => null,
+    conversationById: () => conversation, messagesForOpenRouter: async (items) => items,
+    effectiveSystemPrompt: () => "", expandMemorySteps: (items) => items,
+    fetch: async () => {
+      hiddenWhenRequested = [laterQuestion, laterReply, badge].map((node) => node.classes.join(" "));
+      throw new Error("断网");
+    },
+    renderActiveConversation: () => { renders += 1; }, showAppStatus() {},
+    setPending() {}, scrollToBottom() {},
+  };
+  vm.createContext(context);
+  vm.runInContext(`${branchSource}\n${sendSource}`, context);
+  await context.streamAssistantReply({
+    conversationId: "test", sessionId: "s", model: "mock", effort: "off",
+    assistantIndex: 1, existingBubble: bubble,
+  });
+  assert.deepEqual(hiddenWhenRequested, ["is-reroll-stale", "is-reroll-stale", "is-reroll-stale"], "请求发出前后续就该收起");
+  assert.deepEqual(earlier.classes, [], "被重掷回复之前的内容不能动");
+  assert.deepEqual(plain(conversation), before, "只改屏幕，不改存档");
+  assert.equal(renders, 1, "失败后整段重画，把收起的后续放回来");
+});

@@ -127,6 +127,11 @@ async function streamAssistantReply({ conversationId, sessionId, model, effort, 
     if (reasoningBox) item?.before(reasoningBox.root);
     bubble.classList.remove("error");
     setBubbleText(bubble, "");
+    // 中段 reroll：后面的旧消息只从屏幕上收起（存档不动），让这条气泡成为最后一条可见内容，
+    // 否则流式期间 scrollToBottom 会把视野拉到旧后续的末尾。成功/失败都会整段重画，收起状态随之消失。
+    for (let next = item?.nextElementSibling; next; next = next.nextElementSibling) {
+      next.classList.add("is-reroll-stale");
+    }
   }
   bubble.classList.add("typing");
   // 流式输出：攒下全文，每帧最多重渲染一次 Markdown；思考文字也攒着，回复完成后随消息落盘

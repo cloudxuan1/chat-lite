@@ -22,6 +22,8 @@
   max-width: 85%;
   min-width: 0;
 }
+/* 中段重新生成期间：被重掷回复后面的旧消息/思考块/来源先收起，生成结束整段重画时自然消失 */
+.messages > .is-reroll-stale { display: none !important; }
 .message-item.user {
   align-self: flex-end;
   align-items: flex-end;
