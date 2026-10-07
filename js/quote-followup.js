@@ -211,10 +211,13 @@ function startEditMessage(root) {
       showComposerStatus("当前模型不能看图，请先换一个支持图片的模型。", { error: true, source: "capability" });
       return;
     }
-    const followingCount = getActiveConversation().messages.length - index - 1;
+    const following = getActiveConversation().messages.slice(index + 1);
+    const followingCount = following.length;
+    // 后面的回复若还有别的版本，那些版本各自的后续也会一起删，数字里看不出来，得说明白
+    const hiddenNote = hasHiddenBranchMessages(following) ? "，以及这些回复其他版本下的全部后续" : "";
     if (
       followingCount > 0 &&
-      !window.confirm(`重新发送会删除它后面的 ${followingCount} 条消息，确定吗？`)
+      !window.confirm(`重新发送会删除它后面的 ${followingCount} 条消息${hiddenNote}，确定吗？`)
     ) return;
 
     const draft = cloneConversationStore();

@@ -71,6 +71,9 @@ test("reroll 后旧、新版本各自保留完整后续，来回切换不串分�
     ["new-image", "old-image"],
     "当前分支和隐藏分支的图片都必须保持引用",
   );
+  assert.equal(h.hasHiddenBranchMessages(conversation.messages.slice(1)), true, "后面的回复藏着旧版本后续时要能认出来");
+  assert.equal(h.hasHiddenBranchMessages(conversation.messages.slice(2)), false, "只有可见消息时不该误报");
+  assert.equal(h.hasHiddenBranchMessages([{ role: "assistant", content: "x", variants: ["a", "x"], variantBranches: [null, []] }]), false);
 });
 
 test("存档归一化递归保留分支消息、图片和嵌套 reroll 数据", () => {

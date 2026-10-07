@@ -88,3 +88,9 @@ function collectMessageAttachments(messages, depth = 0) {
   });
   return attachments;
 }
+
+// 这些消息里有没有藏着别的版本的后续；破坏性操作（重新发送）弹确认前用来提醒。
+function hasHiddenBranchMessages(messages) {
+  return Array.isArray(messages) && messages.some((message) =>
+    Array.isArray(message?.variantBranches) && message.variantBranches.some((branch) => branch?.length));
+}
