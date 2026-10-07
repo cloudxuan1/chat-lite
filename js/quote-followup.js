@@ -309,16 +309,25 @@ function switchVariant(root, direction) {
   const draftConversation = conversationById(conversation.id, draft);
   if (!switchConversationVariantBranch(draftConversation, index, target)) return;
   persistConversationStore(draft, { keepInMemoryOnFailure: true });
-  renderActiveConversation();
 
-  const updatedRoot = messagesEl.querySelector(`.message-item[data-msg-index="${index}"]`);
-  // 两个版本长短不一，切换后视野会停在半空：最后一条就滚到底，中间的保证这条消息还在视野里
-  if (index === getActiveConversation().messages.length - 1) {
-    scrollToBottom();
-  } else {
-    // 长版本会把工具栏顶出视野，让箭头所在那行留在原地附近
-    (updatedRoot?.querySelector(".message-tools") || updatedRoot)?.scrollIntoView({ block: "nearest" });
+  // 不整段重画（那样每次都会先滚到底再滚回来，图片也会重新加载）：
+  // 这条回复就地换成目标版本，它上面的节点一个不动，后面的撤掉换成目标分支的后续。
+  const tools = root.querySelector(".message-tools") || root;
+  const anchorTop = tools.getBoundingClientRect().top;
+  const updated = getActiveConversation().messages[index];
+  const bubble = root.querySelector(".msg");
+  if (bubble) setBubbleText(bubble, updated.content);
+  syncMemoryStepsTrace(root, updated);
+  syncReasoningTrace(root, updated);
+  const copy = root.querySelector(".message-copy");
+  if (copy) {
+    copy.dataset.copyText = updated.content;
+    copy.hidden = !updated.content;
   }
+  updateVariantSwitcher(root, updated);
+  renderMessagesAfter(root, index + 1);
+  // 两个版本长短不一：把箭头那一行钉回点击前的屏幕位置，连着点箭头比较时手指不用追着它跑
+  messagesEl.scrollTop += tools.getBoundingClientRect().top - anchorTop;
 }
 
 // 根据消息的 variants 状态显示/隐藏「‹ 2/3 ›」切换器并更新禁用态
