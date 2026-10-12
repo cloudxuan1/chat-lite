@@ -89,7 +89,7 @@ chat-lite（曾用名 ember，2026 年迁仓改名）—— 跟 Claude 聊天的
 
 - 网址：https://cloudxuan1.github.io/chat-lite/
 - 仓库：https://github.com/cloudxuan1/chat-lite （public）
-- 链路：浏览器 → 密码门禁 → Worker（注入 key）→ OpenRouter → Opus 4.6
+- 链路：浏览器 → 密码门禁 → Worker（注入 key）→ OpenRouter → 设置里可切换任意模型（默认 Opus 4.6）
 
 ## 绝对不能动（摘要）
 
