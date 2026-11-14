@@ -91,6 +91,8 @@ async function runReply({ existing = false, reasoning = "先想想", effort = "h
     requestAnimationFrame: (fn) => fn(),
     cloneConversationStore: () => ({}), persistConversationStore() {}, renderConversationList() {},
     setPending() {}, scrollToBottom() {}, followToBottom() {},
+    newReplyId: () => "reply-test-0000000000", resumableReplyBody: (res) => res.body, ackReply() {},
+    fetchReplyStart: (init) => context.fetch("https://mock.invalid", init),
   };
   vm.createContext(context);
   vm.runInContext(`${branchSource}\n${sendSource}`, context);
