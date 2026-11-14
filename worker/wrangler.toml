@@ -4,3 +4,17 @@
 name = "ember-proxy"
 main = "worker.js"
 compatibility_date = "2024-11-01"
+
+# 没有手机连着时，回复中转站（Durable Object）手上还有活（ctx.waitUntil）就不被系统收走，单次最长 15 分钟。
+# 只开这一个行为，不动 compatibility_date；需要 wrangler 4.145+（deploy-worker.yml 里固定了版本）。
+compatibility_flags = ["durable_object_io_tasks_prevent_eviction"]
+
+# 回复中转站：切后台断线时替手机把回复收完、存着等续传（worker/reply-relay.js）
+[[durable_objects.bindings]]
+name = "REPLY_RELAY"
+class_name = "ReplyRelay"
+
+# 免费计划只能用 SQLite 存储的 Durable Object
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["ReplyRelay"]

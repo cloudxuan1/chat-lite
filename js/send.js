@@ -171,7 +171,9 @@ async function streamAssistantReply({ conversationId, sessionId, model, effort, 
       : history;
 
     while (true) {
-      const res = await fetch(WORKER_URL, {
+      // 每轮一个回复编号：Worker 的中转站替手机收着，切后台断了也能按编号续上（js/reply-resume.js）
+      const replyId = newReplyId();
+      const res = await fetchReplyStart({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -186,6 +188,7 @@ async function streamAssistantReply({ conversationId, sessionId, model, effort, 
           ...(webSearchMaxUses === null ? {} : { webSearchMaxUses }),
           ...(webSearchMaxResults === null ? {} : { webSearchMaxResults }),
           ...(maxCompletionTokens === null ? {} : { maxCompletionTokens }),
+          replyId,
         }),
       });
 
@@ -206,22 +209,34 @@ async function streamAssistantReply({ conversationId, sessionId, model, effort, 
         throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
       }
 
-      const result = await readStream(res.body, {
-        onReasoning(delta) {
-          if (!reasoningBox) return;
-          reasoningText += delta;
-          reasoningBox.append(delta);
-          if (conversationStore.activeId === conversationId) followToBottom();
-        },
-        onContent(delta) {
-          bubble.classList.remove("typing");
-          streamed += delta;
-          if (!renderQueued) {
-            renderQueued = true;
-            requestAnimationFrame(renderStreamed);
-          }
-        },
-      });
+      let result;
+      try {
+        result = await readStream(resumableReplyBody(res, replyId), {
+          onReasoning(delta) {
+            if (!reasoningBox) return;
+            reasoningText += delta;
+            reasoningBox.append(delta);
+            if (conversationStore.activeId === conversationId) followToBottom();
+          },
+          onContent(delta) {
+            bubble.classList.remove("typing");
+            streamed += delta;
+            if (!renderQueued) {
+              renderQueued = true;
+              requestAnimationFrame(renderStreamed);
+            }
+          },
+        });
+      } catch (err) {
+        // 续不上了：这一轮已经出来的字留下，照常存档，结尾标「回复中断」，想要完整的就点重新生成
+        if (!streamed.trim() || err.code === 401) throw err;
+        result = {
+          full: `${streamed}\n\n（回复中断）`,
+          annotations: [], usage: null, toolCalls: [], reasoningDetails: [], finishReason: "interrupted",
+        };
+      } finally {
+        ackReply(replyId);
+      }
       full = result.full;
       annotations.push(...result.annotations);
       usage = accumulateUsage(usage, result.usage);

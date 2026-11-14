@@ -34,6 +34,8 @@ async function runLoop({ memory = true, rounds = 6, ignoresStop = false } = {}) 
     runMemoryTool: async () => { executions++; return '{"ok":true}'; },
     cloneConversationStore: () => ({}), persistConversationStore() {}, renderConversationList() {},
     setPending() {}, scrollToBottom() {}, followToBottom() {},
+    newReplyId: () => "reply-test-0000000000", resumableReplyBody: (res) => res.body, ackReply() {},
+    fetchReplyStart: (init) => context.fetch("https://mock.invalid", init),
   };
   vm.createContext(context);
   vm.runInContext(source, context);

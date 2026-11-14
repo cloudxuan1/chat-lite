@@ -14,6 +14,11 @@ const ALLOWED_ORIGIN = "https://cloudxuan1.github.io";
 // 以及每个分支 / PR 自动生成的预览域名 <hash>.chat-lite.pages.dev。密码门禁照旧，只是多放行这些域名。
 const PREVIEW_ORIGIN_PATTERN = /^https:\/\/(?:[a-z0-9-]+\.)?chat-lite\.pages\.dev$/;
 
+import { ReplyRelay, isReplyId } from "./reply-relay.js";
+
+// 回复中转站（Durable Object 类必须从主模块导出，wrangler.toml 里绑定成 REPLY_RELAY）
+export { ReplyRelay };
+
 export function isAllowedOrigin(origin) {
   return origin === ALLOWED_ORIGIN || PREVIEW_ORIGIN_PATTERN.test(String(origin || ""));
 }
@@ -141,6 +146,9 @@ async function handleRequest(request, env) {
     if (payload.action === "thinking-words-get" || payload.action === "thinking-words-save") {
       return thinkingWords(payload, env);
     }
+    if (payload.action === "reply-resume" || payload.action === "reply-ack") {
+      return replyRelayAction(payload, env);
+    }
 
     if (!Array.isArray(payload.messages) || payload.messages.length === 0) {
       return json({ error: "messages 必须是非空数组" }, 400);
@@ -182,23 +190,27 @@ async function handleRequest(request, env) {
     if (payload.memoryToolsExhausted !== undefined && typeof payload.memoryToolsExhausted !== "boolean") {
       return json({ error: "memoryToolsExhausted 必须是布尔值" }, 400);
     }
+    if (payload.replyId !== undefined && !isReplyId(payload.replyId)) {
+      return json({ error: "replyId 必须是 16 到 64 位的字母、数字、- 或 _" }, 400);
+    }
     const imageValidationError = validateImageMessages(payload.messages);
     if (imageValidationError) {
       return json({ error: imageValidationError }, 400);
     }
 
+    // 带回复编号：交给回复中转站去请求 OpenRouter，手机断了它也接着收、存着等续传。
+    // 没带编号（老网页）或没绑中转站：照旧直通。
+    if (payload.replyId !== undefined && env.REPLY_RELAY) {
+      const relayed = await replyRelayStub(env, payload.replyId).fetch("https://reply-relay/start", {
+        method: "POST",
+        body: JSON.stringify({ url: OPENROUTER_URL, init: openRouterChatInit(payload, env) }),
+      });
+      return relayResponse(relayed);
+    }
+
     let upstream;
     try {
-      upstream = await fetch(OPENROUTER_URL, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${env.OPENROUTER_API_KEY}`,
-          "Content-Type": "application/json",
-          "HTTP-Referer": ALLOWED_ORIGIN,
-          "X-Title": "ember",
-        },
-        body: JSON.stringify(buildUpstreamBody(payload)),
-      });
+      upstream = await fetch(OPENROUTER_URL, openRouterChatInit(payload, env));
     } catch (err) {
       return json({ error: "连接 OpenRouter 失败：" + err.message }, 502);
     }
@@ -684,6 +696,49 @@ function addCacheControl(content) {
       ? { ...block, cache_control: { type: "ephemeral" } }
       : block
   ));
+}
+
+function openRouterChatInit(payload, env) {
+  return {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${env.OPENROUTER_API_KEY}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": ALLOWED_ORIGIN,
+      "X-Title": "ember",
+    },
+    body: JSON.stringify(buildUpstreamBody(payload)),
+  };
+}
+
+function replyRelayStub(env, replyId) {
+  return env.REPLY_RELAY.get(env.REPLY_RELAY.idFromName(replyId));
+}
+
+// 中转站的回复补上 CORS；X-Reply-Status（running / done / failed）要让网页读得到
+function relayResponse(response) {
+  const headers = corsHeaders();
+  headers["Access-Control-Expose-Headers"] = "X-Reply-Status";
+  for (const name of ["Content-Type", "Cache-Control", "X-Reply-Status"]) {
+    const value = response.headers.get(name);
+    if (value) headers[name] = value;
+  }
+  return new Response(response.body, { status: response.status, headers });
+}
+
+// 续传：从第 offset 个字节接着给（还在收就接着推）；ack：网页存好了，删掉中转站里存的
+export async function replyRelayAction(payload, env) {
+  if (!env.REPLY_RELAY) return json({ error: "回复中转站没配置" }, 503);
+  if (!isReplyId(payload.replyId)) return json({ error: "replyId 不对" }, 400);
+  const stub = replyRelayStub(env, payload.replyId);
+  if (payload.action === "reply-ack") {
+    await stub.fetch("https://reply-relay/ack", { method: "POST" });
+    return json({ ok: true });
+  }
+  if (!Number.isSafeInteger(payload.offset) || payload.offset < 0) {
+    return json({ error: "offset 必须是不小于 0 的整数" }, 400);
+  }
+  return relayResponse(await stub.fetch(`https://reply-relay/resume?offset=${payload.offset}`));
 }
 
 function corsHeaders() {

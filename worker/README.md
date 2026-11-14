@@ -11,6 +11,8 @@
 5. 给 Claude 的 system、历史尾部和当前问题添加提示词缓存断点（`role: tool` 消息和空正文不打），再把流式回复与 usage 原样透传给前端。
 6. 记忆库（ember，可选）：Secrets `EMBER_URL`（ember 根地址）+ `EMBER_TOKEN`（ember 的 `EMBER_READ_TOKEN`）。聊天请求带 `memoryTools: true` 时挂 `memory_search` / `memory_recall` 两个 function tool；`action: "memory-briefing"` 拿开场小抄、`action: "memory-tool"` 代执行模型的工具调用。15 秒超时（ember 冷启动会慢），未配置/超时/401 都软失败（小抄为空、工具返回 `ok:false` 说明），聊天照常。
 
+7. 回复中转站（Durable Object `ReplyRelay`，`reply-relay.js`）：聊天请求带 `replyId` 时，由它去请求 OpenRouter 并把字节攒批存下；手机切后台断线它照收。网页用 `action: "reply-resume"`（`replyId` + 已收到的字节数 `offset`）续，响应头 `X-Reply-Status` 是 running / done / failed；`action: "reply-ack"` 删掉。没人取的 24 小时后自删。不带 `replyId` 照旧直通。
+
 ---
 
 ## 部署：日常走自动，手动只当备胎
@@ -22,7 +24,9 @@
 
 ## 手动部署（备胎）：二选一
 
-### 方式 A — Cloudflare 网页后台（最简单，不用装东西）
+### 方式 A — Cloudflare 网页后台（2026-11-14 起不适用）
+
+> Worker 现在是 `worker.js` + `reply-relay.js` 两个文件，还带 Durable Object（回复中转站），网页后台粘贴一个文件跑不起来。手动部署请用方式 B。下面留作历史参考。
 
 1. 登录 [dash.cloudflare.com](https://dash.cloudflare.com) → 左侧 **Workers & Pages** → **Create** → **Create Worker**。
 2. 给它起个名（建议 `ember-proxy`）→ **Deploy**（先随便部署一版）。

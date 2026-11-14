@@ -251,7 +251,10 @@ async function readStream(body, callbacks) {
       if (!t || t.startsWith(":")) continue;    // 跳过空行和注释（如 OpenRouter 的心跳）
       if (!t.startsWith("data:")) continue;
       const data = t.slice(5).trim();
-      if (data === "[DONE]") return finish();
+      if (data === "[DONE]") {
+        reader.cancel().catch(() => {});        // 后面没东西了：放掉连接（续传那层的计时器也跟着收）
+        return finish();
+      }
       try {
         const obj = JSON.parse(data);
         if (obj.usage) usage = obj.usage;

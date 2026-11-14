@@ -18,11 +18,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: 跑缓存单元测试（挡住坏代码上线）
-        run: node worker/cache.test.mjs
+      - name: 跑单元测试（挡住坏代码上线）
+        run: node worker/cache.test.mjs && node worker/reply-relay.test.mjs
       - name: 部署到 Cloudflare
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: worker
+          # 回复中转站用的 compatibility flag 需要 wrangler 4.145+，固定版本免得默认装到旧的
+          wranglerVersion: "4.149.0"
