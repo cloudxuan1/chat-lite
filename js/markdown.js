@@ -270,7 +270,7 @@ async function hydrateMessageImages(grid, attachments, conversationId, keepScrol
   records.forEach((record, index) =>
     appendMessageImage(grid, record, attachments[index])
   );
-  if (!keepScroll) scrollToBottom();
+  if (!keepScroll) followToBottom();
 }
 
 function addBubble(role, text, attachments = [], conversationId = "", messageIndex = null, keepScroll = false) {

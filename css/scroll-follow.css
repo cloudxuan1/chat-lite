@@ -1,0 +1,55 @@
+/* 「回到底部」箭头：往上翻离开底部时浮在输入栏上方，半透明毛玻璃。 */
+.composer { position: relative; }   /* 给箭头当定位锚点：输入栏多高，箭头都贴在它上面 */
+.scroll-bottom {
+  position: absolute;
+  z-index: 5;
+  bottom: calc(100% + 12px);
+  left: 50%;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  color: var(--text-secondary);
+  background: rgba(255,255,255,.55);
+  border: .5px solid rgba(31,30,29,.14);
+  border-radius: 50%;
+  box-shadow: 0 4px 14px rgba(31,30,29,.08);
+  backdrop-filter: blur(14px) saturate(1.4);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  cursor: pointer;
+  visibility: hidden;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, 6px) scale(.96);
+  transition:
+    opacity var(--motion-fast) ease,
+    transform var(--motion-fast) var(--ease-out),
+    visibility 0s linear var(--motion-fast);
+  -webkit-tap-highlight-color: transparent;
+}
+.scroll-bottom::after {   /* 手指点的范围比看到的大一圈 */
+  content: "";
+  position: absolute;
+  inset: -6px;
+}
+.scroll-bottom.is-visible {
+  visibility: visible;
+  pointer-events: auto;
+  opacity: 1;
+  transform: translate(-50%, 0);
+  transition-delay: 0s;
+}
+.scroll-bottom:active { transform: translate(-50%, 0) scale(.94); }
+.scroll-bottom svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+@media (prefers-reduced-motion: reduce) {
+  .scroll-bottom { transition: opacity var(--motion-fast) ease, visibility 0s linear var(--motion-fast); }
+}

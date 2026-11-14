@@ -58,7 +58,7 @@ function addReasoningBlock({ webSearch, attach = true, open = true }) {
 
   if (attach) {
     messagesEl.appendChild(root);
-    scrollToBottom();
+    followToBottom();
   }
   // 每个思考块都从第一扇海棠窗开始（内嵌 SVG 的动画时钟从页面加载算起，不归零就会从半路开始）
   if (open) {
@@ -164,7 +164,7 @@ function addCitations(annotations) {
   });
 
   messagesEl.appendChild(root);
-  scrollToBottom();
+  followToBottom();
 }
 
 // 缓存状态小徽章：优先显示读取命中，其次显示本轮新写入；门槛由所选模型决定。

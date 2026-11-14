@@ -33,7 +33,7 @@ async function runLoop({ memory = true, rounds = 6, ignoresStop = false } = {}) 
     },
     runMemoryTool: async () => { executions++; return '{"ok":true}'; },
     cloneConversationStore: () => ({}), persistConversationStore() {}, renderConversationList() {},
-    setPending() {}, scrollToBottom() {},
+    setPending() {}, scrollToBottom() {}, followToBottom() {},
   };
   vm.createContext(context);
   vm.runInContext(source, context);

@@ -128,7 +128,7 @@ test("reroll 请求失败时恢复原气泡，存档和整条后续完全不变"
     effectiveSystemPrompt: () => "", expandMemorySteps: (items) => items,
     fetch: async () => { throw new Error("断网"); },
     renderActiveConversation: () => { renders += 1; }, showAppStatus: (message) => { status = message; },
-    setPending() {}, scrollToBottom() {},
+    setPending() {}, scrollToBottom() {}, followToBottom() {},
   };
   vm.createContext(context);
   vm.runInContext(`${branchSource}\n${sendSource}`, context);
@@ -176,7 +176,7 @@ test("中段 reroll 生成期间只从屏幕收起后续节点，存档不动，
       throw new Error("断网");
     },
     renderActiveConversation: () => { renders += 1; }, showAppStatus() {},
-    setPending() {}, scrollToBottom() {},
+    setPending() {}, scrollToBottom() {}, followToBottom() {},
   };
   vm.createContext(context);
   vm.runInContext(`${branchSource}\n${sendSource}`, context);

@@ -90,7 +90,7 @@ async function runReply({ existing = false, reasoning = "先想想", effort = "h
     },
     requestAnimationFrame: (fn) => fn(),
     cloneConversationStore: () => ({}), persistConversationStore() {}, renderConversationList() {},
-    setPending() {}, scrollToBottom() {},
+    setPending() {}, scrollToBottom() {}, followToBottom() {},
   };
   vm.createContext(context);
   vm.runInContext(`${branchSource}\n${sendSource}`, context);
