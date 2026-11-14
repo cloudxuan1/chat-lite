@@ -1,5 +1,7 @@
 // 消息区杂项：滚到底、代码块复制、指针/键盘焦点框判定。
+// 强制滚到底（发消息、打开会话）：同时恢复「跟随」；流式/异步出现的内容用 followToBottom（js/scroll-follow.js）
 function scrollToBottom() {
+  scrollFollow = true;
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 

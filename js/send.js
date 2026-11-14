@@ -117,7 +117,9 @@ async function send() {
 // 传 existingBubble 时是 reroll：先只改屏幕；成功后旧回复连同后续收进旧分支，新回复成为当前分支。
 async function streamAssistantReply({ conversationId, sessionId, model, effort, assistantIndex, existingBubble, onUnauthorized }) {
   const reasoningBox = effort !== "off" ? addReasoningBlock({ webSearch: webSearchEnabled }) : null;
-  const bubble = existingBubble || addBubble("assistant", "", [], conversationId, assistantIndex);
+  // 等记忆小抄的这会儿可能已经往上翻了：空气泡建好后只跟不拽
+  const bubble = existingBubble || addBubble("assistant", "", [], conversationId, assistantIndex, true);
+  if (!existingBubble) followToBottom();
   if (existingBubble) {
     const item = bubble.closest(".message-item");
     // 旧版本的「查了记忆」块和思考块先拆掉（当前展示哪个版本就只留它的），新一轮有再重建，不然新旧块叠在一起
@@ -141,7 +143,7 @@ async function streamAssistantReply({ conversationId, sessionId, model, effort, 
   const renderStreamed = () => {
     renderQueued = false;
     setBubbleText(bubble, streamed);
-    if (conversationStore.activeId === conversationId) scrollToBottom();
+    if (conversationStore.activeId === conversationId) followToBottom();
   };
 
   // 记忆工具：模型要查记忆时，前端代执行再把结果回给模型，中间消息攒在 steps 里随最终回复落盘
@@ -209,7 +211,7 @@ async function streamAssistantReply({ conversationId, sessionId, model, effort, 
           if (!reasoningBox) return;
           reasoningText += delta;
           reasoningBox.append(delta);
-          if (conversationStore.activeId === conversationId) scrollToBottom();
+          if (conversationStore.activeId === conversationId) followToBottom();
         },
         onContent(delta) {
           bubble.classList.remove("typing");
@@ -251,7 +253,7 @@ async function streamAssistantReply({ conversationId, sessionId, model, effort, 
       streamed = "";
       setBubbleText(bubble, "");
       bubble.classList.add("typing");
-      if (conversationStore.activeId === conversationId) scrollToBottom();
+      if (conversationStore.activeId === conversationId) followToBottom();
     }
 
     bubble.classList.remove("typing");
@@ -328,6 +330,6 @@ async function streamAssistantReply({ conversationId, sessionId, model, effort, 
     }
   } finally {
     setPending(false);
-    if (conversationStore.activeId === conversationId) scrollToBottom();
+    if (conversationStore.activeId === conversationId) followToBottom();
   }
 }

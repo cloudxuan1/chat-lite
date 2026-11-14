@@ -145,6 +145,7 @@ const imageFileInput = document.getElementById("image-file");
 const imageAttach = document.getElementById("image-attach");
 const composerAttachments = document.getElementById("composer-attachments");
 const composerStatus = document.getElementById("composer-status");
+const scrollBottomButton = document.getElementById("scroll-bottom");
 const gate = document.getElementById("gate");
 const gateForm = document.getElementById("gate-form");
 const gateInput = document.getElementById("gate-input");
