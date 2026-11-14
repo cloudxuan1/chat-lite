@@ -121,8 +121,9 @@ await test("还在收时续传：先补断点后的，再接着推新字", async
   assert.equal(resumed.headers.get("X-Reply-Status"), "running");
   const textPromise = resumed.text();
   up.push("data: 3\n\n");
+  up.push("data: [DONE]\n\n");
   up.end();
-  assert.equal(await textPromise, "data: 2\n\ndata: 3\n\n");
+  assert.equal(await textPromise, "data: 2\n\ndata: 3\n\ndata: [DONE]\n\n");
   await Promise.all(ctx.waits);
 });
 
@@ -137,22 +138,83 @@ await test("同一个编号重复开始（网页重试）：不再请求上游�
   const again = await relay.fetch(startRequest());
   const textPromise = again.text();
   up.push("data: y\n\n");
+  up.push("data: [DONE]\n\n");
   up.end();
-  assert.equal(await textPromise, "data: x\n\ndata: y\n\n");
+  assert.equal(await textPromise, "data: x\n\ndata: y\n\ndata: [DONE]\n\n");
   assert.equal(calls.length, 1);
   await res.body.cancel();
   await Promise.all(ctx.waits);
 });
 
-await test("上游报错（不是流）：原样交回，什么都不存", async () => {
-  useFetch(() => new Response('{"error":{"message":"bad model"}}', { status: 400, headers: { "Content-Type": "application/json" } }));
+await test("上游报错（不是流）：原样交回并记下；同一编号再来（含重启后）回同一个错，不再问模型", async () => {
+  const calls = useFetch(() => new Response('{"error":{"message":"bad model"}}', { status: 400, headers: { "Content-Type": "application/json" } }));
   const ctx = mockCtx();
   const relay = new ReplyRelay(ctx, {});
   const res = await relay.fetch(startRequest());
   assert.equal(res.status, 400);
   assert.match(await res.text(), /bad model/);
+  assert.equal(ctx.data.get("meta").status, "error");
+  assert.equal([...ctx.data.keys()].filter((key) => key.startsWith("c:")).length, 0);
+  const again = await relay.fetch(startRequest());
+  assert.equal(again.status, 400);
+  const restarted = await new ReplyRelay(ctx, {}).fetch(startRequest());
+  assert.equal(restarted.status, 400);
+  assert.match(await restarted.text(), /bad model/);
+  assert.equal(calls.length, 1);
+  assert.equal((await relay.fetch(resumeRequest(0))).status, 410);
+});
+
+await test("上游没说 [DONE] 就收线：记成中断，续传带 failed", async () => {
+  const up = fakeUpstream();
+  useFetch(() => up.response);
+  const ctx = mockCtx();
+  const relay = new ReplyRelay(ctx, {});
+  const res = await relay.fetch(startRequest());
+  const reader = res.body.getReader();
+  up.push("data: A\n\n");
+  const first = await reader.read();
+  up.end();                                  // 没有 [DONE]
+  await assert.rejects(reader.read());       // 连着的手机收到错误，会来续
+  await Promise.all(ctx.waits);
+  assert.equal(ctx.data.get("meta").status, "failed");
+  const resumed = await relay.fetch(resumeRequest(first.value.byteLength));
+  assert.equal(resumed.headers.get("X-Reply-Status"), "failed");
+  assert.equal(await resumed.text(), "");
+});
+
+await test("请求上游前先落占位：响应头没回来对象就重启了，同一编号重发不再问模型、按中断处理", async () => {
+  let release;
+  const calls = useFetch(() => new Promise((resolve) => { release = resolve; }));   // 上游迟迟不回响应头
+  const ctx = mockCtx();
+  const first = new ReplyRelay(ctx, {});
+  const pending = first.fetch(startRequest());
+  await tick();
+  await tick();
+  assert.equal(ctx.data.get("meta").status, "starting");
+  const restarted = new ReplyRelay(ctx, {});   // 旧对象没了，网页用同一编号重发
+  const res = await restarted.fetch(startRequest());
+  assert.equal(calls.length, 1);
+  assert.equal(res.headers.get("X-Reply-Status"), "failed");
+  assert.equal(await res.text(), "");
+  assert.equal(ctx.data.get("meta").status, "failed");
+  release(new Response("", { status: 500 }));
+  await pending;
+});
+
+await test("ack 以后：还在收也不再给续传；收尾时把内存放掉", async () => {
+  const up = fakeUpstream();
+  useFetch(() => up.response);
+  const ctx = mockCtx();
+  const relay = new ReplyRelay(ctx, {});
+  const res = await relay.fetch(startRequest());
+  up.push("data: x\n\ndata: [DONE]\n\n");
+  await res.body.getReader().read();
+  await relay.fetch(new Request("https://reply-relay/ack", { method: "POST" }));
+  assert.equal((await relay.fetch(resumeRequest(0))).status, 404);
+  up.end();
+  await Promise.all(ctx.waits);
+  assert.equal(relay.total, 0);
   assert.equal(ctx.data.size, 0);
-  assert.equal(ctx.waits.length, 0);
 });
 
 await test("上游中途断了：连着的手机收到错误，续传拿到全部已收字节并标 failed", async () => {
