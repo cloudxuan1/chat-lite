@@ -49,7 +49,7 @@ const MAX_IMAGE_BYTES_PER_MESSAGE = 6 * 1024 * 1024;
 const IMAGE_DATA_URL_PATTERN = /^data:image\/(?:png|jpeg|webp|gif);base64,/i;
 
 // ember 记忆库（只读）：Secrets EMBER_URL（根地址，如 https://ember.example.com）+ EMBER_TOKEN（= ember 的 EMBER_READ_TOKEN）。
-// 超时 25 秒（11-14 从 15 秒放宽）：ember 搜索时算查询指纹最多等 8 秒，慢了降级关键词搜；这边必须等得比它久，
+// 超时 25 秒（11-14 从 15 秒放宽）：ember 搜索时算查询指纹最多约 18 秒（连接 3 + 等结果 15），慢了降级关键词搜；这边必须等得比它久，
 // 降级结果才送得到（以前两头都是 15 秒，指纹一慢这边先放弃，就显示「失败」）。09-16 定的原则不变：
 // 既然已经在查了就宁可慢一点也别失败；真连不上是秒回失败。任何失败都软处理：
 // 开场小抄拿不到就不带，工具调用失败就把错误说明当结果还给模型，聊天照常。
