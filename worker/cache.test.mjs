@@ -1134,7 +1134,8 @@ await testAsync("memory-tool：search 转发到 ember、limit 封顶 8、结果�
   let mode = "ok";
   globalThis.fetch = async (url, options) => {
     calls.push({ url, body: JSON.parse(options.body) });
-    if (mode === "timeout") throw new Error("timeout");
+    if (mode === "timeout") throw new DOMException("The operation was aborted due to timeout", "TimeoutError");
+    if (mode === "offline") throw new TypeError("Network connection lost");
     if (mode === "404") return new Response(JSON.stringify({ detail: "记忆 9 不存在" }), { status: 404 });
     if (url.endsWith("/search")) {
       return new Response(JSON.stringify({
@@ -1173,7 +1174,10 @@ await testAsync("memory-tool：search 转发到 ember、limit 封顶 8、结果�
     mode = "timeout";
     r = await (await call({ name: "memory_search", arguments: { query: "x" } })).json();
     assert.strictEqual(r.ok, false);
-    assert.match(r.error, /超时/);
+    assert.match(r.error, /^记忆库超时（等了 \d+ 秒没回话），这次查不了$/);
+    mode = "offline";   // 超时和连不上分开说，以后好查是哪种
+    r = await (await call({ name: "memory_search", arguments: { query: "x" } })).json();
+    assert.match(r.error, /^连不上记忆库（立刻失败），这次查不了$/);
   } finally {
     globalThis.fetch = originalFetch;
   }

@@ -49,10 +49,11 @@ const MAX_IMAGE_BYTES_PER_MESSAGE = 6 * 1024 * 1024;
 const IMAGE_DATA_URL_PATTERN = /^data:image\/(?:png|jpeg|webp|gif);base64,/i;
 
 // ember 记忆库（只读）：Secrets EMBER_URL（根地址，如 https://ember.example.com）+ EMBER_TOKEN（= ember 的 EMBER_READ_TOKEN）。
-// 超时 15 秒（轩 09-16 定：ember 冷启动第一次检索见过 10 秒多，既然已经在查了就宁可慢一点也别失败；
-// 真连不上是秒回失败，超时只在 ember 收到请求但算得慢时才发生）。任何失败都软处理：
+// 超时 25 秒（11-14 从 15 秒放宽）：ember 搜索时算查询指纹最多约 18 秒（连接 3 + 等结果 15），慢了降级关键词搜；这边必须等得比它久，
+// 降级结果才送得到（以前两头都是 15 秒，指纹一慢这边先放弃，就显示「失败」）。09-16 定的原则不变：
+// 既然已经在查了就宁可慢一点也别失败；真连不上是秒回失败。任何失败都软处理：
 // 开场小抄拿不到就不带，工具调用失败就把错误说明当结果还给模型，聊天照常。
-const EMBER_TIMEOUT_MS = 15000;
+const EMBER_TIMEOUT_MS = 25000;
 const MEMORY_QUERY_MAX_CHARS = 500;
 const MEMORY_SPACE_MAX_CHARS = 40;
 const MEMORY_LIMIT_MAX = 8;
@@ -232,6 +233,13 @@ function emberConfigured(env) {
     && typeof env.EMBER_TOKEN === "string" && env.EMBER_TOKEN !== "";
 }
 
+// ember 没回话时说清是哪种：等到超时（ember 收到了但算得慢），还是根本连不上（一般秒回失败）
+function emberFailure(err, startedAt) {
+  const seconds = Math.round((Date.now() - startedAt) / 1000);
+  if (err?.name === "TimeoutError" || err?.name === "AbortError") return `记忆库超时（等了 ${seconds} 秒没回话）`;
+  return `连不上记忆库（${seconds ? `${seconds} 秒后` : "立刻"}失败）`;
+}
+
 // 调 ember 的接口（默认 /internal/memory/*）；返回 { status, data } 或抛错（超时/断网）。
 async function emberPost(env, path, body, prefix = "memory") {
   const base = env.EMBER_URL.trim().replace(/\/+$/, "");
@@ -312,10 +320,11 @@ export async function memoryBriefing(payload, env) {
     ? Array.from(payload.topic.trim()).slice(0, MEMORY_QUERY_MAX_CHARS).join("")
     : "";
   let upstream;
+  const startedAt = Date.now();
   try {
     upstream = await emberPost(env, "briefing", topic ? { topic } : {});
-  } catch {
-    return json({ error: "记忆库连接失败或超时" }, 502);
+  } catch (err) {
+    return json({ error: emberFailure(err, startedAt) }, 502);
   }
   if (upstream.status !== 200 || !Array.isArray(upstream.data?.items)) {
     return json({ error: `记忆库返回 ${upstream.status}` }, 502);
@@ -368,10 +377,11 @@ export async function memoryTool(payload, env) {
   }
 
   let upstream;
+  const startedAt = Date.now();
   try {
     upstream = await emberPost(env, path, body);
-  } catch {
-    return json({ ok: false, error: "记忆库连接失败或超时（15 秒），这次查不了" });
+  } catch (err) {
+    return json({ ok: false, error: `${emberFailure(err, startedAt)}，这次查不了` });
   }
   if (upstream.status === 404 && name === "memory_recall") {
     return json({ ok: false, error: `记忆 ${body.id} 不存在` });
